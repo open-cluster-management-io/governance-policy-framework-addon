@@ -1,4 +1,4 @@
-module github.com/open-cluster-management/governance-policy-syncer
+module github.com/open-cluster-management/governance-policy-spec-sync
 
 go 1.13
 

@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: policy-syncer
+  name: policy-spec-sync
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: policy-syncer
+      name: policy-spec-sync
   template:
     metadata:
       labels:
-        name: policy-syncer
+        name: policy-spec-sync
     spec:
-      serviceAccountName: policy-syncer
+      serviceAccountName: policy-spec-sync
       containers:
-        - name: policy-syncer
+        - name: policy-spec-sync
           # Replace this with the built image name
           image: REPLACE_IMAGE
           command:
-          - policy-syncer
+          - policy-spec-sync
           imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
@@ -30,4 +30,4 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: "policy-syncer"
+              value: "policy-spec-sync"

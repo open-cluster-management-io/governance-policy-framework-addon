@@ -1,1 +1,1 @@
-# governance-policy-syncer
+# governance-policy-spec-sync

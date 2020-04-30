@@ -12,10 +12,12 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/open-cluster-management/governance-policy-syncer/pkg/apis"
-	"github.com/open-cluster-management/governance-policy-syncer/pkg/controller"
-	"github.com/open-cluster-management/governance-policy-syncer/version"
+	"github.com/open-cluster-management/governance-policy-spec-sync/cmd/manager/tool"
+	"github.com/open-cluster-management/governance-policy-spec-sync/pkg/apis"
+	"github.com/open-cluster-management/governance-policy-spec-sync/pkg/controller"
+	"github.com/open-cluster-management/governance-policy-spec-sync/version"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
@@ -49,6 +51,8 @@ func printVersion() {
 }
 
 func main() {
+	// custom flags for the controler
+	tool.ProcessFlags()
 	// Add the zap logger flag set to the CLI. The flag set must
 	// be added before calling pflag.Parse().
 	pflag.CommandLine.AddFlagSet(zap.FlagSet())
@@ -78,7 +82,14 @@ func main() {
 	}
 
 	// Get a config to talk to the apiserver
-	cfg, err := config.GetConfig()
+	managedCfg, err := config.GetConfig()
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	// Get hubconfig to talk to hub apiserver
+	hubCfg, err := clientcmd.BuildConfigFromFlags("", tool.Options.HubConfigFilePathName)
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
@@ -86,7 +97,7 @@ func main() {
 
 	ctx := context.TODO()
 	// Become the leader before proceeding
-	err = leader.Become(ctx, "policy-syncer-lock")
+	err = leader.Become(ctx, "policy-spec-sync-lock")
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
@@ -108,7 +119,7 @@ func main() {
 	}
 
 	// Create a new manager to provide shared dependencies and start components
-	mgr, err := manager.New(cfg, options)
+	mgr, err := manager.New(hubCfg, options)
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
@@ -123,13 +134,13 @@ func main() {
 	}
 
 	// Setup all Controllers
-	if err := controller.AddToManager(mgr); err != nil {
+	if err := controller.AddToManager(mgr, managedCfg); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
 
 	// Add the Metrics Service
-	addMetrics(ctx, cfg)
+	addMetrics(ctx, managedCfg)
 
 	log.Info("Starting the Cmd.")
 
