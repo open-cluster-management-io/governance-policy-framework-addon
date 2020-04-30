@@ -1,0 +1,11 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: policy-syncer
+subjects:
+- kind: ServiceAccount
+  name: policy-syncer
+roleRef:
+  kind: Role
+  name: policy-syncer
+  apiGroup: rbac.authorization.k8s.io

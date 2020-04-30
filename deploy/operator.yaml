@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policy-syncer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: policy-syncer
+  template:
+    metadata:
+      labels:
+        name: policy-syncer
+    spec:
+      serviceAccountName: policy-syncer
+      containers:
+        - name: policy-syncer
+          # Replace this with the built image name
+          image: REPLACE_IMAGE
+          command:
+          - policy-syncer
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "policy-syncer"
