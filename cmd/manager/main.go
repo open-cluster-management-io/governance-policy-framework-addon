@@ -144,7 +144,6 @@ func main() {
 	addMetrics(ctx, managedCfg)
 
 	// create namespace
-	log.Info("Checking if cluster namespace exist.", "Namespace", namespace)
 	var generatedClient kubernetes.Interface = kubernetes.NewForConfigOrDie(managedCfg)
 	if err := tool.CreateClusterNs(&generatedClient, namespace); err != nil {
 		log.Error(err, "")

@@ -50,10 +50,11 @@ func ProcessFlags() {
 // CreateClusterNs creates the cluster namespace on managed cluster if not exists
 func CreateClusterNs(client *kubernetes.Interface, ns string) error {
 	_, err := (*client).CoreV1().Namespaces().Get(ns, metav1.GetOptions{})
+	log.Info("Checking if cluster namespace exist.", "Namespace", ns)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// not found, create it
-			log.Info("Checking if cluster namespace exist.", "Namespace", ns)
+			log.Info("Cluster namespace not found, creating it...", "Namespace", ns)
 			_, err := (*client).CoreV1().Namespaces().Create(&corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: ns,
@@ -61,6 +62,8 @@ func CreateClusterNs(client *kubernetes.Interface, ns string) error {
 			})
 			return err
 		}
+		return err
 	}
+	log.Info("Cluster namespace exists.", "Namespace", ns)
 	return nil
 }
