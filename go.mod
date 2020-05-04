@@ -3,7 +3,7 @@ module github.com/open-cluster-management/governance-policy-spec-sync
 go 1.13
 
 require (
-	github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200429183457-42cc4c273eef
+	github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200504161718-3ffab85bbaaa
 	github.com/operator-framework/operator-sdk v0.17.0
 	github.com/spf13/pflag v1.0.5
 	k8s.io/api v0.17.4

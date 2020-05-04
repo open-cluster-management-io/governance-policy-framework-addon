@@ -4,7 +4,7 @@ import (
 	"context"
 
 	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policies/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
+	"github.com/open-cluster-management/governance-policy-propagator/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -67,8 +67,6 @@ type ReconcilePolicy struct {
 
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
 // and what is in the Policy.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
@@ -93,15 +91,14 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 					Namespace: request.Namespace,
 				},
 			})
-			if err != nil {
-				if errors.IsNotFound(err) {
-					reqLogger.Info("Failed to remove policy on managed cluster...it has been already deleted.")
-					return reconcile.Result{}, nil
-				}
+			if err != nil && !errors.IsNotFound(err) {
+				reqLogger.Error(err, "Failed to remove policy on managed cluster...")
 			}
-			return reconcile.Result{}, err
+			reqLogger.Info("Policy has been removed from managed cluster...Reconciliation complete.")
+			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
+		reqLogger.Error(err, "Failed to get policy from hub...")
 		return reconcile.Result{}, err
 	}
 	managedPlc := &policiesv1.Policy{}
@@ -112,20 +109,26 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			reqLogger.Info("Policy not found on managed cluster, creating it...")
 			instance.SetOwnerReferences(nil)
 			instance.SetResourceVersion("")
-			return reconcile.Result{}, r.managedClient.Create(context.TODO(), instance)
+			err = r.managedClient.Create(context.TODO(), instance)
+			if err != nil {
+				reqLogger.Error(err, "Failed to create policy on managed...")
+				return reconcile.Result{}, r.managedClient.Create(context.TODO(), instance)
+			}
 		}
+		reqLogger.Error(err, "Failed to get policy from managed...")
 	}
 	// found, then compare and update
-	if !equality.Semantic.DeepEqual(instance.GetAnnotations(), managedPlc.GetAnnotations()) || !equality.Semantic.DeepEqual(instance.Spec, managedPlc.Spec) {
+	if !common.CompareSpecAndAnnotation(instance, managedPlc) {
 		// update needed
-		reqLogger.Info("Policy needs update...")
+		reqLogger.Info("Policy mismatch between hub and managed, updating it...")
 		managedPlc.SetAnnotations(instance.GetAnnotations())
 		managedPlc.Spec = instance.Spec
 		err = r.managedClient.Update(context.TODO(), managedPlc)
-		if err != nil {
+		if err != nil && errors.IsNotFound(err) {
+			reqLogger.Error(err, "Failed to update policy on managed...")
 			return reconcile.Result{}, err
 		}
 	}
-	reqLogger.Info("Reconciling complete...")
+	reqLogger.Info("Reconciliation complete.")
 	return reconcile.Result{}, nil
 }

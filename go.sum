@@ -593,6 +593,10 @@ github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7J
 github.com/onsi/gomega v1.8.1/go.mod h1:Ho0h+IUsWyvy1OpqCwxlQ/21gkhVunqlU8fDGcoTdcA=
 github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200429183457-42cc4c273eef h1:nbgbx/L/qtaU8rDdxNG+dKUHNsySwTbFA3UBQ9kjNog=
 github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200429183457-42cc4c273eef/go.mod h1:5iRpnHLtDYH2v/l2lzCKNnEwFjXYchybkSq4Wd+wZgo=
+github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200501183720-f866cce99cd1 h1:R9IKXLGCxf1UwJuI6Mrq/zTSxwCEzs6Lsk/7aYChVCI=
+github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200501183720-f866cce99cd1/go.mod h1:5iRpnHLtDYH2v/l2lzCKNnEwFjXYchybkSq4Wd+wZgo=
+github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200504161718-3ffab85bbaaa h1:yXCwsAcAeCohu6G4+ks6mu+ssQ+Wci1nLJU1xLEiW5g=
+github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200504161718-3ffab85bbaaa/go.mod h1:5iRpnHLtDYH2v/l2lzCKNnEwFjXYchybkSq4Wd+wZgo=
 github.com/opencontainers/go-digest v0.0.0-20170106003457-a6d0ee40d420/go.mod h1:cMLVZDEM3+U2I4VmLI6N8jQYUd2OVphdqWwCJHrFt2s=
 github.com/opencontainers/go-digest v0.0.0-20180430190053-c9281466c8b2/go.mod h1:cMLVZDEM3+U2I4VmLI6N8jQYUd2OVphdqWwCJHrFt2s=
 github.com/opencontainers/go-digest v1.0.0-rc1/go.mod h1:cMLVZDEM3+U2I4VmLI6N8jQYUd2OVphdqWwCJHrFt2s=
