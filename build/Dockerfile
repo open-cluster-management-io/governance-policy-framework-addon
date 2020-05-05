@@ -1,11 +1,11 @@
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
-ENV OPERATOR=/usr/local/bin/policy-spec-sync \
+ENV OPERATOR=/usr/local/bin/governance-policy-spec-sync \
     USER_UID=1001 \
-    USER_NAME=policy-spec-sync
+    USER_NAME=governance-policy-spec-sync
 
 # install operator binary
-COPY build/_output/bin/policy-spec-sync ${OPERATOR}
+COPY build/_output/bin/governance-policy-spec-sync ${OPERATOR}
 
 COPY build/bin /usr/local/bin
 RUN  /usr/local/bin/user_setup
