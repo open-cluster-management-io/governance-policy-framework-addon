@@ -25,4 +25,14 @@ var eventPredicateFuncs = predicate.Funcs{
 		}
 		return false
 	},
+	GenericFunc: func(e event.GenericEvent) bool {
+		eventObj := e.Object.(*corev1.Event)
+		if eventObj.InvolvedObject.Kind == policiesv1.Kind && eventObj.InvolvedObject.APIVersion == policiesv1APIVersion {
+			return true
+		}
+		return false
+	},
+	DeleteFunc: func(e event.DeleteEvent) bool {
+		return false
+	},
 }
