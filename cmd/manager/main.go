@@ -38,7 +38,7 @@ import (
 var (
 	metricsHost               = "0.0.0.0"
 	metricsPort         int32 = 8386
-	operatorMetricsPort int32 = 8686
+	operatorMetricsPort int32 = 8689
 )
 var log = logf.Log.WithName("cmd")
 
