@@ -1,33 +1,32 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: policy-template-sync
+  name: governance-policy-template-sync
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: policy-template-sync
+      name: governance-policy-template-sync
   template:
     metadata:
       labels:
-        name: policy-template-sync
+        name: governance-policy-template-sync
     spec:
-      serviceAccountName: policy-template-sync
+      serviceAccountName: governance-policy-template-sync
+      imagePullSecrets:
+        - name: multiclusterhub-operator-pull-secret
       containers:
-        - name: policy-template-sync
-          # Replace this with the built image name
-          image: REPLACE_IMAGE
+        - name: governance-policy-template-sync
+          image: quay.io/open-cluster-management/governance-policy-template-sync:latest-dev
           command:
-          - policy-template-sync
+          - governance-policy-template-sync
           imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+              value: calamari
             - name: POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: "policy-template-sync"
+              value: "governance-policy-template-sync"

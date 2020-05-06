@@ -1,3 +1,4 @@
+// Copyright (c) 2020 Red Hat, Inc.
 package controller
 
 import "github.com/open-cluster-management/governance-policy-template-sync/pkg/controller/sync"
