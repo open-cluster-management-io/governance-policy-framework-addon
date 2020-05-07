@@ -1,3 +1,4 @@
+// Copyright (c) 2020 Red Hat, Inc.
 package sync
 
 import (
@@ -164,6 +165,7 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			eventHistory := policiesv1.ComplianceHistory{
 				LastTimestamp: event.LastTimestamp,
 				Message:       event.Message,
+				EventName:     event.GetName(),
 			}
 			if eventForPolicyMap[templateName] == nil {
 				eventForPolicyMap[templateName] = &[]policiesv1.ComplianceHistory{}
@@ -204,37 +206,50 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			// append existingDpt to status
 			instance.Status.Details = append(instance.Status.Details, existingDpt)
 		}
-		// add history from event to existingDpt
-		// var existingDpt = &policiesv1.DetailsPerTemplate{}
-		history := eventForPolicyMap[tName]
-		if history == nil {
-			//nothing to add to existingDpt, do nothing
-		} else {
-			// append event to existingDpt
-			for _, ch := range *history {
-				dupEntry := false
-				for _, ech := range existingDpt.History {
-					if ch.LastTimestamp.Equal(&ech.LastTimestamp) && ch.Message == ech.Message {
-						// duplicated entry, do not append
-						dupEntry = true
-						break
-					}
+
+		history := []policiesv1.ComplianceHistory{}
+		if eventForPolicyMap[tName] != nil {
+			history = *eventForPolicyMap[tName]
+		}
+
+		for _, ech := range existingDpt.History {
+			exists := false
+			for _, ch := range history {
+				if ch.LastTimestamp.Time.Equal(ech.LastTimestamp.Time) && ch.EventName == ech.EventName {
+					// do nothing
+					exists = true
+					break
 				}
-				if !dupEntry {
-					existingDpt.History = append(existingDpt.History, ch)
+			}
+			// doesn't exists, append to history
+			if !exists {
+				history = append(history, ech)
+			}
+		}
+		// sort by lasttimestamp
+		sort.Slice(history, func(i, j int) bool {
+			return history[i].LastTimestamp.Time.After(history[j].LastTimestamp.Time)
+		})
+		// remove duplicates
+		newHistory := []policiesv1.ComplianceHistory{}
+		for i := 0; i < len(history); i++ {
+			newHistory = append(newHistory, history[i])
+			for j := i; j < len(history); j++ {
+				if history[i].EventName == history[j].EventName &&
+					history[i].Message == history[j].Message {
+					// same event, filter it
+				} else {
+					i = j - 1
+					break
 				}
 			}
 		}
-		// sort by lasttimestampe
-		sort.Slice(existingDpt.History, func(i, j int) bool {
-			return existingDpt.History[i].LastTimestamp.Time.After(existingDpt.History[j].LastTimestamp.Time)
-		})
 		// shorten it to first 10
 		size := 10
-		if len(existingDpt.History) < 10 {
-			size = len(existingDpt.History)
+		if len(newHistory) < 10 {
+			size = len(newHistory)
 		}
-		existingDpt.History = existingDpt.History[0:size]
+		existingDpt.History = newHistory[0:size]
 
 		// set compliancy at different level
 		if len(existingDpt.History) > 0 {
