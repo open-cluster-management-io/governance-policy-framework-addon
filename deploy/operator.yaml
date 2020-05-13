@@ -17,7 +17,6 @@ spec:
         - name: multiclusterhub-operator-pull-secret
       containers:
         - name: governance-policy-spec-sync
-          # Replace this with the built image name
           image: quay.io/open-cluster-management/governance-policy-spec-sync:latest-dev
           command:
           - governance-policy-spec-sync
@@ -29,7 +28,7 @@ spec:
               mountPath: /var/run/klusterlet
           env:
             - name: WATCH_NAMESPACE
-              value: calamari
+              value: managed
             - name: POD_NAME
               valueFrom:
                 fieldRef:
