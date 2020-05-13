@@ -1,0 +1,24 @@
+apiVersion: policies.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: default.case2-remedation-action-not-exsits
+  labels:
+    policies.open-cluster-management.io/cluster-name: managed
+    policies.open-cluster-management.io/cluster-namespace: managed
+    policies.open-cluster-management.io/root-policy: default.case1-test-policy
+spec:
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policies.ibm.com/v1alpha1
+        kind: TrustedContainerPolicy
+        metadata:
+          name: case2-remedation-action-not-exsits-trustedcontainerpolicy
+        spec:
+          severity: low
+          namespaceSelector:
+            include: ["default"]
+            exclude: ["kube-system"]
+          remediationAction: inform
+          imageRegistry: quay.io
+

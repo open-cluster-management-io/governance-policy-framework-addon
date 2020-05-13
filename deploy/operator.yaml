@@ -23,7 +23,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
-              value: calamari
+              value: managed
             - name: POD_NAME
               valueFrom:
                 fieldRef:

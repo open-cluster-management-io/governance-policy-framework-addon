@@ -4,10 +4,13 @@ package sync
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policies/v1"
+	"github.com/open-cluster-management/governance-policy-propagator/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,6 +19,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -25,7 +29,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("policy-template-sync")
+const controllerName string = "policy-template-sync"
+
+var log = logf.Log.WithName(controllerName)
 
 // Add creates a new Policy Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -35,18 +41,14 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	// dclient, err := dynamic.NewForConfig(mgr.GetConfig())
-	// if err != nil {
-	// 	log.Error(err, "")
-	// 	os.Exit(1)
-	// }
-	return &ReconcilePolicy{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: mgr.GetConfig()}
+	return &ReconcilePolicy{client: mgr.GetClient(), scheme: mgr.GetScheme(),
+		config: mgr.GetConfig(), recorder: mgr.GetEventRecorderFor(controllerName)}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
-	c, err := controller.New("policy-template-sync", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
@@ -66,15 +68,14 @@ var _ reconcile.Reconciler = &ReconcilePolicy{}
 type ReconcilePolicy struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
-	config *rest.Config
+	client   client.Client
+	scheme   *runtime.Scheme
+	config   *rest.Config
+	recorder record.EventRecorder
 }
 
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
 // and what is in the Policy.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
@@ -91,47 +92,74 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
 			reqLogger.Info("Policy not found, may have been deleted, reconciliation completed.")
+			// r.recorder.Event(&policiesv1.Policy{ObjectMeta: metav1.ObjectMeta{
+			// 	Name:      request.Name,
+			// 	Namespace: request.Namespace,
+			// }}, "Normal", "PolicyTemplateSync", fmt.Sprintf("Policy %s was deleted successfully", request.Name))
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
 
-	// found
-	// loop throught policy templates
-	for _, policyT := range instance.Spec.PolicyTemplates {
+	var rMapper meta.RESTMapper
+	var dClient dynamic.Interface
+	if len(instance.Spec.PolicyTemplates) > 0 {
+		// initialize restmapper
 		clientset := kubernetes.NewForConfigOrDie(r.config)
 		dd := clientset.Discovery()
 		apigroups, err := restmapper.GetAPIGroupResources(dd)
 		if err != nil {
-			// throw err
+			reqLogger.Error(err, "Failed to create restmapper")
+			return reconcile.Result{}, err
 		}
-		restmapper := restmapper.NewDiscoveryRESTMapper(apigroups)
+		rMapper = restmapper.NewDiscoveryRESTMapper(apigroups)
+
+		// initialize dynamic client
+		dClient, err = dynamic.NewForConfig(r.config)
+		if err != nil {
+			reqLogger.Error(err, "Failed to create dynamic client")
+			return reconcile.Result{}, err
+		}
+	} else {
+		reqLogger.Info("Spec.PolicyTemplates is empty, nothing to reconcile.")
+		return reconcile.Result{}, nil
+	}
+
+	// PolicyTemplates is not empty
+	// loop through policy templates
+	for _, policyT := range instance.Spec.PolicyTemplates {
 		object, gvk, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
 			// failed to decode PolicyTemplate, skipping it, should throw violation
 			reqLogger.Error(err, "Failed to decode policy template...")
+			r.recorder.Event(instance, "Warning", "PolicyTemplateSync",
+				fmt.Sprintf("Failed to decode policy template with err: %s", err))
 			break
 		}
 		var rsrc schema.GroupVersionResource
-		mapping, err := restmapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+		mapping, err := rMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		if mapping != nil {
 			rsrc = mapping.Resource
 		} else {
 			// mapping not found, should create a violation event
-			reqLogger.Error(err, "Mapping not found")
-			return reconcile.Result{}, nil
-
+			reqLogger.Error(err, "Mapping not found...")
+			r.recorder.Event(instance, "Warning", "PolicyTemplateSync",
+				fmt.Sprintf("Mapping not found with err: %s", err))
+			break
 		}
-		dClient, err := dynamic.NewForConfig(r.config)
-		// if err != nil {
-		// 	log.Error(err, "")
-		// 	os.Exit(1)
-		// }
+		// fetch resource
 		res := dClient.Resource(rsrc).Namespace(instance.GetNamespace())
 		tName := object.(metav1.Object).GetName()
 		tObjectUnstructured := &unstructured.Unstructured{}
-		json.Unmarshal(policyT.ObjectDefinition.Raw, tObjectUnstructured)
+		err = json.Unmarshal(policyT.ObjectDefinition.Raw, tObjectUnstructured)
+		if err != nil {
+			// failed to decode PolicyTemplate, skipping it, should throw violation
+			reqLogger.Error(err, "Failed to unmarshal policy template...")
+			r.recorder.Event(instance, "Warning", "PolicyTemplateSync",
+				fmt.Sprintf("Failed to unmarshal policy template with err: %s", err))
+			break
+		}
 		eObject, err := res.Get(tName, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
@@ -144,33 +172,42 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 				labels := tObjectUnstructured.GetLabels()
 				if labels == nil {
 					labels = map[string]string{
-						"cluster-name":      instance.GetLabels()["cluster-name"],
-						"cluster-namespace": instance.GetLabels()["cluster-namespace"],
+						"cluster-name":               instance.GetLabels()[common.ClusterNameLabel],
+						common.ClusterNameLabel:      instance.GetLabels()[common.ClusterNameLabel],
+						"cluster-namespace":          instance.GetLabels()[common.ClusterNamespaceLabel],
+						common.ClusterNamespaceLabel: instance.GetLabels()[common.ClusterNamespaceLabel],
 					}
 				} else {
-					labels["cluster-name"] = instance.GetLabels()["cluster-name"]
-					labels["cluster-namespace"] = instance.GetLabels()["cluster-namespace"]
+					labels["cluster-name"] = instance.GetLabels()[common.ClusterNameLabel]
+					labels[common.ClusterNameLabel] = instance.GetLabels()[common.ClusterNameLabel]
+					labels["cluster-namespace"] = instance.GetLabels()[common.ClusterNamespaceLabel]
+					labels[common.ClusterNamespaceLabel] = instance.GetLabels()[common.ClusterNamespaceLabel]
 				}
 				tObjectUnstructured.SetLabels(labels)
 				tObjectUnstructured.SetOwnerReferences([]metav1.OwnerReference{plcOwnerReferences})
-				if spec, ok := tObjectUnstructured.Object["spec"]; ok {
-					specObject := spec.(map[string]interface{})
-					if _, ok := specObject["remediationAction"]; ok {
-						specObject["remediationAction"] = instance.Spec.RemediationAction
-					}
-				}
+
+				overrideRemediationAction(instance, tObjectUnstructured)
+
 				_, err = res.Create(tObjectUnstructured, metav1.CreateOptions{})
 				if err != nil {
 					// failed to create policy template
 					reqLogger.Error(err, "Failed to create policy template...", "PolicyTemplateName", tName)
+					r.recorder.Event(instance, "Warning", "PolicyTemplateSync",
+						fmt.Sprintf("Failed to create policy template %s", tName))
 					return reconcile.Result{}, err
 				}
 				reqLogger.Info("Policy template created successfully...", "PolicyTemplateName", tName)
+				r.recorder.Event(instance, "Normal", "PolicyTemplateSync",
+					fmt.Sprintf("Policy template %s was created successfully", tName))
 
 			}
 			// other error
+			r.recorder.Event(instance, "Warning", "PolicyTemplateSync",
+				fmt.Sprintf("Failed to create policy template %s", tName))
 			return reconcile.Result{}, err
 		}
+
+		overrideRemediationAction(instance, tObjectUnstructured)
 		// got object, need to compare and update
 		eObjectUnstructured := eObject.UnstructuredContent()
 		if !equality.Semantic.DeepEqual(eObjectUnstructured["spec"], tObjectUnstructured.Object["spec"]) {
@@ -180,11 +217,27 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			_, err = res.Update(eObject, metav1.UpdateOptions{})
 			if err != nil {
 				reqLogger.Error(err, "Failed to update policy template...", "PolicyTemplateName", tName)
+				r.recorder.Event(instance, "Warning", "PolicyTemplateSync",
+					fmt.Sprintf("Failed to update policy template %s", tName))
 				return reconcile.Result{}, err
 			}
 			reqLogger.Info("existing object has been updated...", "PolicyTemplateName", tName)
+			r.recorder.Event(instance, "Normal", "PolicyTemplateSync",
+				fmt.Sprintf("Policy template %s was updated successfully", tName))
 		}
 	}
 	reqLogger.Info("Reconciliation complete.")
 	return reconcile.Result{}, nil
+}
+
+func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured *unstructured.Unstructured) {
+	// override RemediationAction only when it is set on parent
+	if instance.Spec.RemediationAction != "" {
+		if spec, ok := tObjectUnstructured.Object["spec"]; ok {
+			specObject := spec.(map[string]interface{})
+			if _, ok := specObject["remediationAction"]; ok {
+				specObject["remediationAction"] = instance.Spec.RemediationAction
+			}
+		}
+	}
 }
