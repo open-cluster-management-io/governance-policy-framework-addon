@@ -14,7 +14,7 @@ spec:
         apiVersion: policies.ibm.com/v1alpha1
         kind: TrustedContainerPolicy
         metadata:
-          name: case4-test-policy-trustedcontainerpolicy1
+          name: case4-test-policy-trustedcontainerpolicy
         spec:
           severity: low
           namespaceSelector:

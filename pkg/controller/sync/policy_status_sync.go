@@ -3,18 +3,25 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
 
 	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policies/v1"
 	"github.com/open-cluster-management/governance-policy-propagator/pkg/controller/common"
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	kubecorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -24,7 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("policy-status-sync")
+const controllerName string = "policy-status-sync"
+
+var log = logf.Log.WithName(controllerName)
 
 // Add creates a new Policy Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -34,18 +43,35 @@ func Add(mgr manager.Manager, hubCfg *rest.Config) error {
 		log.Error(err, "Failed to generate client to managed cluster")
 		return err
 	}
-	return add(mgr, newReconciler(mgr, hubClient))
+	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(hubCfg)
+	eventsScheme := runtime.NewScheme()
+	if err = v1.AddToScheme(eventsScheme); err != nil {
+		return err
+	}
+
+	eventBroadcaster := record.NewBroadcaster()
+	namespace, err := k8sutil.GetWatchNamespace()
+	if err != nil {
+		log.Error(err, "Failed to get watch namespace")
+		return err
+	}
+	eventBroadcaster.StartRecordingToSink(&kubecorev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(namespace)})
+	hubRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: controllerName})
+	return add(mgr, newReconciler(mgr, hubClient, hubRecorder))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager, hubClient client.Client) reconcile.Reconciler {
-	return &ReconcilePolicy{hubClient: hubClient, managedClient: mgr.GetClient(), scheme: mgr.GetScheme()}
+func newReconciler(mgr manager.Manager, hubClient client.Client,
+	hubRecorder record.EventRecorder) reconcile.Reconciler {
+	return &ReconcilePolicy{hubClient: hubClient, managedClient: mgr.GetClient(),
+		hubRecorder: hubRecorder, managedRecorder: mgr.GetEventRecorderFor(controllerName),
+		scheme: mgr.GetScheme()}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
-	c, err := controller.New("policy-status-sync", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
@@ -73,9 +99,11 @@ var _ reconcile.Reconciler = &ReconcilePolicy{}
 type ReconcilePolicy struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	hubClient     client.Client
-	managedClient client.Client
-	scheme        *runtime.Scheme
+	hubClient       client.Client
+	managedClient   client.Client
+	hubRecorder     record.EventRecorder
+	managedRecorder record.EventRecorder
+	scheme          *runtime.Scheme
 }
 
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
@@ -172,6 +200,7 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			eventForPolicyMap[templateName] = &templateEvents
 		}
 	}
+	oldStatus := instance.Status.DeepCopy()
 	newStatus := policiesv1.PolicyStatus{}
 	for _, policyT := range instance.Spec.PolicyTemplates {
 		object, _, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
@@ -273,17 +302,29 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// all done, update status on managed and hub
 	// instance.Status.Details = nil
-	err = r.managedClient.Status().Update(context.TODO(), instance)
-	if err != nil {
-		reqLogger.Error(err, "Failed to get update policy status on managed")
-		return reconcile.Result{}, err
+	if !equality.Semantic.DeepEqual(newStatus, oldStatus) {
+		reqLogger.Info("status mismatch, update it... ")
+		err = r.managedClient.Status().Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to get update policy status on managed")
+			return reconcile.Result{}, err
+		}
+		r.managedRecorder.Event(instance, "Normal", "PolicyStatusSync",
+			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", instance.GetName(),
+				instance.GetNamespace()))
+		hubPlc.Status = instance.Status
+		err = r.hubClient.Status().Update(context.TODO(), hubPlc)
+		if err != nil {
+			reqLogger.Error(err, "Failed to get update policy status on hub")
+			return reconcile.Result{}, err
+		}
+		r.hubRecorder.Event(instance, "Normal", "PolicyStatusSync",
+			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
+				hubPlc.GetNamespace()))
+	} else {
+		reqLogger.Info("status match, nothing to update... ")
 	}
-	hubPlc.Status = instance.Status
-	err = r.hubClient.Status().Update(context.TODO(), hubPlc)
-	if err != nil {
-		reqLogger.Error(err, "Failed to get update policy status on hub")
-		return reconcile.Result{}, err
-	}
+
 	reqLogger.Info("Reconciling complete...")
 	return reconcile.Result{}, nil
 }
