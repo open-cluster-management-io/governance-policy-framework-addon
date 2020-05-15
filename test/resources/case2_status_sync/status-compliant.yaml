@@ -1,0 +1,33 @@
+apiVersion: policies.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  labels:
+    policies.open-cluster-management.io/cluster-name: managed
+    policies.open-cluster-management.io/cluster-namespace: managed
+    policies.open-cluster-management.io/root-policy: default.case2-test-policy
+  name: default.case2-test-policy
+spec:
+  disabled: false
+  policy-templates:
+  - objectDefinition:
+      apiVersion: policies.ibm.com/v1alpha1
+      kind: TrustedContainerPolicy
+      metadata:
+        name: case2-test-policy-trustedcontainerpolicy
+      spec:
+        imageRegistry: quay.io
+        namespaceSelector:
+          exclude:
+          - kube-system
+          include:
+          - default
+        remediationAction: inform
+        severity: low
+  remediationAction: inform
+status:
+  compliant: Compliant
+  details:
+  - compliant: Compliant
+    templateMeta:
+      creationTimestamp: null
+      name: case2-test-policy-trustedcontainerpolicy

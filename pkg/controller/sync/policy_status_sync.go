@@ -139,8 +139,6 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 		// update and stop here
 		return reconcile.Result{}, r.managedClient.Update(context.TODO(), instance)
 	}
-	// set overall compliance to compliant
-	instance.Status.ComplianceState = policiesv1.Compliant
 
 	// plc matches hub plc, then get events
 	eventList := &corev1.EventList{}
@@ -151,7 +149,7 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 	// filter events to current policy instance and build map
 	eventForPolicyMap := make(map[string]*[]policiesv1.ComplianceHistory)
-	rgx, err := regexp.Compile(`^policy:\s*([A-Za-z0-9.-]+)\s*\/([A-Za-z0-9.-]+)`)
+	rgx, err := regexp.Compile(`(?i)^policy:\s*([A-Za-z0-9.-]+)\s*\/([A-Za-z0-9.-]+)`)
 	if err != nil {
 		// regexp is wrong, how?
 		return reconcile.Result{}, err
@@ -174,7 +172,7 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			eventForPolicyMap[templateName] = &templateEvents
 		}
 	}
-
+	newStatus := policiesv1.PolicyStatus{}
 	for _, policyT := range instance.Spec.PolicyTemplates {
 		object, _, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
@@ -197,14 +195,11 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 		// no dpt from status field, intialzie it
 		if !found {
 			existingDpt = &policiesv1.DetailsPerTemplate{
-				ComplianceState: policiesv1.Compliant,
 				TemplateMeta: metav1.ObjectMeta{
 					Name: tName,
 				},
 				History: []policiesv1.ComplianceHistory{},
 			}
-			// append existingDpt to status
-			instance.Status.Details = append(instance.Status.Details, existingDpt)
 		}
 
 		history := []policiesv1.ComplianceHistory{}
@@ -253,16 +248,27 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 
 		// set compliancy at different level
 		if len(existingDpt.History) > 0 {
-			existingDpt.ComplianceState = policiesv1.NonCompliant
 			s := strings.Split(existingDpt.History[0].Message, ";")
-			if len(s) > 1 && strings.ToLower(strings.TrimSpace(strings.TrimPrefix(s[0], "(combined from similar events):"))) == "compliant" {
+			if len(s) > 1 && strings.ToLower(strings.TrimSpace(
+				strings.TrimPrefix(s[0], "(combined from similar events):"))) == "compliant" {
 				existingDpt.ComplianceState = policiesv1.Compliant
 			} else {
-				// one violation found in status of one template, set overall compliancy to NonCompliant
-				instance.Status.ComplianceState = policiesv1.NonCompliant
+				existingDpt.ComplianceState = policiesv1.NonCompliant
 			}
 		}
+		// append existingDpt to status
+		newStatus.Details = append(newStatus.Details, existingDpt)
 		reqLogger.Info("status update complete... ", "PolicyTemplate", tName)
+	}
+
+	instance.Status = newStatus
+	// one violation found in status of one template, set overall compliancy to NonCompliant
+	for _, dpt := range newStatus.Details {
+		if dpt.ComplianceState == "NonCompliant" || dpt.ComplianceState == "" {
+			instance.Status.ComplianceState = policiesv1.NonCompliant
+			break
+		}
+		instance.Status.ComplianceState = policiesv1.Compliant
 	}
 
 	// all done, update status on managed and hub

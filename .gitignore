@@ -86,3 +86,4 @@ OPENSOURCE.check
 !vbh/.build-harness-vendorized
 !vbh/build-harness
 !vbh/build-harness-extensions 
+kubeconfig_*

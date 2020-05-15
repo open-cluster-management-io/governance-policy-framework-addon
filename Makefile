@@ -110,7 +110,7 @@ lint: lint-all
 ############################################################
 
 test:
-	@go test ${TESTARGS} ./...
+	@go test ${TESTARGS} `go list ./... | grep -v test/e2e`
 
 ############################################################
 # coverage section
@@ -148,3 +148,53 @@ clean::
 ############################################################
 copyright-check:
 	./build/copyright-check.sh $(TRAVIS_BRANCH)
+
+############################################################
+# e2e test section
+############################################################
+.PHONY: kind-bootstrap-cluster
+kind-bootstrap-cluster: kind-create-cluster install-crds kind-deploy-controller install-resources
+
+.PHONY: kind-bootstrap-cluster-dev
+kind-bootstrap-cluster-dev: kind-create-cluster install-crds install-resources
+
+check-env:
+ifndef DOCKER_USER
+	$(error DOCKER_USER is undefined)
+endif
+ifndef DOCKER_PASS
+	$(error DOCKER_PASS is undefined)
+endif
+
+kind-deploy-controller: check-env
+	@echo installing policy-spec-sync
+	kubectl create ns multicluster-endpoint --kubeconfig=$(PWD)/kubeconfig_managed
+	kubectl create secret -n multicluster-endpoint docker-registry multiclusterhub-operator-pull-secret --docker-server=quay.io --docker-username=${DOCKER_USER} --docker-password=${DOCKER_PASS} --kubeconfig=$(PWD)/kubeconfig_managed
+	kubectl create secret -n multicluster-endpoint generic endpoint-connmgr-hub-kubeconfig --from-file=kubeconfig=$(PWD)/kubeconfig_hub_internal --kubeconfig=$(PWD)/kubeconfig_managed
+	kubectl apply -f deploy/ -n multicluster-endpoint --kubeconfig=$(PWD)/kubeconfig_managed
+
+kind-create-cluster:
+	@echo "creating cluster"
+	kind create cluster --name test-hub
+	kind get kubeconfig --name test-hub > $(PWD)/kubeconfig_hub
+	# needed for mangaed -> hub communication
+	kind get kubeconfig --name test-hub --internal > $(PWD)/kubeconfig_hub_internal
+	kind create cluster --name test-managed
+	kind get kubeconfig --name test-managed > $(PWD)/kubeconfig_managed
+
+kind-delete-cluster:
+	kind delete cluster --name test-hub
+	kind delete cluster --name test-managed
+
+install-crds:
+	@echo installing crds
+	kubectl apply -f deploy/crds/policies.open-cluster-management.io_policies_crd.yaml --kubeconfig=$(PWD)/kubeconfig_hub
+	kubectl apply -f deploy/crds/policies.open-cluster-management.io_policies_crd.yaml --kubeconfig=$(PWD)/kubeconfig_managed
+
+install-resources:
+	@echo creating namespace on hub and managed
+	kubectl create ns managed --kubeconfig=$(PWD)/kubeconfig_hub
+	kubectl create ns managed --kubeconfig=$(PWD)/kubeconfig_managed
+ 
+e2e-test:
+	ginkgo -v --slowSpecThreshold=10 test/e2e

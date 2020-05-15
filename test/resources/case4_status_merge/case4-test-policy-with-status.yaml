@@ -1,0 +1,35 @@
+apiVersion: policies.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: default.case4-test-policy
+  labels:
+    policies.open-cluster-management.io/cluster-name: managed
+    policies.open-cluster-management.io/cluster-namespace: managed
+    policies.open-cluster-management.io/root-policy: default.case4-test-policy
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policies.ibm.com/v1alpha1
+        kind: TrustedContainerPolicy
+        metadata:
+          name: case4-test-policy-trustedcontainerpolicy1
+        spec:
+          severity: low
+          namespaceSelector:
+            include: ["default"]
+            exclude: ["kube-system"]
+          remediationAction: inform
+          imageRegistry: quay.io
+status:
+  compliant: Compliant
+  details:
+  - compliant: Compliant
+    history:
+    - eventName: default.case3-test-policy.160f01b55cbd9880
+      lastTimestamp: "2020-05-14T21:17:51Z"
+      message: Compliant; there is no violation
+    templateMeta:
+      creationTimestamp: null
+      name: case3-test-policy-trustedcontainerpolicy2

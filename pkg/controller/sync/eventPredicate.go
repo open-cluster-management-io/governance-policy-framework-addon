@@ -14,21 +14,24 @@ var eventPredicateFuncs = predicate.Funcs{
 	UpdateFunc: func(e event.UpdateEvent) bool {
 		eventObjNew := e.ObjectNew.(*corev1.Event)
 		// eventObjOld := e.ObjectOld.(*corev1.Event)
-		if eventObjNew.InvolvedObject.Kind == policiesv1.Kind && eventObjNew.InvolvedObject.APIVersion == policiesv1APIVersion {
+		if eventObjNew.InvolvedObject.Kind == policiesv1.Kind &&
+			eventObjNew.InvolvedObject.APIVersion == policiesv1APIVersion {
 			return true
 		}
 		return false
 	},
 	CreateFunc: func(e event.CreateEvent) bool {
 		eventObj := e.Object.(*corev1.Event)
-		if eventObj.InvolvedObject.Kind == policiesv1.Kind && eventObj.InvolvedObject.APIVersion == policiesv1APIVersion {
+		if eventObj.InvolvedObject.Kind == policiesv1.Kind &&
+			eventObj.InvolvedObject.APIVersion == policiesv1APIVersion {
 			return true
 		}
 		return false
 	},
 	GenericFunc: func(e event.GenericEvent) bool {
 		eventObj := e.Object.(*corev1.Event)
-		if eventObj.InvolvedObject.Kind == policiesv1.Kind && eventObj.InvolvedObject.APIVersion == policiesv1APIVersion {
+		if eventObj.InvolvedObject.Kind == policiesv1.Kind &&
+			eventObj.InvolvedObject.APIVersion == policiesv1APIVersion {
 			return true
 		}
 		return false
