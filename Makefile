@@ -189,3 +189,15 @@ install-resources:
  
 e2e-test:
 	ginkgo -v --slowSpecThreshold=10 test/e2e
+
+############################################################
+# e2e test coverage
+############################################################
+build-instrumented:
+	go test -covermode=atomic -coverpkg=github.com/open-cluster-management/$(IMG)/pkg... -c -tags e2e ./cmd/manager -o build/_output/bin/$(IMG)-instrumented
+
+run-instrumented:
+	WATCH_NAMESPACE="managed" ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=coverage.out &>/dev/null &
+
+stop-instrumented:
+	ps -ef | grep 'govern' | grep -v grep | awk '{print $$2}' | xargs kill
