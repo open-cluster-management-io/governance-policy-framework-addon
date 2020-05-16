@@ -92,10 +92,6 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
 			reqLogger.Info("Policy not found, may have been deleted, reconciliation completed.")
-			// r.recorder.Event(&policiesv1.Policy{ObjectMeta: metav1.ObjectMeta{
-			// 	Name:      request.Name,
-			// 	Namespace: request.Namespace,
-			// }}, "Normal", "PolicyTemplateSync", fmt.Sprintf("Policy %s was deleted successfully", request.Name))
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
