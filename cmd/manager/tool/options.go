@@ -5,9 +5,10 @@ import "github.com/spf13/pflag"
 
 // PolicySpecSyncOptions for command line flag parsing
 type PolicySpecSyncOptions struct {
-	ClusterName           string
-	ClusterNamespace      string
-	HubConfigFilePathName string
+	ClusterName               string
+	ClusterNamespace          string
+	HubConfigFilePathName     string
+	ManagedConfigFilePathName string
 }
 
 // Options default value
@@ -36,5 +37,12 @@ func ProcessFlags() {
 		"hub-cluster-configfile",
 		Options.HubConfigFilePathName,
 		"Configuration file pathname to hub kubernetes cluster",
+	)
+
+	flag.StringVar(
+		&Options.ManagedConfigFilePathName,
+		"managed-cluster-configfile",
+		Options.ManagedConfigFilePathName,
+		"Configuration file pathname to managed kubernetes cluster",
 	)
 }
