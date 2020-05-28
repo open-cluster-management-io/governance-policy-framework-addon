@@ -277,9 +277,8 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 
 		// set compliancy at different level
 		if len(existingDpt.History) > 0 {
-			s := strings.Split(existingDpt.History[0].Message, ";")
-			if len(s) > 1 && strings.ToLower(strings.TrimSpace(
-				strings.TrimPrefix(s[0], "(combined from similar events):"))) == "compliant" {
+			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(
+				strings.TrimPrefix(existingDpt.History[0].Message, "(combined from similar events):"))), "compliant") {
 				existingDpt.ComplianceState = policiesv1.Compliant
 			} else {
 				existingDpt.ComplianceState = policiesv1.NonCompliant
