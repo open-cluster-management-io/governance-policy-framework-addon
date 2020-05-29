@@ -232,7 +232,7 @@ func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured 
 		if spec, ok := tObjectUnstructured.Object["spec"]; ok {
 			specObject := spec.(map[string]interface{})
 			if _, ok := specObject["remediationAction"]; ok {
-				specObject["remediationAction"] = instance.Spec.RemediationAction
+				specObject["remediationAction"] = string(instance.Spec.RemediationAction)
 			}
 		}
 	}
