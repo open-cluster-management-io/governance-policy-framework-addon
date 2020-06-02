@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.10.0
-	github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200512185140-129be5b7684b
+	github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200602150427-d0f4af8aba9d
 	github.com/operator-framework/operator-sdk v0.17.0
 	github.com/spf13/pflag v1.0.5
 	k8s.io/api v0.17.4
