@@ -1,11 +1,11 @@
-apiVersion: policies.open-cluster-management.io/v1
+apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
   name: default.case1-test-policy
   labels:
-    policies.open-cluster-management.io/cluster-name: managed
-    policies.open-cluster-management.io/cluster-namespace: managed
-    policies.open-cluster-management.io/root-policy: default.case1-test-policy
+    policy.open-cluster-management.io/cluster-name: managed
+    policy.open-cluster-management.io/cluster-namespace: managed
+    policy.open-cluster-management.io/root-policy: default.case1-test-policy
 spec:
   remediationAction: inform
   disabled: false
