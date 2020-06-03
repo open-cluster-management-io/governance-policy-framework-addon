@@ -1,4 +1,5 @@
 // Copyright (c) 2020 Red Hat, Inc.
+
 package sync
 
 import (
@@ -190,7 +191,7 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			templateName := rgx.FindStringSubmatch(event.Reason)[2]
 			eventHistory := policiesv1.ComplianceHistory{
 				LastTimestamp: event.LastTimestamp,
-				Message:       event.Message,
+				Message:       strings.TrimSpace(strings.TrimPrefix(event.Message, "(combined from similar events):")),
 				EventName:     event.GetName(),
 			}
 			if eventForPolicyMap[templateName] == nil {
@@ -214,14 +215,14 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 		found := false
 		for _, dpt := range instance.Status.Details {
 			if dpt.TemplateMeta.Name == tName {
-				// found existing status for curently policyTemplate
+				// found existing status for policyTemplate
 				// retreive it
 				existingDpt = dpt
 				found = true
 				break
 			}
 		}
-		// no dpt from status field, intialzie it
+		// no dpt from status field, initialize it
 		if !found {
 			existingDpt = &policiesv1.DetailsPerTemplate{
 				TemplateMeta: metav1.ObjectMeta{
