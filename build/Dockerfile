@@ -6,6 +6,7 @@ ENV OPERATOR=/usr/local/bin/governance-policy-spec-sync \
 
 # install operator binary
 COPY build/_output/bin/governance-policy-spec-sync ${OPERATOR}
+COPY build/_output/bin/uninstall-ns /usr/local/bin
 
 COPY build/bin /usr/local/bin
 RUN  /usr/local/bin/user_setup

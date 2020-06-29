@@ -76,3 +76,11 @@ func CreateClusterNs(client *kubernetes.Interface, ns string) error {
 	log.Info("Cluster namespace exists.", "Namespace", ns)
 	return nil
 }
+
+// DeleteClusterNs deletes the cluster namespace on managed cluster if not exists
+func DeleteClusterNs(client *kubernetes.Interface, ns string) error {
+	if ns != "" {
+		return (*client).CoreV1().Namespaces().Delete(ns, &metav1.DeleteOptions{})
+	}
+	return nil
+}

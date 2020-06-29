@@ -121,9 +121,11 @@ coverage:
 
 build:
 	@build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
+	@build/common/scripts/gobuild.sh build/_output/bin/uninstall-ns ./cmd/uninstall-ns
 
 local:
 	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
+	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/uninstall-ns ./cmd/uninstall-ns
 
 ############################################################
 # images section
@@ -138,6 +140,7 @@ build-images:
 ############################################################
 clean::
 	rm -f build/_output/bin/$(IMG)
+	rm -f build/_output/bin/uninstall-ns
 
 ############################################################
 # check copyright section
