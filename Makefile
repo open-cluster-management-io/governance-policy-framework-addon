@@ -153,7 +153,7 @@ copyright-check:
 # e2e test section
 ############################################################
 .PHONY: kind-bootstrap-cluster
-kind-bootstrap-cluster: kind-create-cluster install-crds kind-deploy-controller install-resources
+kind-bootstrap-cluster: kind-create-cluster install-crds install-resources kind-deploy-controller
 
 .PHONY: kind-bootstrap-cluster-dev
 kind-bootstrap-cluster-dev: kind-create-cluster install-crds install-resources
@@ -168,9 +168,6 @@ endif
 
 kind-deploy-controller: check-env
 	@echo installing policy-spec-sync
-	kubectl create ns multicluster-endpoint --kubeconfig=$(PWD)/kubeconfig_managed
-	kubectl create secret -n multicluster-endpoint docker-registry multiclusterhub-operator-pull-secret --docker-server=quay.io --docker-username=${DOCKER_USER} --docker-password=${DOCKER_PASS} --kubeconfig=$(PWD)/kubeconfig_managed
-	kubectl create secret -n multicluster-endpoint generic endpoint-connmgr-hub-kubeconfig --from-file=kubeconfig=$(PWD)/kubeconfig_hub_internal --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl apply -f deploy/ -n multicluster-endpoint --kubeconfig=$(PWD)/kubeconfig_managed
 
 kind-create-cluster:
@@ -194,6 +191,11 @@ install-crds:
 install-resources:
 	@echo creating namespace on hub
 	kubectl create ns managed --kubeconfig=$(PWD)/kubeconfig_hub
+	@echo creating namespace on managed
+	kubectl create ns multicluster-endpoint --kubeconfig=$(PWD)/kubeconfig_managed
+	@echo creating secrets on hub and managed
+	kubectl create secret -n multicluster-endpoint docker-registry multiclusterhub-operator-pull-secret --docker-server=quay.io --docker-username=${DOCKER_USER} --docker-password=${DOCKER_PASS} --kubeconfig=$(PWD)/kubeconfig_managed
+	kubectl create secret -n multicluster-endpoint generic endpoint-connmgr-hub-kubeconfig --from-file=kubeconfig=$(PWD)/kubeconfig_hub_internal --kubeconfig=$(PWD)/kubeconfig_managed
  
 e2e-test:
 	ginkgo -v --slowSpecThreshold=10 test/e2e
