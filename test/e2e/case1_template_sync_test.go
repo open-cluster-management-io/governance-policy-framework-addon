@@ -49,6 +49,16 @@ var _ = Describe("Test spec sync", func() {
 			return trustedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
 	})
+	It("should still override remediationAction in spec when there is no remediationAction", func() {
+		By("Updating policy with no remediationAction")
+		utils.Kubectl("apply", "-f", "../resources/case1_template_sync/case1-test-policy-no-remediation.yaml", "-n", testNamespace)
+		By("Checking template policy remediationAction")
+		yamlTrustedPlc := utils.ParseYaml("../resources/case1_template_sync/case1-trusted-container-policy-enforce.yaml")
+		Eventually(func() interface{} {
+			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrTrustedContainerPolicy, cast1TrustedContainerPolicyName, testNamespace, true, defaultTimeoutSeconds)
+			return trustedPlc.Object["spec"]
+		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
+	})
 	It("should contains labels from parent policy", func() {
 		By("Checking labels of template policy")
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
