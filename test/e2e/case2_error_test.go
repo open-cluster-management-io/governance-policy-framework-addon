@@ -16,17 +16,17 @@ var _ = Describe("Test error handling", func() {
 			"-n", testNamespace)
 		Eventually(func() interface{} {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrTrustedContainerPolicy,
-				"case2-remedation-action-not-exsits-trustedcontainerpolicy", testNamespace, true, defaultTimeoutSeconds)
+				"case2-remedation-action-not-exists-trustedcontainerpolicy", testNamespace, true, defaultTimeoutSeconds)
 			return trustedPlc.Object["spec"].(map[string]interface{})["remediationAction"]
 		}, defaultTimeoutSeconds, 1).Should(Equal("inform"))
 		By("Patching ../resources/case2_error_test/remediation-action-not-exists2.yaml on managed cluster in ns:" + testNamespace)
 		utils.Kubectl("apply", "-f", "../resources/case2_error_test/remediation-action-not-exists2.yaml",
 			"-n", testNamespace)
-		By("Checking the case2-remedation-action-not-exsits-trustedcontainerpolicy CR")
-		yamlTrustedPlc := utils.ParseYaml("../resources/case2_error_test/remedation-action-not-exsits-trustedcontainerpolicy.yaml")
+		By("Checking the case2-remedation-action-not-exists-trustedcontainerpolicy CR")
+		yamlTrustedPlc := utils.ParseYaml("../resources/case2_error_test/remedation-action-not-exists-trustedcontainerpolicy.yaml")
 		Eventually(func() interface{} {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrTrustedContainerPolicy,
-				"case2-remedation-action-not-exsits-trustedcontainerpolicy", testNamespace, true, defaultTimeoutSeconds)
+				"case2-remedation-action-not-exists-trustedcontainerpolicy", testNamespace, true, defaultTimeoutSeconds)
 			return trustedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
 		By("Deleting ../resources/case2_error_test/remediation-action-not-exists.yaml to clean up")
@@ -65,10 +65,11 @@ var _ = Describe("Test error handling", func() {
 		utils.Kubectl("apply", "-f", "../resources/case2_error_test/template-mapping-error.yaml",
 			"-n", testNamespace)
 		By("Creating event with decode err on managed cluster in ns:" + testNamespace)
-		eventList := utils.ListWithTimeout(clientManagedDynamic, gvrEvent, metav1.ListOptions{FieldSelector: "involvedObject.name=default.case2-template-mapping-error"}, 1, true, defaultTimeoutSeconds)
+		eventList := utils.ListWithTimeout(clientManagedDynamic, gvrEvent, metav1.ListOptions{FieldSelector: "involvedObject.name=default.case2-template-mapping-error"}, 2, true, defaultTimeoutSeconds)
 		By("Deleting the event to clean up")
-		event := eventList.Items[0]
-		utils.Kubectl("delete", "event", event.GetName(), "-n", testNamespace)
+		for _, event := range eventList.Items {
+			utils.Kubectl("delete", "event", event.GetName(), "-n", testNamespace)
+		}
 		eventList = utils.ListWithTimeout(clientManagedDynamic, gvrEvent, metav1.ListOptions{FieldSelector: "involvedObject.name=default.case2-template-mapping-error"}, 0, true, defaultTimeoutSeconds)
 		By("Deleting ../resources/case2_error_test/template-mapping-error.yaml to clean up")
 		utils.Kubectl("delete", "-f", "../resources/case2_error_test/template-mapping-error.yaml",

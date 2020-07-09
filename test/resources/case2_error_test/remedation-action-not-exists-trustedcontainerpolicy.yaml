@@ -1,7 +1,7 @@
 apiVersion: policies.ibm.com/v1alpha1
 kind: TrustedContainerPolicy
 metadata:
-  name: case2-remedation-action-not-exsits-trustedcontainerpolicy
+  name: case2-remedation-action-not-exists-trustedcontainerpolicy
 spec:
   severity: low
   namespaceSelector:
