@@ -10,6 +10,7 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/prometheus/common/log"
 	"github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
@@ -39,8 +40,10 @@ func main() {
 
 	var generatedClient kubernetes.Interface = kubernetes.NewForConfigOrDie(cfg)
 	if err := tool.DeleteClusterNs(&generatedClient, namespace); err != nil {
-		log.Error(err, "")
-		os.Exit(1)
+		if !errors.IsNotFound(err) {
+			log.Error(err, "")
+			os.Exit(1)
+		}
 	}
 	log.Info("Finished uninstall ns...")
 }
