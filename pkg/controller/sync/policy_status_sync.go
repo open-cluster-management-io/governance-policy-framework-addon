@@ -5,6 +5,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -312,15 +313,17 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 		r.managedRecorder.Event(instance, "Normal", "PolicyStatusSync",
 			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", instance.GetName(),
 				instance.GetNamespace()))
-		hubPlc.Status = instance.Status
-		err = r.hubClient.Status().Update(context.TODO(), hubPlc)
-		if err != nil {
-			reqLogger.Error(err, "Failed to get update policy status on hub")
-			return reconcile.Result{}, err
+		if "true" != os.Getenv("ON_MULTICLUSTERHUB") {
+			hubPlc.Status = instance.Status
+			err = r.hubClient.Status().Update(context.TODO(), hubPlc)
+			if err != nil {
+				reqLogger.Error(err, "Failed to get update policy status on hub")
+				return reconcile.Result{}, err
+			}
+			r.hubRecorder.Event(instance, "Normal", "PolicyStatusSync",
+				fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
+					hubPlc.GetNamespace()))
 		}
-		r.hubRecorder.Event(instance, "Normal", "PolicyStatusSync",
-			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
-				hubPlc.GetNamespace()))
 	} else {
 		reqLogger.Info("status match, nothing to update... ")
 	}
