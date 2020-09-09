@@ -1,10 +1,10 @@
 module github.com/open-cluster-management/governance-policy-spec-sync
 
-go 1.13
+go 1.14
 
 require (
-	github.com/onsi/ginkgo v1.12.0
-	github.com/onsi/gomega v1.10.0
+	github.com/onsi/ginkgo v1.14.1
+	github.com/onsi/gomega v1.10.2
 	github.com/open-cluster-management/governance-policy-propagator v0.0.0-20200602150427-d0f4af8aba9d
 	github.com/operator-framework/operator-sdk v0.17.0
 	github.com/prometheus/common v0.9.1
