@@ -16,3 +16,7 @@ Every reconcile does following things:
 ```
 operator-sdk run --local --operator-flags "--kubeconfig=path_to_kubeconfig"
 ```
+
+<!---
+Date: 9/09/2020
+-->
