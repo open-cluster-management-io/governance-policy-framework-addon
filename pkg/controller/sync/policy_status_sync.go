@@ -293,11 +293,18 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 
 	instance.Status = newStatus
 	// one violation found in status of one template, set overall compliancy to NonCompliant
+	isCompliant := true
 	for _, dpt := range newStatus.Details {
-		if dpt.ComplianceState == "NonCompliant" || dpt.ComplianceState == "" {
+		if dpt.ComplianceState == "NonCompliant" {
 			instance.Status.ComplianceState = policiesv1.NonCompliant
+			isCompliant = false
 			break
+		} else if dpt.ComplianceState == "" {
+			isCompliant = false
 		}
+	}
+	// set to compliant only when all templates are compliant
+	if isCompliant {
 		instance.Status.ComplianceState = policiesv1.Compliant
 	}
 

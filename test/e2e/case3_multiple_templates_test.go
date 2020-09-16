@@ -47,11 +47,11 @@ var _ = Describe("Test status sync with multiple templates", func() {
 		managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case3PolicyName, testNamespace, true, defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
 		managedRecorder.Event(managedPlc, "Normal", "policy: managed/case3-test-policy-trustedcontainerpolicy", fmt.Sprintf("Compliant; there is no violation"))
-		By("Checking if policy status is noncompliant")
-		Eventually(func() interface{} {
+		By("Checking if policy status consistently nil")
+		Consistently(func() interface{} {
 			managedPlc = utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case3PolicyName, testNamespace, true, defaultTimeoutSeconds)
 			return managedPlc.Object["status"].(map[string]interface{})["compliant"]
-		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		}, 20, 1).Should(BeNil())
 	})
 	It("Should not set overall compliancy to compliant", func() {
 		By("Generating an event belong to template: case3-test-policy-trustedcontainerpolicy1")
@@ -67,11 +67,11 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case3-test-policy-trustedcontainerpolicy1"))
 			return plc.Status.Details[0].ComplianceState
 		}, defaultTimeoutSeconds, 1).Should(Equal(policiesv1.Compliant))
-		By("Checking if policy overall status is noncompliant")
-		Eventually(func() interface{} {
+		By("Checking if policy overall status is still nil as only one of two policy templates has status")
+		Consistently(func() interface{} {
 			managedPlc = utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case3PolicyName, testNamespace, true, defaultTimeoutSeconds)
 			return managedPlc.Object["status"].(map[string]interface{})["compliant"]
-		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		}, 20, 1).Should(BeNil())
 		By("Checking if hub policy status is in sync")
 		Eventually(func() interface{} {
 			hubPlc := utils.GetWithTimeout(clientHubDynamic, gvrPolicy, case3PolicyName, testNamespace, true, defaultTimeoutSeconds)
@@ -93,11 +93,11 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			Expect(plc.Status.Details[1].TemplateMeta.GetName()).To(Equal("case3-test-policy-trustedcontainerpolicy2"))
 			return plc.Status.Details[1].ComplianceState
 		}, defaultTimeoutSeconds, 1).Should(Equal(policiesv1.Compliant))
-		By("Checking if policy overall status is noncompliant")
-		Eventually(func() interface{} {
+		By("Checking if policy overall status is still nil as only one of two policy templates has status")
+		Consistently(func() interface{} {
 			managedPlc = utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case3PolicyName, testNamespace, true, defaultTimeoutSeconds)
 			return managedPlc.Object["status"].(map[string]interface{})["compliant"]
-		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		}, 20, 1).Should(BeNil())
 		By("Checking if hub policy status is in sync")
 		Eventually(func() interface{} {
 			hubPlc := utils.GetWithTimeout(clientHubDynamic, gvrPolicy, case3PolicyName, testNamespace, true, defaultTimeoutSeconds)
