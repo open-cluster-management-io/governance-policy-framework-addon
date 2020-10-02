@@ -193,6 +193,9 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 					reqLogger.Error(err, "Failed to create policy template...", "PolicyTemplateName", tName)
 					r.recorder.Event(instance, "Warning", "PolicyTemplateSync",
 						fmt.Sprintf("Failed to create policy template %s", tName))
+					createErrMsg := fmt.Sprintf("NonCompliant; Failed to create policy template %s", err)
+					r.recorder.Event(instance, "Warning",
+						fmt.Sprintf("policy: %s/%s", instance.GetNamespace(), object.(metav1.Object).GetName()), createErrMsg)
 					return reconcile.Result{}, err
 				}
 				reqLogger.Info("Policy template created successfully...", "PolicyTemplateName", tName)
