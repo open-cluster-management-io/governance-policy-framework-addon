@@ -188,9 +188,8 @@ install-crds:
 	kubectl apply -f deploy/crds/policy.open-cluster-management.io_policies_crd.yaml --kubeconfig=$(PWD)/kubeconfig_managed
 
 install-resources:
-	@echo creating namespace on hub and managed
+	@echo creating namespace on hub
 	kubectl create ns managed --kubeconfig=$(PWD)/kubeconfig_hub
-	kubectl create ns managed --kubeconfig=$(PWD)/kubeconfig_managed
  
 e2e-test:
 	ginkgo -v --slowSpecThreshold=10 test/e2e
