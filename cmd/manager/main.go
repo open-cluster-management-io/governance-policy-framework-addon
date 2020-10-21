@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	"k8s.io/client-go/kubernetes"
+
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -163,13 +163,6 @@ func main() {
 
 	// Add the Metrics Service
 	addMetrics(ctx, managedCfg)
-
-	// create namespace
-	var generatedClient kubernetes.Interface = kubernetes.NewForConfigOrDie(managedCfg)
-	if err := tool.CreateClusterNs(&generatedClient, namespace); err != nil {
-		log.Error(err, "")
-		os.Exit(1)
-	}
 
 	log.Info("Starting the Cmd.")
 

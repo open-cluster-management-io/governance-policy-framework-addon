@@ -3,8 +3,6 @@ package tool
 
 import (
 	"github.com/spf13/pflag"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -54,27 +52,6 @@ func ProcessFlags() {
 		Options.ManagedConfigFilePathName,
 		"Configuration file pathname to managed kubernetes cluster",
 	)
-}
-
-// CreateClusterNs creates the cluster namespace on managed cluster if not exists
-func CreateClusterNs(client *kubernetes.Interface, ns string) error {
-	_, err := (*client).CoreV1().Namespaces().Get(ns, metav1.GetOptions{})
-	log.Info("Checking if cluster namespace exist.", "Namespace", ns)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// not found, create it
-			log.Info("Cluster namespace not found, creating it...", "Namespace", ns)
-			_, err := (*client).CoreV1().Namespaces().Create(&corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: ns,
-				},
-			})
-			return err
-		}
-		return err
-	}
-	log.Info("Cluster namespace exists.", "Namespace", ns)
-	return nil
 }
 
 // DeleteClusterNs deletes the cluster namespace on managed cluster if not exists
