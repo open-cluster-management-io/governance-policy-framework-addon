@@ -118,6 +118,7 @@ func main() {
 	// Set default manager options
 	options := manager.Options{
 		Namespace:          namespace,
+		MetricsBindAddress: "0",
 	}
 
 	// Add support for MultiNamespace set in WATCH_NAMESPACE (e.g ns1,ns2)
