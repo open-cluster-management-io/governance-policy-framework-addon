@@ -19,5 +19,5 @@ operator-sdk run --local --operator-flags "--hub-cluster-configfile=path_to_kube
 ```
 
 <!---
-Date: 9/09/2020
+Date: Nov/10/2020
 -->
