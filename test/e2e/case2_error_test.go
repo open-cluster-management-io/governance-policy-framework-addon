@@ -3,6 +3,8 @@
 package e2e
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/open-cluster-management/governance-policy-propagator/test/utils"
@@ -73,6 +75,28 @@ var _ = Describe("Test error handling", func() {
 		eventList = utils.ListWithTimeout(clientManagedDynamic, gvrEvent, metav1.ListOptions{FieldSelector: "involvedObject.name=default.case2-template-mapping-error"}, 0, true, defaultTimeoutSeconds)
 		By("Deleting ../resources/case2_error_test/template-mapping-error.yaml to clean up")
 		utils.Kubectl("delete", "-f", "../resources/case2_error_test/template-mapping-error.yaml",
+			"-n", testNamespace)
+		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, metav1.ListOptions{}, 0, true, defaultTimeoutSeconds)
+	})
+	It("should generate duplicate policy template err event", func() {
+		By("Creating ../resources/case2_error_test/working-policy-duplicate.yaml on managed cluster in ns:" + testNamespace)
+		utils.Kubectl("apply", "-f", "../resources/case2_error_test/working-policy.yaml",
+			"-n", testNamespace)
+		//wait for original policy to be processed before creating duplicate policy
+		time.Sleep(30 * time.Second)
+		utils.Kubectl("apply", "-f", "../resources/case2_error_test/working-policy-duplicate.yaml",
+			"-n", testNamespace)
+		By("Creating event with duplicate err on managed cluster in ns:" + testNamespace)
+		eventList := utils.ListWithTimeout(clientManagedDynamic, gvrEvent, metav1.ListOptions{FieldSelector: "involvedObject.name=default.case2-test-policy-duplicate"}, 2, true, defaultTimeoutSeconds)
+		By("Deleting the event to clean up")
+		for _, event := range eventList.Items {
+			utils.Kubectl("delete", "event", event.GetName(), "-n", testNamespace)
+		}
+		eventList = utils.ListWithTimeout(clientManagedDynamic, gvrEvent, metav1.ListOptions{FieldSelector: "involvedObject.name=default.case2-test-policy-duplicate"}, 0, true, defaultTimeoutSeconds)
+		By("Deleting policies to clean up")
+		utils.Kubectl("delete", "-f", "../resources/case2_error_test/working-policy.yaml",
+			"-n", testNamespace)
+		utils.Kubectl("delete", "-f", "../resources/case2_error_test/working-policy-duplicate.yaml",
 			"-n", testNamespace)
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, metav1.ListOptions{}, 0, true, defaultTimeoutSeconds)
 	})
