@@ -18,5 +18,5 @@ operator-sdk run --local --operator-flags "--kubeconfig=path_to_kubeconfig"
 ```
 
 <!---
-Date: 9/09/2020
+Date: Jan/04/2021
 -->
