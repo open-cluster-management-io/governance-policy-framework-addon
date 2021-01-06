@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Red Hat, Inc.
+// Copyright (c) 2021 Red Hat, Inc.
 package main
 
 import (
@@ -166,4 +166,3 @@ func main() {
 		os.Exit(1)
 	}
 }
-
