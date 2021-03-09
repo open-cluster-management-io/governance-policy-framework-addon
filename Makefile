@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Copyright Contributors to the Open Cluster Management project
+
 
 # This repo is build in Travis-ci by default;
 # Override this variable in local env.
@@ -107,7 +109,7 @@ test:
 ############################################################
 # coverage section
 ############################################################
- 
+
 coverage:
 	@build/common/scripts/codecov.sh
 
@@ -186,7 +188,7 @@ install-crds:
 install-resources:
 	@echo creating namespace on hub
 	kubectl create ns managed --kubeconfig=$(PWD)/kubeconfig_hub
- 
+
 e2e-test:
 	ginkgo -v --slowSpecThreshold=10 test/e2e
 

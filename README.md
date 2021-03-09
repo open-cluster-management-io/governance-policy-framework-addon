@@ -1,3 +1,5 @@
+[comment]: # ( Copyright Contributors to the Open Cluster Management project )
+
 # Governance Policy Status Sync
 Red Hat Advance Cluster Management Governance - Policy Status Sync
 
