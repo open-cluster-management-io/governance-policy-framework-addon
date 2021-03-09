@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Copyright Contributors to the Open Cluster Management project
+
 
 # This repo is build in Travis-ci by default;
 # Override this variable in local env.
@@ -107,7 +109,7 @@ test:
 ############################################################
 # coverage section
 ############################################################
- 
+
 coverage:
 	@build/common/scripts/codecov.sh
 
@@ -193,7 +195,7 @@ install-resources:
 	@echo creating secrets on hub and managed
 	kubectl create secret -n multicluster-endpoint docker-registry multiclusterhub-operator-pull-secret --docker-server=quay.io --docker-username=${DOCKER_USER} --docker-password=${DOCKER_PASS} --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl create secret -n multicluster-endpoint generic endpoint-connmgr-hub-kubeconfig --from-file=kubeconfig=$(PWD)/kubeconfig_hub_internal --kubeconfig=$(PWD)/kubeconfig_managed
- 
+
 e2e-test:
 	ginkgo -v --slowSpecThreshold=10 test/e2e
 

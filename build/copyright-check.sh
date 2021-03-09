@@ -5,8 +5,10 @@
 # U.S. Government Users Restricted Rights - Use, duplication or disclosure restricted by GSA ADP Schedule
 # Contract with IBM Corp.
 # Licensed Materials - Property of IBM
-# Copyright (c) 2020 Red Hat, Inc.
 ###############################################################################
+# Copyright (c) 2020 Red Hat, Inc.
+# Copyright Contributors to the Open Cluster Management project
+
 
 #Project start year
 origin_year=2016
@@ -33,6 +35,7 @@ if [ -z "$current_year" ] || [ $current_year -lt $origin_year ]; then
 fi
 
 lic_ibm_identifier=" (c) Copyright IBM Corporation"
+lic_redhat_identifier_2020=" Copyright (c) 2020 Red Hat, Inc."
 lic_redhat_identifier=" Copyright (c) ${current_year} Red Hat, Inc."
 
 lic_year=()
@@ -110,7 +113,7 @@ for f in $FILES_TO_SCAN; do
     must_have_redhat_license=true
   fi
 
-  if [[ "${must_have_redhat_license}" == "true" ]] && [[ "$header" != *"${lic_redhat_identifier}"* ]]; then
+  if [[ "${must_have_redhat_license}" == "true" && "$header" != *"${lic_redhat_identifier_2020}"* && "$header" != *"${lic_redhat_identifier}"* ]]; then
     printf " Missing copyright\n >> Could not find [${lic_redhat_identifier}] in the file.\n"
     ERROR=1
   fi
