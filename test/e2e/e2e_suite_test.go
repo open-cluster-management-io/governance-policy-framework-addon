@@ -1,10 +1,10 @@
 // Copyright (c) 2020 Red Hat, Inc.
 // Copyright Contributors to the Open Cluster Management project
 
-
 package e2e
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -71,20 +71,20 @@ var _ = BeforeSuite(func() {
 	defaultTimeoutSeconds = 30
 	By("Create Namespace if needed")
 	namespacesHub := clientHub.CoreV1().Namespaces()
-	if _, err := namespacesHub.Get(testNamespace, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
-		Expect(namespacesHub.Create(&corev1.Namespace{
+	if _, err := namespacesHub.Get(context.TODO(), testNamespace, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
+		Expect(namespacesHub.Create(context.TODO(), &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testNamespace,
 			},
-		})).NotTo(BeNil())
+		}, metav1.CreateOptions{})).NotTo(BeNil())
 	}
 	namespacesManaged := clientHub.CoreV1().Namespaces()
-	if _, err := namespacesManaged.Get(testNamespace, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
-		Expect(namespacesManaged.Create(&corev1.Namespace{
+	if _, err := namespacesManaged.Get(context.TODO(), testNamespace, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
+		Expect(namespacesManaged.Create(context.TODO(), &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testNamespace,
 			},
-		})).NotTo(BeNil())
+		}, metav1.CreateOptions{})).NotTo(BeNil())
 	}
 	By("Create EventRecorder")
 	var err error

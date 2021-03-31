@@ -1,15 +1,15 @@
 // Copyright (c) 2020 Red Hat, Inc.
 // Copyright Contributors to the Open Cluster Management project
 
-
 package e2e
 
 import (
+	"context"
 	"fmt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policies/v1"
+	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policy/v1"
 	"github.com/open-cluster-management/governance-policy-propagator/test/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -45,7 +45,7 @@ var _ = Describe("Test mutation recovery", func() {
 		managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
 		Expect(managedPlc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("inform"))
 		managedPlc.Object["spec"].(map[string]interface{})["remediationAction"] = "enforce"
-		managedPlc, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace).Update(managedPlc, metav1.UpdateOptions{})
+		managedPlc, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace).Update(context.TODO(), managedPlc, metav1.UpdateOptions{})
 		Expect(err).To(BeNil())
 		By("Comparing spec between hub and managed policy")
 		hubPlc := utils.GetWithTimeout(clientHubDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
@@ -58,7 +58,7 @@ var _ = Describe("Test mutation recovery", func() {
 		By("Patching " + case1PolicyYaml + " on managed with spec.policyTemplate = {}")
 		managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
 		managedPlc.Object["spec"].(map[string]interface{})["policy-templates"] = []*policiesv1.PolicyTemplate{}
-		managedPlc, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace).Update(managedPlc, metav1.UpdateOptions{})
+		managedPlc, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace).Update(context.TODO(), managedPlc, metav1.UpdateOptions{})
 		Expect(err).To(BeNil())
 		By("Comparing spec between hub and managed policy")
 		hubPlc := utils.GetWithTimeout(clientHubDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
@@ -90,7 +90,7 @@ var _ = Describe("Test mutation recovery", func() {
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("Update status to NonCompliant")
 		managedPlc.Object["status"].(map[string]interface{})["compliant"] = "NonCompliant"
-		managedPlc, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace).UpdateStatus(managedPlc, metav1.UpdateOptions{})
+		managedPlc, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace).UpdateStatus(context.TODO(), managedPlc, metav1.UpdateOptions{})
 		Expect(err).To(BeNil())
 		Expect(managedPlc.Object["status"].(map[string]interface{})["compliant"]).To(Equal("NonCompliant"))
 		By("Checking if policy status was recovered to compliant")

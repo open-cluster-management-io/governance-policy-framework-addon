@@ -4,6 +4,8 @@
 package tool
 
 import (
+	"context"
+
 	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -61,18 +63,18 @@ func ProcessFlags() {
 // CreateClusterNs creates the cluster namespace on managed cluster if not exists
 func CreateClusterNs(client *kubernetes.Interface, nsName string) error {
 	const clusterLabel = "policy.open-cluster-management.io/isClusterNamespace"
-	ns, err := (*client).CoreV1().Namespaces().Get(nsName, metav1.GetOptions{})
+	ns, err := (*client).CoreV1().Namespaces().Get(context.TODO(), nsName, metav1.GetOptions{})
 	log.Info("Checking if cluster namespace exist.", "Namespace", nsName)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// not found, create it
 			log.Info("Cluster namespace not found, creating it...", "Namespace", nsName)
-			_, err := (*client).CoreV1().Namespaces().Create(&corev1.Namespace{
+			_, err := (*client).CoreV1().Namespaces().Create(context.TODO(), &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   nsName,
 					Labels: map[string]string{clusterLabel: "true"},
 				},
-			})
+			}, metav1.CreateOptions{})
 			return err
 		}
 		return err
@@ -87,7 +89,7 @@ func CreateClusterNs(client *kubernetes.Interface, nsName string) error {
 		log.Info("Label doesn't exist, patching it...", "Namespace", nsName)
 		labels[clusterLabel] = "true"
 		ns.SetLabels(labels)
-		_, err = (*client).CoreV1().Namespaces().Update(ns)
+		_, err = (*client).CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
 		if err != nil {
 			log.Error(err, "Failed to patch cluster namespace with label.", "Namespace", nsName)
 			return err
