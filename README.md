@@ -1,7 +1,7 @@
 [comment]: # ( Copyright Contributors to the Open Cluster Management project )
 
-# Governance Policy Template Sync
-Red Hat Advance Cluster Management Governance - Policy Template Sync
+# Governance Policy Template Sync [![KinD tests](https://github.com/open-cluster-management/governance-policy-template-sync/actions/workflows/kind.yml/badge.svg?branch=main&event=push)](https://github.com/open-cluster-management/governance-policy-template-sync/actions/workflows/kind.yml)
+Red Hat Advanced Cluster Management Governance - Policy Template Sync
 
 ## How it works
 
