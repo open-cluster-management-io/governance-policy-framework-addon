@@ -9,49 +9,20 @@ services:
 branches:
   only:
     - main
-    - /^release-[0-9]+\..*$/
-
-addons:
-  sonarcloud:
-    organization: "open-cluster-management"
-    token:
-      secure: "ZjI4wN+SvW18G7vrjF4MvtHuX4ttsTZX6u9yKvyoY+CjhSkqGJ/GgWbEZAakTzcRCUnmPqxuvtCAb0bXVZi+YDpOT0KoVUJCa9S00QA+BSuYvwwVMhO9K/n6mqr3WxoRHb+Z9x8cm4Bpkb6eq13IjAeDFTHX6TjSug0AS6BirWrq6aza1Z3PHMtRyTjdXyP7iRNANytyKtMt2oz+fwqXWIOwrdBAkaVvGYFys03sSfjLm3bWdGGZNGCDZ/wZ6Z4Tv+1pQ7e9iIgKjhcDCDHLrJ6lgHslqxUvTqBr3qSZKM+jHHeBkJwIfmEMjb0IKVawdhJvW+daUzYmr8cYGWrehhiEwzRcQbpcA518XCrScF27RqGyLbyvXgt7XsB95IRWW1Ge3b2d5Fqb0zbxxMEX3lYCY8iV2RRWs6/f7DqWpGQTSSqG2cs5hY5+5eub7SofzpwtAO8sv/QDp52PTz/4yUWqZFaRK8VnHDazEjRK+GH99haAoCA7lPK1Ksjp7Zgm4kKb7ZB/qvzzo0cj0KA2oMFyK6GiCO1HKlnpMzK1M/Dq1Kf06pzYCfbkMHNZS6a6cp0x0gt8k0sWhdG8JRmRjz+VCTEI99akelPkqkFy19BXUORDpL41dOWMemaTb9BtfsfJ29PJTBNi0PaYh5RIdYnRJWHU/wE8ZsQv27aR5ZE="
 
 env:
   global:
     # Required
     - OS=linux
-    - COMPONENT_TAG_EXTENSION="-${TRAVIS_COMMIT}"
     # Component Specific
     - COMPONENT_INIT_COMMAND=${TRAVIS_BUILD_DIR}/build/install-dependencies.sh
     - COMPONENT_BUILD_COMMAND=${TRAVIS_BUILD_DIR}/build/build.sh
-    - COMPONENT_UNIT_TEST_COMMAND=${TRAVIS_BUILD_DIR}/build/run-unit-tests.sh
-    - COMPONENT_E2E_TEST_COMMAND=${TRAVIS_BUILD_DIR}/build/run-e2e-tests.sh
 
 stages:
-  # - lint
   - build
-  - unit-test
-  - test-e2e
-  # - publish
 
 jobs:
   include:
-    # - stage: lint
-    #   name: "Run code lint"
-    #   if: type = pull_request
-    #   script: bash ${TRAVIS_BUILD_DIR}/build/run-code-lint.sh
-    - stage: build
-      name: "Build the image for pr and push it"
-      if: type = pull_request
-      script:
-        - set -e
-        - make copyright-check TRAVIS_BRANCH=${TRAVIS_BRANCH}
-        - export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"
-        - |
-          make
-          make component/build
-          make component/push
     - stage: build
       name: "Build the image with latest-dev tag and push it"
       if: type = push AND branch = main
@@ -63,33 +34,3 @@ jobs:
           make
           make component/build
           make component/push
-    - stage: unit-test
-      name: "Run unit test and collect coverage"
-      script:
-        - set -e
-        - |
-          make
-          make component/test/unit
-          set +e
-          make stop-instrumented
-          set -e
-          make go/gosec-install
-          gosec -fmt sonarqube -out gosec.json -no-fail ./...
-          make sonar/js
-    - stage: test-e2e
-      name: "Deploy the image to a cluster and run e2e tests"
-      if: type = pull_request
-      script:
-        - set -e
-        - export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"
-        - |
-          make
-          make component/pull
-          make component/test/e2e
-    # - stage: publish
-    #   name: "Publish the image to quay with an official version/sha tag and publish entry to integration pipeline stage"
-    #   if: type = push AND branch =~ /^release-[0-9]+\..*$/
-    #   script:
-    #     - |
-    #       make
-    #       make pipeline-manifest/update PIPELINE_MANIFEST_COMPONENT_SHA256=${TRAVIS_COMMIT} PIPELINE_MANIFEST_COMPONENT_REPO=${TRAVIS_REPO_SLUG} PIPELINE_MANIFEST_BRANCH=${TRAVIS_BRANCH}

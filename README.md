@@ -1,7 +1,7 @@
 [comment]: # ( Copyright Contributors to the Open Cluster Management project )
 
-# Governance Policy Spec Sync
-Red Hat Advance Cluster Management Governance - Policy Spec Sync
+# Governance Policy Spec Sync [![KinD tests](https://github.com/open-cluster-management/governance-policy-spec-sync/actions/workflows/kind.yml/badge.svg?branch=main&event=push)](https://github.com/open-cluster-management/governance-policy-spec-sync/actions/workflows/kind.yml)
+Red Hat Advanced Cluster Management Governance - Policy Spec Sync
 
 ## How it works
 
