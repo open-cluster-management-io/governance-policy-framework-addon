@@ -29,8 +29,8 @@ make install-resources
 make kind-deploy-controller 
 
 echo "patch image"
-kubectl patch deployment governance-policy-spec-sync -n multicluster-endpoint -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"governance-policy-spec-sync\",\"image\":\"${DOCKER_IMAGE_AND_TAG}\"}]}}}}"
-kubectl rollout status -n multicluster-endpoint deployment governance-policy-spec-sync --timeout=90s
+kubectl patch deployment governance-policy-spec-sync -n open-cluster-management-agent-addon -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"governance-policy-spec-sync\",\"image\":\"${DOCKER_IMAGE_AND_TAG}\"}]}}}}"
+kubectl rollout status -n open-cluster-management-agent-addon deployment governance-policy-spec-sync --timeout=90s
 sleep 10
 
 make e2e-test

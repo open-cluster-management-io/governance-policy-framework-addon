@@ -37,8 +37,8 @@ go test `go list ./... | grep -v test/e2e` > report.json
 # run e2e test
 make build-instrumented
 make kind-bootstrap-cluster-dev
-kubectl apply -f deploy/service_account.yaml -n multicluster-endpoint
-kubectl apply -f deploy/clusterrole.yaml -n multicluster-endpoint
-kubectl apply -f deploy/clusterrole_binding.yaml -n multicluster-endpoint
+kubectl apply -f deploy/service_account.yaml -n open-cluster-management-agent-addon
+kubectl apply -f deploy/clusterrole.yaml -n open-cluster-management-agent-addon
+kubectl apply -f deploy/clusterrole_binding.yaml -n open-cluster-management-agent-addon
 make run-instrumented
 make e2e-test

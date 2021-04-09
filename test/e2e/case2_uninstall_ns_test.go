@@ -32,12 +32,12 @@ var _ = Describe("Test uninstall ns", func() {
 	})
 	AfterEach(func() {
 		By("Delete the job on managed cluster")
-		utils.Kubectl("delete", "job", "uninstall-ns", "-n", "multicluster-endpoint",
+		utils.Kubectl("delete", "job", "uninstall-ns", "-n", "open-cluster-management-agent-addon",
 			"--kubeconfig=../../kubeconfig_managed")
 	})
 	It("should remove ns on managed cluster", func() {
 		By("Running uninstall ns job")
-		utils.Kubectl("apply", "-f", case2UninstallYaml, "-n", "multicluster-endpoint",
+		utils.Kubectl("apply", "-f", case2UninstallYaml, "-n", "open-cluster-management-agent-addon",
 			"--kubeconfig=../../kubeconfig_managed")
 		By("Checking if ns uninstall has been deleted eventually")
 		Eventually(func() interface{} {
