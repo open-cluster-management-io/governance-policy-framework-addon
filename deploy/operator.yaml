@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,8 +14,6 @@ spec:
         name: governance-policy-template-sync
     spec:
       serviceAccountName: governance-policy-template-sync
-      imagePullSecrets:
-        - name: multiclusterhub-operator-pull-secret
       containers:
         - name: governance-policy-template-sync
           image: quay.io/open-cluster-management/governance-policy-template-sync:latest-dev
@@ -30,3 +29,150 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: "governance-policy-template-sync"
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: governance-policy-template-sync
+subjects:
+- kind: ServiceAccount
+  name: governance-policy-template-sync
+  namespace: open-cluster-management-agent-addon
+roleRef:
+  kind: ClusterRole
+  name: governance-policy-template-sync
+  apiGroup: rbac.authorization.k8s.io
+
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: governance-policy-template-sync
+rules:
+- apiGroups:
+  - "policy.open-cluster-management.io"
+  - "policies.ibm.com"
+  resources:
+  - '*'
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: governance-policy-template-sync
+subjects:
+- kind: ServiceAccount
+  name: governance-policy-template-sync
+roleRef:
+  kind: Role
+  name: governance-policy-template-sync
+  apiGroup: rbac.authorization.k8s.io
+
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: governance-policy-template-sync
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - services
+  - services/finalizers
+  - endpoints
+  - persistentvolumeclaims
+  - events
+  - configmaps
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - daemonsets
+  - replicasets
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - "get"
+  - "create"
+- apiGroups:
+  - apps
+  resources:
+  - deployments/finalizers
+  resourceNames:
+  - governance-policy-template-sync
+  verbs:
+  - "update"
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  - deployments
+  verbs:
+  - get
+- apiGroups:
+  - "policy.open-cluster-management.io"
+  - "policies.ibm.com"
+  resources:
+  - '*'
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: governance-policy-template-sync
