@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policies/v1"
+	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policy/v1"
 	"github.com/open-cluster-management/governance-policy-propagator/pkg/controller/common"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	v1 "k8s.io/api/core/v1"
