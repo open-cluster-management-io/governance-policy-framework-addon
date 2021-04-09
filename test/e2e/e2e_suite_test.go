@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/user"
@@ -60,12 +61,12 @@ var _ = BeforeSuite(func() {
 	defaultTimeoutSeconds = 30
 	By("Create Namesapce if needed")
 	namespacesHub := clientManaged.CoreV1().Namespaces()
-	if _, err := namespacesHub.Get(testNamespace, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
-		Expect(namespacesHub.Create(&corev1.Namespace{
+	if _, err := namespacesHub.Get(context.TODO(), testNamespace, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
+		Expect(namespacesHub.Create(context.TODO(), &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testNamespace,
 			},
-		})).NotTo(BeNil())
+		}, metav1.CreateOptions{})).NotTo(BeNil())
 	}
 	By("Create trustedcontainerpolicy CRD")
 	utils.Kubectl("apply", "-f", "../resources/policies.ibm.com_trustedcontainerpolicies_crd.yaml")

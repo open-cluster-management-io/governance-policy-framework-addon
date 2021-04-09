@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policies/v1"
+	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policy/v1"
 	"github.com/open-cluster-management/governance-policy-propagator/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -162,7 +162,7 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 				fmt.Sprintf("Failed to unmarshal policy template with err: %s", err))
 			continue
 		}
-		eObject, err := res.Get(tName, metav1.GetOptions{})
+		eObject, err := res.Get(context.TODO(), tName, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				// not found should create it
@@ -190,7 +190,7 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 
 				overrideRemediationAction(instance, tObjectUnstructured)
 
-				_, err = res.Create(tObjectUnstructured, metav1.CreateOptions{})
+				_, err = res.Create(context.TODO(), tObjectUnstructured, metav1.CreateOptions{})
 				if err != nil {
 					// failed to create policy template
 					reqLogger.Error(err, "Failed to create policy template...", "PolicyTemplateName", tName)
@@ -235,7 +235,7 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			// doesn't match
 			reqLogger.Info("existing object and template don't match, updating...", "PolicyTemplateName", tName)
 			eObjectUnstructured["spec"] = tObjectUnstructured.Object["spec"]
-			_, err = res.Update(eObject, metav1.UpdateOptions{})
+			_, err = res.Update(context.TODO(), eObject, metav1.UpdateOptions{})
 			if err != nil {
 				reqLogger.Error(err, "Failed to update policy template...", "PolicyTemplateName", tName)
 				r.recorder.Event(instance, "Warning", "PolicyTemplateSync",

@@ -4,6 +4,8 @@
 package e2e
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/open-cluster-management/governance-policy-propagator/pkg/controller/common"
@@ -40,7 +42,7 @@ var _ = Describe("Test spec sync", func() {
 		By("Patching policy remediationAction=enforce")
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
 		plc.Object["spec"].(map[string]interface{})["remediationAction"] = "enforce"
-		plc, err := clientManagedDynamic.Resource(gvrPolicy).Namespace("managed").Update(plc, metav1.UpdateOptions{})
+		plc, err := clientManagedDynamic.Resource(gvrPolicy).Namespace("managed").Update(context.TODO(), plc, metav1.UpdateOptions{})
 		Expect(err).To(BeNil())
 		Expect(plc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("enforce"))
 		By("Checking template policy remediationAction")
