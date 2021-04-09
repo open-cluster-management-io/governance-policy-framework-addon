@@ -39,8 +39,7 @@ var (
 	kubeconfigManaged     string
 	defaultTimeoutSeconds int
 
-	defaultImageRegistry       string
-	defaultImagePullSecretName string
+	defaultImageRegistry string
 
 	managedRecorder record.EventRecorder
 )
@@ -66,7 +65,6 @@ var _ = BeforeSuite(func() {
 	clientManaged = NewKubeClient("", kubeconfigManaged, "")
 	clientManagedDynamic = NewKubeClientDynamic("", kubeconfigManaged, "")
 	defaultImageRegistry = "quay.io/open-cluster-management"
-	defaultImagePullSecretName = "multiclusterhub-operator-pull-secret"
 	testNamespace = "managed"
 	defaultTimeoutSeconds = 30
 	By("Create Namespace if needed")
