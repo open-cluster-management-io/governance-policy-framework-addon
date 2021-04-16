@@ -13,10 +13,10 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/open-cluster-management/addon-framework/pkg/lease"
 	"github.com/open-cluster-management/governance-policy-status-sync/cmd/manager/tool"
 	"github.com/open-cluster-management/governance-policy-status-sync/pkg/apis"
 	"github.com/open-cluster-management/governance-policy-status-sync/pkg/controller"
@@ -24,12 +24,13 @@ import (
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/leader"
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
+
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
 	"github.com/spf13/pflag"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
@@ -46,25 +47,12 @@ func printVersion() {
 func main() {
 	// custom flags for the controler
 	tool.ProcessFlags()
-	// Add the zap logger flag set to the CLI. The flag set must
-	// be added before calling pflag.Parse().
-	pflag.CommandLine.AddFlagSet(zap.FlagSet())
 
-	// Add flags registered by imported packages (e.g. glog and
-	// controller-runtime)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.Parse()
 
-	// Use a zap logr.Logger implementation. If none of the zap
-	// flags are configured (or if the zap flag set is not being
-	// used), this defaults to a production zap logger.
-	//
-	// The logger instantiated here can be changed to any logger
-	// implementing the logr.Logger interface. This logger will
-	// be propagated through the whole operator, generating
-	// uniform and structured logs.
-	logf.SetLogger(zap.Logger())
+	logf.SetLogger(zap.New())
 
 	printVersion()
 
@@ -158,6 +146,29 @@ func main() {
 	if err := tool.CreateClusterNs(&generatedClient, namespace); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
+	}
+
+	if tool.Options.EnableLease {
+		operatorNs, err := k8sutil.GetOperatorNamespace()
+		if err != nil {
+			if err == k8sutil.ErrNoNamespace || err == k8sutil.ErrRunLocal {
+				log.Info("Skipping lease; not running in a cluster.")
+			} else {
+				log.Error(err, "Failed to get operator namespace")
+				os.Exit(1)
+			}
+		} else {
+			log.Info("Starting lease controller to report status")
+			leaseUpdater := lease.NewLeaseUpdater(
+				generatedClient,
+				"policy-controller",
+				operatorNs,
+				lease.CheckAddonPodFunc(generatedClient.CoreV1(), operatorNs, "app=policy-framework"),
+			)
+			go leaseUpdater.Start(ctx)
+		}
+	} else {
+		log.Info("Status reporting is not enabled")
 	}
 
 	log.Info("Starting the Cmd.")

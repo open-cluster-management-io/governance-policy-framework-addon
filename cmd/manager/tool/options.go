@@ -22,6 +22,7 @@ type PolicySpecSyncOptions struct {
 	ClusterNamespace          string
 	HubConfigFilePathName     string
 	ManagedConfigFilePathName string
+	EnableLease               bool
 }
 
 // Options default value
@@ -57,6 +58,13 @@ func ProcessFlags() {
 		"managed-cluster-configfile",
 		Options.ManagedConfigFilePathName,
 		"Configuration file pathname to managed kubernetes cluster",
+	)
+
+	flag.BoolVar(
+		&Options.EnableLease,
+		"enable-lease",
+		false,
+		"If enabled, the controller will start the lease controller to report its status",
 	)
 }
 

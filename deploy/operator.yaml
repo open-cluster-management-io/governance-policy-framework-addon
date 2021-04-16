@@ -12,6 +12,7 @@ spec:
     metadata:
       labels:
         name: governance-policy-status-sync
+        app: policy-framework
     spec:
       serviceAccountName: governance-policy-status-sync
       containers:
@@ -21,6 +22,7 @@ spec:
           - governance-policy-status-sync
           args:
             - '--hub-cluster-configfile=/var/run/klusterlet/kubeconfig'
+            - '--enable-lease=true'
           imagePullPolicy: Always
           volumeMounts:
             - name: klusterlet-config
@@ -105,6 +107,18 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: governance-policy-status-sync
 rules:
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - ""
   resources:

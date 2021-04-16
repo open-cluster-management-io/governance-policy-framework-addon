@@ -231,6 +231,7 @@ e2e-debug:
 	@echo gathering managed cluster info
 	kubectl get all -n $(KIND_NAMESPACE) --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl get all -n managed --kubeconfig=$(PWD)/kubeconfig_managed
+	kubectl get leases -n managed --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl get Policy.policy.open-cluster-management.io --all-namespaces --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl describe pods -n $(KIND_NAMESPACE) --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl logs $$(kubectl get pods -n $(KIND_NAMESPACE) -o name --kubeconfig=$(PWD)/kubeconfig_managed | grep $(IMG)) -n $(KIND_NAMESPACE) --kubeconfig=$(PWD)/kubeconfig_managed
