@@ -161,7 +161,7 @@ func main() {
 			log.Info("Starting lease controller to report status")
 			leaseUpdater := lease.NewLeaseUpdater(
 				generatedClient,
-				"policy-controller",
+				"policy-framework-controller",
 				operatorNs,
 				lease.CheckAddonPodFunc(generatedClient.CoreV1(), operatorNs, "app=policy-framework"),
 			)
