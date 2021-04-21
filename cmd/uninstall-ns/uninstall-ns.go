@@ -8,23 +8,17 @@ import (
 	"os"
 
 	"github.com/open-cluster-management/governance-policy-spec-sync/cmd/manager/tool"
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
-	"github.com/prometheus/common/log"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func main() {
 	var namespace string
+	var log = logf.Log.WithName("uninstall")
 
-	// Add the zap logger flag set to the CLI. The flag set must
-	// be added before calling pflag.Parse().
-	pflag.CommandLine.AddFlagSet(zap.FlagSet())
-
-	// Add flags registered by imported packages (e.g. glog and
-	// controller-runtime)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.StringVar(&namespace, "namespace", "", "namespace to delete")
