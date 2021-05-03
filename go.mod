@@ -1,6 +1,6 @@
 module github.com/open-cluster-management/governance-policy-template-sync
 
-go 1.14
+go 1.16
 
 require (
 	github.com/onsi/ginkgo v1.14.1
