@@ -1,24 +1,39 @@
 [comment]: # ( Copyright Contributors to the Open Cluster Management project )
 
 # Governance Policy Template Sync [![KinD tests](https://github.com/open-cluster-management/governance-policy-template-sync/actions/workflows/kind.yml/badge.svg?branch=main&event=push)](https://github.com/open-cluster-management/governance-policy-template-sync/actions/workflows/kind.yml)
-Red Hat Advanced Cluster Management Governance - Policy Template Sync
 
-## How it works
+## Description
 
-This operator watches for following changes to trigger reconcile
+The governance policy template sync runs on managed clusters and updates objects defined in the templates of `Policies` in the cluster namespace. This controller is a part of the [governance-policy-framework](https://github.com/open-cluster-management/governance-policy-framework).
 
+This operator watches for changes on `Policies` in the cluster namespace on the managed cluster to trigger a reconcile. On each reconcile, it creates/updates/deletes objects defined in the `spec.policy-templates` of those `Policies`.
 
-1. policies changes in watching cluster namespace on managed cluster
+## Geting started 
 
-Every reconcile does following things:
+Check the [Security guide](SECURITY.md) if you need to report a security issue.
 
-1. Create/update/delete objects defined in spec.policy-templates on managed cluster in cluster namespace
+### Build and deploy locally
+You will need [kind](https://kind.sigs.k8s.io/docs/user/quick-start/) installed.
 
-## Run
+```bash
+make kind-bootstrap-cluster-dev
+make build-images
+make kind-deploy-controller-dev
 ```
-operator-sdk run --local --operator-flags "--kubeconfig=path_to_kubeconfig"
+### Running tests
+```
+make test-dependencies
+make test
+
+make e2e-dependencies
+make e2e-test
 ```
 
-<!---
-Date: Apr/19/2021
--->
+### Clean up
+```
+make kind-delete-cluster
+```
+
+## References
+
+- The `governance-policy-template-sync` is part of the `open-cluster-management` community. For more information, visit: [open-cluster-management.io](https://open-cluster-management.io).
