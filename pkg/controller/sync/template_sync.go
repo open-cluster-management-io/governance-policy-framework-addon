@@ -205,6 +205,9 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 				r.recorder.Event(instance, "Normal", "PolicyTemplateSync",
 					fmt.Sprintf("Policy template %s was created successfully", tName))
 
+				// The policy template was created successfully, so requeue for further processing
+				// of the other policy templates
+				return reconcile.Result{Requeue: true}, nil
 			}
 			// other error
 			r.recorder.Event(instance, "Warning", "PolicyTemplateSync",
