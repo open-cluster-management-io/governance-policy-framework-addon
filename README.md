@@ -46,5 +46,5 @@ make kind-delete-cluster
 - The `governance-policy-status-sync` is part of the `open-cluster-management` community. For more information, visit: [open-cluster-management.io](https://open-cluster-management.io).
 
 <!---
-Date: June/30/2021
+Date: 8/18/2021
 -->
