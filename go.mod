@@ -18,5 +18,6 @@ require (
 replace (
 	github.com/go-logr/logr => github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr => github.com/go-logr/zapr v0.2.0
+	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
 	k8s.io/client-go => k8s.io/client-go v0.20.5
 )
