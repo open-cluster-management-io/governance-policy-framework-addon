@@ -4,7 +4,7 @@
 
 ## Description
 
-The governance policy spec sync is a controller that runs on managed clusters, updating local `Policy` specs to match `Policies` in the cluster's namespace on the hub cluster. This controller is a part of the [governance-policy-framework](https://github.com/open-cluster-management-io/governance-policy-framework).
+The governance policy spec sync is a controller that runs on managed clusters, updating local `Policy` specs to match `Policies` in the cluster's namespace on the hub cluster. This controller is a part of the [governance-policy-framework](https://github.com/open-cluster-management/governance-policy-framework).
 
 The operator watches for changes to Policies in the cluster's namespace on the hub cluster to trigger a reconcile. Every reconcile creates/updates/deletes replicated policies on the managed cluster to match the spec from the hub cluster.
 
