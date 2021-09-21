@@ -232,12 +232,14 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 
 		overrideRemediationAction(instance, tObjectUnstructured)
-		// got object, need to compare and update
+		// got object, need to compare both spec and annotation and update
 		eObjectUnstructured := eObject.UnstructuredContent()
-		if !equality.Semantic.DeepEqual(eObjectUnstructured["spec"], tObjectUnstructured.Object["spec"]) {
+		if (!equality.Semantic.DeepEqual(eObjectUnstructured["spec"], tObjectUnstructured.Object["spec"])) ||
+			(!equality.Semantic.DeepEqual(eObject.GetAnnotations(), tObjectUnstructured.GetAnnotations())) {
 			// doesn't match
 			reqLogger.Info("existing object and template don't match, updating...", "PolicyTemplateName", tName)
 			eObjectUnstructured["spec"] = tObjectUnstructured.Object["spec"]
+			eObject.SetAnnotations(tObjectUnstructured.GetAnnotations())
 			_, err = res.Update(context.TODO(), eObject, metav1.UpdateOptions{})
 			if err != nil {
 				reqLogger.Error(err, "Failed to update policy template...", "PolicyTemplateName", tName)
