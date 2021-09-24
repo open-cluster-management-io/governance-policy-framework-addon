@@ -214,8 +214,8 @@ kind-delete-cluster:
 
 install-crds:
 	@echo installing crds
-	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management/governance-policy-propagator/main/deploy/crds/policy.open-cluster-management.io_policies_crd.yaml --kubeconfig=$(PWD)/kubeconfig_hub
-	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management/governance-policy-propagator/main/deploy/crds/policy.open-cluster-management.io_policies_crd.yaml --kubeconfig=$(PWD)/kubeconfig_managed
+	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management/governance-policy-propagator/main/deploy/crds/policy.open-cluster-management.io_policies.yaml --kubeconfig=$(PWD)/kubeconfig_hub
+	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management/governance-policy-propagator/main/deploy/crds/policy.open-cluster-management.io_policies.yaml --kubeconfig=$(PWD)/kubeconfig_managed
 
 install-resources:
 	@echo creating namespace on hub
