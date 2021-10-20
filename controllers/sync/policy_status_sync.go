@@ -11,122 +11,79 @@ import (
 	"sort"
 	"strings"
 
-	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policy/v1"
-	"github.com/open-cluster-management/governance-policy-propagator/pkg/controller/common"
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
+	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/api/v1"
+	"github.com/open-cluster-management/governance-policy-propagator/controllers/common"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
-	kubecorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const controllerName string = "policy-status-sync"
+const ControllerName string = "policy-status-sync"
 
-var log = logf.Log.WithName(controllerName)
+var log = logf.Log.WithName(ControllerName)
 
-// Add creates a new Policy Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
-func Add(mgr manager.Manager, hubCfg *rest.Config) error {
-	hubClient, err := client.New(hubCfg, client.Options{})
-	if err != nil {
-		log.Error(err, "Failed to generate client to managed cluster")
-		return err
-	}
-	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(hubCfg)
-	eventsScheme := runtime.NewScheme()
-	if err = v1.AddToScheme(eventsScheme); err != nil {
-		return err
-	}
-
-	eventBroadcaster := record.NewBroadcaster()
-	namespace, err := k8sutil.GetWatchNamespace()
-	if err != nil {
-		log.Error(err, "Failed to get watch namespace")
-		return err
-	}
-	eventBroadcaster.StartRecordingToSink(&kubecorev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(namespace)})
-	hubRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: controllerName})
-	return add(mgr, newReconciler(mgr, hubClient, hubRecorder))
-}
-
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager, hubClient client.Client,
-	hubRecorder record.EventRecorder) reconcile.Reconciler {
-	return &ReconcilePolicy{hubClient: hubClient, managedClient: mgr.GetClient(),
-		hubRecorder: hubRecorder, managedRecorder: mgr.GetEventRecorderFor(controllerName),
-		scheme: mgr.GetScheme()}
-}
-
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to primary resource Policy
-	err = c.Watch(&source.Kind{Type: &policiesv1.Policy{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
-
-	err = c.Watch(
-		&source.Kind{Type: &corev1.Event{}},
-		&handler.EnqueueRequestsFromMapFunc{ToRequests: &eventMapper{mgr.GetClient()}}, eventPredicateFuncs)
-	if err != nil {
-		return err
-	}
-
-	return nil
+// SetupWithManager sets up the controller with the Manager.
+func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&policiesv1.Policy{}).
+		Watches(
+			&source.Kind{Type: &corev1.Event{}},
+			handler.EnqueueRequestsFromMapFunc(eventMapper),
+			builder.WithPredicates(eventPredicateFuncs),
+		).
+		Complete(r)
 }
 
 // blank assignment to verify that ReconcilePolicy implements reconcile.Reconciler
-var _ reconcile.Reconciler = &ReconcilePolicy{}
+var _ reconcile.Reconciler = &PolicyReconciler{}
 
 // ReconcilePolicy reconciles a Policy object
-type ReconcilePolicy struct {
+type PolicyReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	hubClient       client.Client
-	managedClient   client.Client
-	hubRecorder     record.EventRecorder
-	managedRecorder record.EventRecorder
-	scheme          *runtime.Scheme
+	HubClient       client.Client
+	ManagedClient   client.Client
+	HubRecorder     record.EventRecorder
+	ManagedRecorder record.EventRecorder
+	Scheme          *runtime.Scheme
 }
+
+//+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/finalizers,verbs=update
+//+kubebuilder:rbac:groups=core,resources=events;namespaces,verbs=get;list;watch;create;update;patch;delete
+// This is required for the status lease for the addon framework
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list
 
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
 // and what is in the Policy.Spec
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling Policy...")
 
 	// Fetch the Policy instance
 	instance := &policiesv1.Policy{}
-	err := r.managedClient.Get(context.TODO(), request.NamespacedName, instance)
+	err := r.ManagedClient.Get(ctx, request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// repliated policy on hub was deleted
 			// check if it was deleted by user by checking if it still exists on hub
 			hubInstance := &policiesv1.Policy{}
-			err = r.hubClient.Get(context.TODO(), request.NamespacedName, hubInstance)
+			err = r.HubClient.Get(ctx, request.NamespacedName, hubInstance)
 			if err != nil {
 				if errors.IsNotFound(err) {
 					// confirmed deleted on hub, doing nothing
@@ -139,19 +96,19 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			// still exist on hub, recover policy on managed
 			hubInstance.SetOwnerReferences(nil)
 			hubInstance.SetResourceVersion("")
-			return reconcile.Result{}, r.managedClient.Create(context.TODO(), hubInstance)
+			return reconcile.Result{}, r.ManagedClient.Create(ctx, hubInstance)
 		}
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
 	// get hub policy
 	hubPlc := &policiesv1.Policy{}
-	err = r.hubClient.Get(context.TODO(), request.NamespacedName, hubPlc)
+	err = r.HubClient.Get(ctx, request.NamespacedName, hubPlc)
 	if err != nil {
 		// hub policy not found, it has been deleted
 		if errors.IsNotFound(err) {
 			// try to delete local one
-			err = r.managedClient.Delete(context.TODO(), instance)
+			err = r.ManagedClient.Delete(ctx, instance)
 			if err == nil || errors.IsNotFound(err) {
 				// no err or err is not found means local policy has been deleted
 				return reconcile.Result{}, nil
@@ -168,12 +125,12 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 		instance.SetAnnotations(hubPlc.GetAnnotations())
 		instance.Spec = hubPlc.Spec
 		// update and stop here
-		return reconcile.Result{}, r.managedClient.Update(context.TODO(), instance)
+		return reconcile.Result{}, r.ManagedClient.Update(ctx, instance)
 	}
 
 	// plc matches hub plc, then get events
 	eventList := &corev1.EventList{}
-	err = r.managedClient.List(context.TODO(), eventList, client.InNamespace(instance.GetNamespace()))
+	err = r.ManagedClient.List(ctx, eventList, client.InNamespace(instance.GetNamespace()))
 	if err != nil {
 		// there is an error to list events, requeue
 		return reconcile.Result{}, err
@@ -313,22 +270,22 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 	// instance.Status.Details = nil
 	if !equality.Semantic.DeepEqual(newStatus.Details, oldStatus.Details) || instance.Status.ComplianceState != oldStatus.ComplianceState {
 		reqLogger.Info("status mismatch, update it... ")
-		err = r.managedClient.Status().Update(context.TODO(), instance)
+		err = r.ManagedClient.Status().Update(ctx, instance)
 		if err != nil {
 			reqLogger.Error(err, "Failed to get update policy status on managed")
 			return reconcile.Result{}, err
 		}
-		r.managedRecorder.Event(instance, "Normal", "PolicyStatusSync",
+		r.ManagedRecorder.Event(instance, "Normal", "PolicyStatusSync",
 			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", instance.GetName(),
 				instance.GetNamespace()))
 		if "true" != os.Getenv("ON_MULTICLUSTERHUB") {
 			hubPlc.Status = instance.Status
-			err = r.hubClient.Status().Update(context.TODO(), hubPlc)
+			err = r.HubClient.Status().Update(ctx, hubPlc)
 			if err != nil {
 				reqLogger.Error(err, "Failed to get update policy status on hub")
 				return reconcile.Result{}, err
 			}
-			r.hubRecorder.Event(instance, "Normal", "PolicyStatusSync",
+			r.HubRecorder.Event(instance, "Normal", "PolicyStatusSync",
 				fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
 					hubPlc.GetNamespace()))
 		}
