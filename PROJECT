@@ -1,0 +1,9 @@
+domain: open-cluster-management.io
+layout:
+- go.kubebuilder.io/v3
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+projectName: governance-policy-template-sync
+repo: github.com/open-cluster-management/governance-policy-template-sync
+version: "3"

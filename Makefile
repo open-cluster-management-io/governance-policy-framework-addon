@@ -132,10 +132,10 @@ test-dependencies:
 ############################################################
 
 build:
-	@build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
+	@build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./
 
 local:
-	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
+	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./
 
 ############################################################
 # images section
@@ -158,6 +158,45 @@ copyright-check:
 	./build/copyright-check.sh $(TRAVIS_BRANCH)
 
 ############################################################
+# Generate manifests
+############################################################
+CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
+KUSTOMIZE = $(shell pwd)/bin/kustomize
+CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
+
+.PHONY: manifests
+manifests: controller-gen
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=governance-policy-template-sync paths="./..." output:crd:artifacts:config=deploy/crds output:rbac:artifacts:config=deploy/rbac
+
+.PHONY: generate
+generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+.PHONY: generate-operator-yaml
+generate-operator-yaml: kustomize manifests
+	$(KUSTOMIZE) build deploy/manager > deploy/operator.yaml
+
+.PHONY: controller-gen
+controller-gen: ## Download controller-gen locally if necessary.
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1)
+
+.PHONY: kustomize
+kustomize: ## Download kustomize locally if necessary.
+	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.8.7)
+
+define go-get-tool
+@[ -f $(1) ] || { \
+set -e ;\
+TMP_DIR=$$(mktemp -d) ;\
+cd $$TMP_DIR ;\
+go mod init tmp ;\
+echo "Downloading $(2)" ;\
+GOBIN=$(PWD)/bin go get $(2) ;\
+rm -rf $$TMP_DIR ;\
+}
+endef
+
+############################################################
 # e2e test section
 ############################################################
 .PHONY: kind-bootstrap-cluster
@@ -174,17 +213,17 @@ ifndef DOCKER_PASS
 	$(error DOCKER_PASS is undefined)
 endif
 
-kind-deploy-controller: check-env
+kind-deploy-controller: check-env generate-operator-yaml
 	@echo installing policy-template-sync
 	kubectl create ns $(KIND_NAMESPACE)
-	kubectl apply -f deploy/ -n $(KIND_NAMESPACE)
+	kubectl apply -f deploy/operator.yaml -n $(KIND_NAMESPACE)
 
-kind-deploy-controller-dev:
+kind-deploy-controller-dev: generate-operator-yaml
 	@echo Pushing image to KinD cluster
 	kind load docker-image $(REGISTRY)/$(IMG):$(TAG) --name $(KIND_NAME)
 	@echo Installing $(IMG)
 	kubectl create ns $(KIND_NAMESPACE)
-	kubectl apply -f deploy/ -n $(KIND_NAMESPACE)
+	kubectl apply -f deploy/operator.yaml -n $(KIND_NAMESPACE)
 	@echo "Patch deployment image"
 	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"imagePullPolicy\":\"Never\"}]}}}}"
 	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"image\":\"$(REGISTRY)/$(IMG):$(TAG)\"}]}}}}"
@@ -209,8 +248,8 @@ e2e-test:
 	ginkgo -v --slowSpecThreshold=10 test/e2e
 
 e2e-dependencies:
-	go get github.com/onsi/ginkgo/ginkgo@v1.14.1
-	go get github.com/onsi/gomega/...@v1.10.1
+	go get github.com/onsi/ginkgo/ginkgo@v1.16.4
+	go get github.com/onsi/gomega/...@v1.13.0
 
 e2e-debug:
 	kubectl get all -n $(KIND_NAMESPACE)
@@ -222,7 +261,7 @@ e2e-debug:
 # e2e test coverage
 ############################################################
 build-instrumented:
-	go test -covermode=atomic -coverpkg=github.com/open-cluster-management/$(IMG)... -c -tags e2e ./cmd/manager -o build/_output/bin/$(IMG)-instrumented
+	go test -covermode=atomic -coverpkg=github.com/open-cluster-management/$(IMG)... -c -tags e2e ./ -o build/_output/bin/$(IMG)-instrumented
 
 run-instrumented:
 	WATCH_NAMESPACE="managed" ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=coverage.out &>/dev/null &
