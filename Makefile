@@ -133,7 +133,7 @@ build:
 	@build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./
 
 local:
-	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
+	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./
 
 ############################################################
 # images section
@@ -274,7 +274,7 @@ e2e-debug:
 # e2e test coverage
 ############################################################
 build-instrumented:
-	go test -covermode=atomic -coverpkg=github.com/open-cluster-management/$(IMG)... -c -tags e2e ./cmd/manager -o build/_output/bin/$(IMG)-instrumented
+	go test -covermode=atomic -coverpkg=github.com/open-cluster-management/$(IMG)... -c -tags e2e ./ -o build/_output/bin/$(IMG)-instrumented
 
 run-instrumented:
 	HUB_CONFIG="$(DEST)/kubeconfig_hub" MANAGED_CONFIG="$(DEST)/kubeconfig_managed" WATCH_NAMESPACE="managed" ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=coverage.out &>/dev/null &
