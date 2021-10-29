@@ -200,7 +200,11 @@ func main() {
 				generatedClient,
 				"policy-controller",
 				operatorNs,
-				lease.CheckAddonPodFunc(generatedClient.CoreV1(), operatorNs, "app in (policy-framework,policy-config-policy)"),
+				lease.CheckAddonPodFunc(generatedClient.CoreV1(), operatorNs, "app=policy-framework"),
+				// this additional CheckAddonPodFunc is temporary until the
+				// addon framework independently verifies the config-policy-controller via its lease
+				// see https://github.com/open-cluster-management/backlog/issues/11508
+				lease.CheckAddonPodFunc(generatedClient.CoreV1(), operatorNs, "app=policy-config-policy"),
 			)
 			go leaseUpdater.Start(ctx)
 		}
