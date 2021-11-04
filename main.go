@@ -15,6 +15,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	v1 "k8s.io/api/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
 
 	"github.com/open-cluster-management/addon-framework/pkg/lease"
 	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/api/v1"
@@ -163,9 +164,16 @@ func main() {
 		log.Error(err, "unable to create controller", "controller", "Policy")
 		os.Exit(1)
 	}
-	//+kubebuilder:scaffold:builder
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+	// use config check
+	cc, err := addonutils.NewConfigChecker("policy-status-sync", tool.Options.HubConfigFilePathName)
+	if err != nil {
+		log.Error(err, "unable to setup a configChecker")
+		os.Exit(1)
+	}
+
+	//+kubebuilder:scaffold:builder
+	if err := mgr.AddHealthzCheck("healthz", cc.Check); err != nil {
 		log.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
