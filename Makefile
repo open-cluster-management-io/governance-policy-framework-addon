@@ -48,7 +48,6 @@ IMAGE_NAME_AND_VERSION ?= $(REGISTRY)/$(IMG)
 KIND_NAME ?= test-managed
 KIND_NAMESPACE ?= open-cluster-management-agent-addon
 KIND_VERSION ?= latest
-KBVERSION := 2.3.1
 ifneq ($(KIND_VERSION), latest)
 	KIND_ARGS = --image kindest/node:$(KIND_VERSION)
 else
