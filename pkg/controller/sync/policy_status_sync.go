@@ -203,7 +203,7 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 			eventForPolicyMap[templateName] = &templateEvents
 		}
 	}
-	oldStatus := instance.Status.DeepCopy()
+	oldStatus := *instance.Status.DeepCopy()
 	newStatus := policiesv1.PolicyStatus{}
 	for _, policyT := range instance.Spec.PolicyTemplates {
 		object, _, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
@@ -311,7 +311,7 @@ func (r *ReconcilePolicy) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// all done, update status on managed and hub
 	// instance.Status.Details = nil
-	if !equality.Semantic.DeepEqual(newStatus, oldStatus) {
+	if !equality.Semantic.DeepEqual(newStatus.Details, oldStatus.Details) || instance.Status.ComplianceState != oldStatus.ComplianceState {
 		reqLogger.Info("status mismatch, update it... ")
 		err = r.managedClient.Status().Update(context.TODO(), instance)
 		if err != nil {
