@@ -54,6 +54,8 @@ ifneq ($(KIND_VERSION), latest)
 else
 	KIND_ARGS =
 endif
+# KubeBuilder configuration
+KBVERSION := 2.3.1
 
 LOCAL_OS := $(shell uname)
 ifeq ($(LOCAL_OS),Linux)
