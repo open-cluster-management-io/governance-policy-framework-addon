@@ -18,8 +18,10 @@ var log = logf.Log.WithName("cmd")
 type PolicySpecSyncOptions struct {
 	ClusterName               string
 	ClusterNamespace          string
+	EnableLeaderElection      bool
 	HubConfigFilePathName     string
 	ManagedConfigFilePathName string
+	LegacyLeaderElection      bool
 }
 
 // Options default value
@@ -55,6 +57,21 @@ func ProcessFlags() {
 		"managed-cluster-configfile",
 		Options.ManagedConfigFilePathName,
 		"Configuration file pathname to managed kubernetes cluster",
+	)
+
+	flag.BoolVar(
+		&Options.EnableLeaderElection,
+		"leader-elect",
+		true,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.",
+	)
+
+	flag.BoolVar(
+		&Options.LegacyLeaderElection,
+		"legacy-leader-elect",
+		false,
+		"Use a legacy leader election method for controller manager instead of the lease API.",
 	)
 }
 

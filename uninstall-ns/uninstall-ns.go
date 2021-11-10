@@ -7,7 +7,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/open-cluster-management/governance-policy-spec-sync/cmd/manager/tool"
+	"github.com/open-cluster-management/governance-policy-spec-sync/tool"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"

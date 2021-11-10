@@ -18,14 +18,15 @@ const case1PolicyYaml string = "../resources/case1_spec_sync/case1-test-policy.y
 var _ = Describe("Test spec sync", func() {
 	BeforeEach(func() {
 		By("Creating a policy on hub cluster in ns:" + testNamespace)
-		utils.Kubectl("apply", "-f", case1PolicyYaml, "-n", testNamespace,
+		_, err := utils.KubectlWithOutput("apply", "-f", case1PolicyYaml, "-n", testNamespace,
 			"--kubeconfig=../../kubeconfig_hub")
+		Expect(err).Should(BeNil())
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
 	})
 	AfterEach(func() {
 		By("Deleting a policy on hub cluster in ns:" + testNamespace)
-		utils.Kubectl("delete", "-f", case1PolicyYaml, "-n", testNamespace,
+		utils.KubectlWithOutput("delete", "-f", case1PolicyYaml, "-n", testNamespace,
 			"--kubeconfig=../../kubeconfig_hub")
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
@@ -50,9 +51,10 @@ var _ = Describe("Test spec sync", func() {
 	})
 	It("should update policy to a different policy template", func() {
 		By("Updating policy on hub with ../resources/case1_propagation/case1-test-policy2.yaml")
-		utils.Kubectl("apply",
+		_, err := utils.KubectlWithOutput("apply",
 			"-f", "../resources/case1_spec_sync/case1-test-policy2.yaml",
 			"-n", testNamespace, "--kubeconfig=../../kubeconfig_hub")
+		Expect(err).Should(BeNil())
 		hubPlc := utils.GetWithTimeout(clientHubDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
 		yamlPlc := utils.ParseYaml("../resources/case1_spec_sync/case1-test-policy2.yaml")
@@ -63,8 +65,9 @@ var _ = Describe("Test spec sync", func() {
 	})
 	It("should delete policy on managed cluster", func() {
 		By("Deleting policy on hub")
-		utils.Kubectl("delete", "policy", "-n", testNamespace,
+		_, err := utils.KubectlWithOutput("delete", "policy", "-n", testNamespace,
 			"--all", "--kubeconfig=../../kubeconfig_hub")
+		Expect(err).Should(BeNil())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)

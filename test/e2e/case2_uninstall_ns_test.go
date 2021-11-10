@@ -20,27 +20,31 @@ const case2UninstallYaml string = "../resources/case2_uninstall_ns/case2-uninsta
 var _ = Describe("Test uninstall ns", func() {
 	BeforeEach(func() {
 		By("Creating a ns on managed cluster")
-		utils.Kubectl("create", "ns", "uninstall",
+		_, err := utils.KubectlWithOutput("create", "ns", "uninstall",
 			"--kubeconfig=../../kubeconfig_managed")
+		Expect(err).Should(BeNil())
 		Eventually(func() interface{} {
 			_, err := clientManaged.CoreV1().Namespaces().Get(context.TODO(), "uninstall", metav1.GetOptions{})
 			return err
 		}, defaultTimeoutSeconds, 1).Should(BeNil())
 		By("Creating a policy on mananged cluster in ns: uninstall")
-		utils.Kubectl("apply", "-f", case2PolicyYaml, "-n", "uninstall",
+		_, err = utils.KubectlWithOutput("apply", "-f", case2PolicyYaml, "-n", "uninstall",
 			"--kubeconfig=../../kubeconfig_managed")
+		Expect(err).Should(BeNil())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 1, true, defaultTimeoutSeconds)
 	})
 	AfterEach(func() {
 		By("Delete the job on managed cluster")
-		utils.Kubectl("delete", "job", "uninstall-ns", "-n", "open-cluster-management-agent-addon",
+		_, err := utils.KubectlWithOutput("delete", "job", "uninstall-ns", "-n", "open-cluster-management-agent-addon",
 			"--kubeconfig=../../kubeconfig_managed")
+		Expect(err).Should(BeNil())
 	})
 	It("should remove ns on managed cluster", func() {
 		By("Running uninstall ns job")
-		utils.Kubectl("apply", "-f", case2UninstallYaml, "-n", "open-cluster-management-agent-addon",
+		_, err := utils.KubectlWithOutput("apply", "-f", case2UninstallYaml, "-n", "open-cluster-management-agent-addon",
 			"--kubeconfig=../../kubeconfig_managed")
+		Expect(err).Should(BeNil())
 		By("Checking if ns uninstall has been deleted eventually")
 		Eventually(func() interface{} {
 			_, err := clientManaged.CoreV1().Namespaces().Get(context.TODO(), "uninstall", metav1.GetOptions{})
