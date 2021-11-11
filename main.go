@@ -11,10 +11,11 @@ import (
 	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-
+	// to ensure that exec-entrypoint and run can make use of them.
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
 
 	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/api/v1"
 
@@ -34,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -105,6 +107,10 @@ func main() {
 			log.Info("Found ENV MANAGED_CONFIG, initializing using", "tool.Options.ManagedConfigFilePathName",
 				tool.Options.ManagedConfigFilePathName)
 			managedCfg, err = clientcmd.BuildConfigFromFlags("", tool.Options.ManagedConfigFilePathName)
+			if err != nil {
+				log.Error(err, "")
+				os.Exit(1)
+			}
 		} else {
 			managedCfg, err = config.GetConfig()
 			if err != nil {
@@ -127,11 +133,12 @@ func main() {
 
 	// Set default manager options
 	options := manager.Options{
-		Scheme:             scheme,
-		Namespace:          namespace,
-		MetricsBindAddress: fmt.Sprintf("%s:%d", metricsHost, metricsPort),
-		LeaderElection:     tool.Options.EnableLeaderElection,
-		LeaderElectionID:   "policy-spec-sync.open-cluster-management.io",
+		Scheme:                 scheme,
+		Namespace:              namespace,
+		MetricsBindAddress:     fmt.Sprintf("%s:%d", metricsHost, metricsPort),
+		HealthProbeBindAddress: tool.Options.ProbeAddr,
+		LeaderElection:         tool.Options.EnableLeaderElection,
+		LeaderElectionID:       "policy-spec-sync.open-cluster-management.io",
 		// Override LeaderElectionConfig to managed cluster config.
 		// Otherwise it will improperly use the hub cluster config for leader election.
 		LeaderElectionConfig: managedCfg,
@@ -171,7 +178,23 @@ func main() {
 		log.Error(err, "unable to create controller", "controller", sync.ControllerName)
 		os.Exit(1)
 	}
+
+	// use config check
+	cc, err := addonutils.NewConfigChecker("policy-spec-sync", tool.Options.HubConfigFilePathName)
+	if err != nil {
+		log.Error(err, "unable to setup a configChecker")
+		os.Exit(1)
+	}
+
 	//+kubebuilder:scaffold:builder
+	if err := mgr.AddHealthzCheck("healthz", cc.Check); err != nil {
+		log.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		log.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
 
 	log.Info("Starting manager.")
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {

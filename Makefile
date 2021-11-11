@@ -205,15 +205,7 @@ kind-bootstrap-cluster: kind-create-cluster install-crds install-resources kind-
 .PHONY: kind-bootstrap-cluster-dev
 kind-bootstrap-cluster-dev: kind-create-cluster install-crds install-resources
 
-check-env:
-ifndef DOCKER_USER
-	$(error DOCKER_USER is undefined)
-endif
-ifndef DOCKER_PASS
-	$(error DOCKER_PASS is undefined)
-endif
-
-kind-deploy-controller: check-env
+kind-deploy-controller:
 	kubectl create ns $(KIND_NAMESPACE) --kubeconfig=$(PWD)/kubeconfig_managed
 	@echo creating secrets on hub and managed
 	kubectl create secret -n $(KIND_NAMESPACE) generic hub-kubeconfig --from-file=kubeconfig=$(PWD)/kubeconfig_hub_internal --kubeconfig=$(PWD)/kubeconfig_managed

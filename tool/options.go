@@ -22,6 +22,7 @@ type PolicySpecSyncOptions struct {
 	HubConfigFilePathName     string
 	ManagedConfigFilePathName string
 	LegacyLeaderElection      bool
+	ProbeAddr                 string
 }
 
 // Options default value
@@ -72,6 +73,13 @@ func ProcessFlags() {
 		"legacy-leader-elect",
 		false,
 		"Use a legacy leader election method for controller manager instead of the lease API.",
+	)
+
+	flag.StringVar(
+		&Options.ProbeAddr,
+		"health-probe-bind-address",
+		":8081",
+		"The address the probe endpoint binds to.",
 	)
 }
 

@@ -153,7 +153,21 @@ spec:
           value: governance-policy-spec-sync
         image: quay.io/open-cluster-management/governance-policy-spec-sync:latest
         imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
         name: governance-policy-spec-sync
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
         volumeMounts:
         - mountPath: /var/run/klusterlet
           name: klusterlet-config
