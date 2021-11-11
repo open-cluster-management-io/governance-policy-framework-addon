@@ -139,6 +139,11 @@ func main() {
 		Namespace:          namespace,
 		Scheme:             scheme,
 	}
+	if tool.Options.LegacyLeaderElection {
+		// If legacyLeaderElection is enabled, then that means the lease API is not available.
+		// In this case, use the legacy leader election method of a ConfigMap.
+		options.LeaderElectionResourceLock = "configmaps"
+	}
 	// Add support for MultiNamespace set in WATCH_NAMESPACE (e.g ns1,ns2)
 	// Note that this is not intended to be used for excluding namespaces, this is better done via a Predicate
 	// Also note that you may face performance issues when using this with a high number of namespaces.
