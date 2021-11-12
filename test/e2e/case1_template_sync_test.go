@@ -20,13 +20,14 @@ const cast1TrustedContainerPolicyName string = "case1-test-policy-trustedcontain
 var _ = Describe("Test spec sync", func() {
 	BeforeEach(func() {
 		By("Creating a policy on managed cluster in ns:" + testNamespace)
-		utils.Kubectl("apply", "-f", case1PolicyYaml, "-n", testNamespace)
+		_, err := utils.KubectlWithOutput("apply", "-f", case1PolicyYaml, "-n", testNamespace)
+		Expect(err).Should(BeNil())
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
 	})
 	AfterEach(func() {
 		By("Deleting a policy on managed cluster in ns:" + testNamespace)
-		utils.Kubectl("delete", "-f", case1PolicyYaml, "-n", testNamespace)
+		utils.KubectlWithOutput("delete", "-f", case1PolicyYaml, "-n", testNamespace)
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 	})
@@ -54,7 +55,8 @@ var _ = Describe("Test spec sync", func() {
 	})
 	It("should still override remediationAction in spec when there is no remediationAction", func() {
 		By("Updating policy with no remediationAction")
-		utils.Kubectl("apply", "-f", "../resources/case1_template_sync/case1-test-policy-no-remediation.yaml", "-n", testNamespace)
+		_, err := utils.KubectlWithOutput("apply", "-f", "../resources/case1_template_sync/case1-test-policy-no-remediation.yaml", "-n", testNamespace)
+		Expect(err).Should(BeNil())
 		By("Checking template policy remediationAction")
 		yamlTrustedPlc := utils.ParseYaml("../resources/case1_template_sync/case1-trusted-container-policy-enforce.yaml")
 		Eventually(func() interface{} {
@@ -77,7 +79,8 @@ var _ = Describe("Test spec sync", func() {
 	})
 	It("should delete template policy on managed cluster", func() {
 		By("Deleting parent policy")
-		utils.Kubectl("delete", "-f", case1PolicyYaml, "-n", testNamespace)
+		_, err := utils.KubectlWithOutput("delete", "-f", case1PolicyYaml, "-n", testNamespace)
+		Expect(err).Should(BeNil())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		By("Checking the existence of template policy")

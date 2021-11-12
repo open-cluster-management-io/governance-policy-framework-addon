@@ -69,7 +69,8 @@ var _ = BeforeSuite(func() {
 		}, metav1.CreateOptions{})).NotTo(BeNil())
 	}
 	By("Create trustedcontainerpolicy CRD")
-	utils.Kubectl("apply", "-f", "../resources/policies.ibm.com_trustedcontainerpolicies_crd.yaml")
+	_, err := utils.KubectlWithOutput("apply", "-f", "../resources/policies.ibm.com_trustedcontainerpolicies_crd.yaml")
+	Expect(err).Should(BeNil())
 })
 
 func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {
