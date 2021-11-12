@@ -1,0 +1,7 @@
+namespace: open-cluster-management-agent-addon
+
+bases:
+  - ../rbac
+
+resources:
+  - manager.yaml

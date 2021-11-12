@@ -1,79 +1,53 @@
----
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: ServiceAccount
 metadata:
-  name: governance-policy-status-sync
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      name: governance-policy-status-sync
-  template:
-    metadata:
-      labels:
-        name: governance-policy-status-sync
-        app: policy-framework
-    spec:
-      serviceAccountName: governance-policy-status-sync
-      containers:
-        - name: governance-policy-status-sync
-          image: quay.io/open-cluster-management/governance-policy-status-sync:edge
-          command:
-          - governance-policy-status-sync
-          args:
-            - '--hub-cluster-configfile=/var/run/klusterlet/kubeconfig'
-            - '--enable-lease=true'
-          imagePullPolicy: Always
-          volumeMounts:
-            - name: klusterlet-config
-              mountPath: /var/run/klusterlet
-          env:
-            - name: WATCH_NAMESPACE
-              value: managed
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: OPERATOR_NAME
-              value: "governance-policy-status-sync"
-      volumes:
-        - name: klusterlet-config
-          secret:
-            secretName: hub-kubeconfig
-            defaultMode: 420
-
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: governance-policy-status-sync
-subjects:
-- kind: ServiceAccount
   name: governance-policy-status-sync
   namespace: open-cluster-management-agent-addon
-roleRef:
-  kind: ClusterRole
-  name: governance-policy-status-sync
-  apiGroup: rbac.authorization.k8s.io
-
 ---
-kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
 metadata:
-  name: governance-policy-status-sync
+  name: governance-policy-status-sync-leader-election
+  namespace: open-cluster-management-agent-addon
 rules:
 - apiGroups:
-  - "policy.open-cluster-management.io"
+  - ""
   resources:
-  - '*'
+  - configmaps
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: governance-policy-status-sync
+rules:
 - apiGroups:
   - ""
   resources:
@@ -87,103 +61,123 @@ rules:
   - patch
   - update
   - watch
-
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - policy.open-cluster-management.io
+  resources:
+  - policies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy.open-cluster-management.io
+  resources:
+  - policies/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - policy.open-cluster-management.io
+  resources:
+  - policies/status
+  verbs:
+  - get
+  - patch
+  - update
 ---
-kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
 metadata:
+  name: governance-policy-status-sync-leader-election
+  namespace: open-cluster-management-agent-addon
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: governance-policy-status-sync-leader-election
+subjects:
+- kind: ServiceAccount
+  name: governance-policy-status-sync
+  namespace: open-cluster-management-agent-addon
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: governance-policy-status-sync
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
   name: governance-policy-status-sync
 subjects:
 - kind: ServiceAccount
   name: governance-policy-status-sync
-roleRef:
-  kind: Role
-  name: governance-policy-status-sync
-  apiGroup: rbac.authorization.k8s.io
-
+  namespace: open-cluster-management-agent-addon
 ---
-kind: Role
-apiVersion: rbac.authorization.k8s.io/v1
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: governance-policy-status-sync
-rules:
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - services
-  - services/finalizers
-  - endpoints
-  - persistentvolumeclaims
-  - events
-  - configmaps
-  - secrets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  - daemonsets
-  - replicasets
-  - statefulsets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - monitoring.coreos.com
-  resources:
-  - servicemonitors
-  verbs:
-  - "get"
-  - "create"
-- apiGroups:
-  - apps
-  resources:
-  - deployments/finalizers
-  resourceNames:
-  - governance-policy-status-sync
-  verbs:
-  - "update"
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - get
-- apiGroups:
-  - apps
-  resources:
-  - replicasets
-  - deployments
-  verbs:
-  - get
-
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: governance-policy-status-sync
+  namespace: open-cluster-management-agent-addon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: governance-policy-status-sync
+  template:
+    metadata:
+      labels:
+        app: policy-framework
+        name: governance-policy-status-sync
+    spec:
+      containers:
+      - args:
+        - --hub-cluster-configfile=/var/run/klusterlet/kubeconfig
+        - --enable-lease=true
+        command:
+        - governance-policy-status-sync
+        env:
+        - name: WATCH_NAMESPACE
+          value: managed
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: OPERATOR_NAME
+          value: governance-policy-status-sync
+        image: quay.io/open-cluster-management/governance-policy-status-sync:edge
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: governance-policy-status-sync
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+        volumeMounts:
+        - mountPath: /var/run/klusterlet
+          name: klusterlet-config
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: governance-policy-status-sync
+      volumes:
+      - name: klusterlet-config
+        secret:
+          defaultMode: 420
+          secretName: hub-kubeconfig

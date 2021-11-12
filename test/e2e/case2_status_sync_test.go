@@ -8,7 +8,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/pkg/apis/policy/v1"
+	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/api/v1"
 	"github.com/open-cluster-management/governance-policy-propagator/test/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,22 +22,26 @@ const case2PolicyYaml string = "../resources/case2_status_sync/case2-test-policy
 var _ = Describe("Test status sync", func() {
 	BeforeEach(func() {
 		By("Creating a policy on hub cluster in ns:" + testNamespace)
-		utils.Kubectl("apply", "-f", case2PolicyYaml, "-n", testNamespace,
+		_, err := utils.KubectlWithOutput("apply", "-f", case2PolicyYaml, "-n", testNamespace,
 			"--kubeconfig=../../kubeconfig_hub")
+		Expect(err).To(BeNil())
 		hubPlc := utils.GetWithTimeout(clientHubDynamic, gvrPolicy, case2PolicyName, testNamespace, true, defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
 		By("Creating a policy on managed cluster in ns:" + testNamespace)
-		utils.Kubectl("apply", "-f", case2PolicyYaml, "-n", testNamespace,
+		_, err = utils.KubectlWithOutput("apply", "-f", case2PolicyYaml, "-n", testNamespace,
 			"--kubeconfig=../../kubeconfig_managed")
+		Expect(err).To(BeNil())
 		managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case2PolicyName, testNamespace, true, defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
 	})
 	AfterEach(func() {
 		By("Deleting a policy on hub cluster in ns:" + testNamespace)
-		utils.Kubectl("delete", "-f", case2PolicyYaml, "-n", testNamespace,
+		_, err := utils.KubectlWithOutput("delete", "-f", case2PolicyYaml, "-n", testNamespace,
 			"--kubeconfig=../../kubeconfig_hub")
-		utils.Kubectl("delete", "-f", case2PolicyYaml, "-n", testNamespace,
+		Expect(err).To(BeNil())
+		_, err = utils.KubectlWithOutput("delete", "-f", case2PolicyYaml, "-n", testNamespace,
 			"--kubeconfig=../../kubeconfig_managed")
+		Expect(err).To(BeNil())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
@@ -50,7 +54,7 @@ var _ = Describe("Test status sync", func() {
 		By("Checking if policy status is compliant")
 		Eventually(func() interface{} {
 			managedPlc = utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case2PolicyName, testNamespace, true, defaultTimeoutSeconds)
-			return managedPlc.Object["status"].(map[string]interface{})["compliant"]
+			return getCompliant(managedPlc)
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("Checking if hub policy status is in sync")
 		Eventually(func() interface{} {
@@ -66,7 +70,7 @@ var _ = Describe("Test status sync", func() {
 		By("Checking if policy status is noncompliant")
 		Eventually(func() interface{} {
 			managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case2PolicyName, testNamespace, true, defaultTimeoutSeconds)
-			return managedPlc.Object["status"].(map[string]interface{})["compliant"]
+			return getCompliant(managedPlc)
 		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 		By("Checking if policy history is correct")
 		managedPlc = utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case2PolicyName, testNamespace, true, defaultTimeoutSeconds)
@@ -90,7 +94,7 @@ var _ = Describe("Test status sync", func() {
 		By("Checking if policy status is compliant")
 		Eventually(func() interface{} {
 			managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case2PolicyName, testNamespace, true, defaultTimeoutSeconds)
-			return managedPlc.Object["status"].(map[string]interface{})["compliant"]
+			return getCompliant(managedPlc)
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("Checking if policy history is correct")
 		managedPlc = utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case2PolicyName, testNamespace, true, defaultTimeoutSeconds)
@@ -106,8 +110,9 @@ var _ = Describe("Test status sync", func() {
 			return hubPlc.Object["status"]
 		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
 		By("clean up all events")
-		utils.Kubectl("delete", "events", "-n", testNamespace, "--all",
+		_, err = utils.KubectlWithOutput("delete", "events", "-n", testNamespace, "--all",
 			"--kubeconfig=../../kubeconfig_managed")
+		Expect(err).Should(BeNil())
 	})
 	It("Should hold up to last 10 history", func() {
 		By("Generating an a lot of event on the policy")
@@ -162,7 +167,8 @@ var _ = Describe("Test status sync", func() {
 			return hubPlc.Object["status"]
 		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
 		By("clean up all events")
-		utils.Kubectl("delete", "events", "-n", testNamespace, "--all",
+		_, err = utils.KubectlWithOutput("delete", "events", "-n", testNamespace, "--all",
 			"--kubeconfig=../../kubeconfig_managed")
+		Expect(err).Should(BeNil())
 	})
 })
