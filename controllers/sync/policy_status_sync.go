@@ -269,8 +269,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	// all done, update status on managed and hub
 	// instance.Status.Details = nil
 	if !equality.Semantic.DeepEqual(newStatus.Details, oldStatus.Details) || instance.Status.ComplianceState != oldStatus.ComplianceState {
-		reqLogger.Info("status mismatch, update it... ")
-		err = r.ManagedClient.Status().Update(ctx, instance)
+		reqLogger.Info("status mismatch on managed, update it... ")
+		err = r.ManagedClient.Status().Update(context.TODO(), instance)
 		if err != nil {
 			reqLogger.Error(err, "Failed to get update policy status on managed")
 			return reconcile.Result{}, err
@@ -278,19 +278,23 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		r.ManagedRecorder.Event(instance, "Normal", "PolicyStatusSync",
 			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", instance.GetName(),
 				instance.GetNamespace()))
-		if "true" != os.Getenv("ON_MULTICLUSTERHUB") {
-			hubPlc.Status = instance.Status
-			err = r.HubClient.Status().Update(ctx, hubPlc)
-			if err != nil {
-				reqLogger.Error(err, "Failed to get update policy status on hub")
-				return reconcile.Result{}, err
-			}
-			r.HubRecorder.Event(instance, "Normal", "PolicyStatusSync",
-				fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
-					hubPlc.GetNamespace()))
-		}
 	} else {
-		reqLogger.Info("status match, nothing to update... ")
+		reqLogger.Info("status match on managed, nothing to update... ")
+	}
+
+	if os.Getenv("ON_MULTICLUSTERHUB") != "true" && !equality.Semantic.DeepEqual(hubPlc.Status, instance.Status) {
+		reqLogger.Info("status not in sync, update the hub... ")
+		hubPlc.Status = instance.Status
+		err = r.HubClient.Status().Update(context.TODO(), hubPlc)
+		if err != nil {
+			reqLogger.Error(err, "Failed to get update policy status on hub")
+			return reconcile.Result{}, err
+		}
+		r.HubRecorder.Event(instance, "Normal", "PolicyStatusSync",
+			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
+				hubPlc.GetNamespace()))
+	} else {
+		reqLogger.Info("status match on hub, nothing to update... ")
 	}
 
 	reqLogger.Info("Reconciling complete...")
