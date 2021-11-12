@@ -270,7 +270,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	// instance.Status.Details = nil
 	if !equality.Semantic.DeepEqual(newStatus.Details, oldStatus.Details) || instance.Status.ComplianceState != oldStatus.ComplianceState {
 		reqLogger.Info("status mismatch on managed, update it... ")
-		err = r.ManagedClient.Status().Update(context.TODO(), instance)
+		err = r.ManagedClient.Status().Update(ctx, instance)
 		if err != nil {
 			reqLogger.Error(err, "Failed to get update policy status on managed")
 			return reconcile.Result{}, err
@@ -285,7 +285,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	if os.Getenv("ON_MULTICLUSTERHUB") != "true" && !equality.Semantic.DeepEqual(hubPlc.Status, instance.Status) {
 		reqLogger.Info("status not in sync, update the hub... ")
 		hubPlc.Status = instance.Status
-		err = r.HubClient.Status().Update(context.TODO(), hubPlc)
+		err = r.HubClient.Status().Update(ctx, hubPlc)
 		if err != nil {
 			reqLogger.Error(err, "Failed to get update policy status on hub")
 			return reconcile.Result{}, err
