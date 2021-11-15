@@ -46,10 +46,12 @@ func init() {
 func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
-	var enableLeaderElection bool
+	var enableLeaderElection, legacyLeaderElect bool
 	pflag.BoolVar(&enableLeaderElection, "leader-elect", true,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	pflag.BoolVar(&legacyLeaderElect, "legacy-leader-elect", false,
+		"Use a legacy leader election method for controller manager instead of the lease API.")
 
 	pflag.Parse()
 
@@ -86,6 +88,12 @@ func main() {
 	if strings.Contains(namespace, ",") {
 		options.Namespace = ""
 		options.NewCache = cache.MultiNamespacedCacheBuilder(strings.Split(namespace, ","))
+	}
+
+	if legacyLeaderElect {
+		// If legacyLeaderElection is enabled, then that means the lease API is not available.
+		// In this case, use the legacy leader election method of a ConfigMap.
+		options.LeaderElectionResourceLock = "configmaps"
 	}
 
 	// Create a new manager to provide shared dependencies and start components
