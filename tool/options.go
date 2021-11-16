@@ -88,7 +88,7 @@ func ProcessFlags() {
 	flag.StringVar(
 		&Options.ProbeAddr,
 		"health-probe-bind-address",
-		":8081",
+		":8082",
 		"The address the probe endpoint binds to.",
 	)
 }
