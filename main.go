@@ -10,27 +10,21 @@ import (
 	"runtime"
 	"strings"
 
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/api/v1"
+	"github.com/spf13/pflag"
+
 	// to ensure that exec-entrypoint and run can make use of them.
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
-
-	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/api/v1"
-
-	"github.com/open-cluster-management/governance-policy-spec-sync/controllers/sync"
-	"github.com/open-cluster-management/governance-policy-spec-sync/tool"
-	"github.com/open-cluster-management/governance-policy-spec-sync/version"
-
-	"github.com/spf13/pflag"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,7 +33,11 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+
 	//+kubebuilder:scaffold:imports
+	"github.com/open-cluster-management/governance-policy-spec-sync/controllers/sync"
+	"github.com/open-cluster-management/governance-policy-spec-sync/tool"
+	"github.com/open-cluster-management/governance-policy-spec-sync/version"
 )
 
 // Change below variables to serve metrics on different host or port.
@@ -63,8 +61,8 @@ func printVersion() {
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1.AddToScheme(eventsScheme))
-	utilruntime.Must(policiesv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+	utilruntime.Must(policiesv1.AddToScheme(scheme))
 }
 
 func main() {
@@ -84,8 +82,9 @@ func main() {
 
 	// Get hubconfig to talk to hub apiserver
 	if tool.Options.HubConfigFilePathName == "" {
-		found := false
+		var found bool
 		tool.Options.HubConfigFilePathName, found = os.LookupEnv("HUB_CONFIG")
+
 		if found {
 			log.Info("Found ENV HUB_CONFIG, initializing using", "tool.Options.HubConfigFilePathName",
 				tool.Options.HubConfigFilePathName)
@@ -100,13 +99,17 @@ func main() {
 
 	// Get managedconfig to talk to hub apiserver
 	var managedCfg *rest.Config
+
 	if tool.Options.ManagedConfigFilePathName == "" {
-		found := false
+		var found bool
 		tool.Options.ManagedConfigFilePathName, found = os.LookupEnv("MANAGED_CONFIG")
+
 		if found {
 			log.Info("Found ENV MANAGED_CONFIG, initializing using", "tool.Options.ManagedConfigFilePathName",
 				tool.Options.ManagedConfigFilePathName)
+
 			managedCfg, err = clientcmd.BuildConfigFromFlags("", tool.Options.ManagedConfigFilePathName)
+
 			if err != nil {
 				log.Error(err, "")
 				os.Exit(1)
@@ -127,6 +130,7 @@ func main() {
 	}
 
 	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(managedCfg)
+
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(namespace)})
 	managedRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: sync.ControllerName})
@@ -180,23 +184,25 @@ func main() {
 	}
 
 	// use config check
-	cc, err := addonutils.NewConfigChecker("policy-spec-sync", tool.Options.HubConfigFilePathName)
+	configChecker, err := addonutils.NewConfigChecker("policy-spec-sync", tool.Options.HubConfigFilePathName)
 	if err != nil {
 		log.Error(err, "unable to setup a configChecker")
 		os.Exit(1)
 	}
 
 	//+kubebuilder:scaffold:builder
-	if err := mgr.AddHealthzCheck("healthz", cc.Check); err != nil {
+	if err := mgr.AddHealthzCheck("healthz", configChecker.Check); err != nil {
 		log.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
+
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		log.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 
 	log.Info("Starting manager.")
+
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
 		log.Error(err, "Manager exited non-zero")
 		os.Exit(1)

@@ -7,17 +7,19 @@ import (
 	"flag"
 	"os"
 
-	"github.com/open-cluster-management/governance-policy-spec-sync/tool"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	"github.com/open-cluster-management/governance-policy-spec-sync/tool"
 )
 
 func main() {
 	var namespace string
-	var log = logf.Log.WithName("uninstall")
+
+	log := logf.Log.WithName("uninstall")
 
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
@@ -40,5 +42,6 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
 	log.Info("Finished uninstall ns...")
 }

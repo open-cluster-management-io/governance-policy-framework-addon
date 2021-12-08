@@ -31,15 +31,12 @@ var ErrNoNamespace = fmt.Errorf("namespace not found for current environment")
 // is returned by functions that only work on operators running in cluster mode)
 var ErrRunLocal = fmt.Errorf("operator run mode forced to local")
 
-func isRunModeLocal() bool {
-	return os.Getenv(ForceRunModeEnv) == string(LocalRunMode)
-}
-
 // GetWatchNamespace returns the Namespace the operator should be watching for changes
 func GetWatchNamespace() (string, error) {
 	ns, found := os.LookupEnv(watchNamespaceEnvVar)
 	if !found {
 		return "", fmt.Errorf("%s must be set", watchNamespaceEnvVar)
 	}
+
 	return ns, nil
 }

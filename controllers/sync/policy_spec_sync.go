@@ -60,11 +60,13 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	// Fetch the Policy instance
 	instance := &policiesv1.Policy{}
+
 	err := r.HubClient.Get(ctx, request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// repliated policy on hub was deleted, remove policy on managed cluster
 			reqLogger.Info("Policy was deleted, removing on managed cluster...")
+
 			err = r.ManagedClient.Delete(ctx, &policiesv1.Policy{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       policiesv1.Kind,
@@ -75,35 +77,46 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					Namespace: request.Namespace,
 				},
 			})
+
 			if err != nil && !errors.IsNotFound(err) {
 				reqLogger.Error(err, "Failed to remove policy on managed cluster...")
 			}
+
 			reqLogger.Info("Policy has been removed from managed cluster...Reconciliation complete.")
+
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
 		reqLogger.Error(err, "Failed to get policy from hub...")
+
 		return reconcile.Result{}, err
 	}
+
 	managedPlc := &policiesv1.Policy{}
 	err = r.ManagedClient.Get(ctx, request.NamespacedName, managedPlc)
+
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// not found on managed cluster, create it
 			reqLogger.Info("Policy not found on managed cluster, creating it...")
+
 			managedPlc = instance.DeepCopy()
 			managedPlc.SetOwnerReferences(nil)
 			managedPlc.SetResourceVersion("")
 			err = r.ManagedClient.Create(ctx, managedPlc)
+
 			if err != nil {
 				reqLogger.Error(err, "Failed to create policy on managed...")
+
 				return reconcile.Result{}, err
 			}
+
 			r.ManagedRecorder.Event(instance, "Normal", "PolicySpecSync",
 				fmt.Sprintf("Policy %s was synchronized to cluster namespace %s", instance.GetName(),
 					instance.GetNamespace()))
 		} else {
 			reqLogger.Error(err, "Failed to get policy from managed...")
+
 			return reconcile.Result{}, err
 		}
 	}
@@ -114,14 +127,19 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		managedPlc.SetAnnotations(instance.GetAnnotations())
 		managedPlc.Spec = instance.Spec
 		err = r.ManagedClient.Update(ctx, managedPlc)
+
 		if err != nil && errors.IsNotFound(err) {
 			reqLogger.Error(err, "Failed to update policy on managed...")
+
 			return reconcile.Result{}, err
 		}
+
 		r.ManagedRecorder.Event(instance, "Normal", "PolicySpecSync",
 			fmt.Sprintf("Policy %s was updated in cluster namespace %s", instance.GetName(),
 				instance.GetNamespace()))
 	}
+
 	reqLogger.Info("Reconciliation complete.")
+
 	return reconcile.Result{}, nil
 }

@@ -9,10 +9,7 @@ import (
 	"github.com/spf13/pflag"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
-
-var log = logf.Log.WithName("cmd")
 
 // PolicySpecSyncOptions for command line flag parsing
 type PolicySpecSyncOptions struct {
@@ -88,5 +85,6 @@ func DeleteClusterNs(client *kubernetes.Interface, ns string) error {
 	if ns != "" {
 		return (*client).CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
 	}
+
 	return nil
 }
