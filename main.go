@@ -5,29 +5,29 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"runtime"
 	"strings"
 
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
-	v1 "k8s.io/api/core/v1"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
-
 	"github.com/open-cluster-management/addon-framework/pkg/lease"
 	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/api/v1"
 	"github.com/spf13/pflag"
+
+	// to ensure that exec-entrypoint and run can make use of them.
+	v1 "k8s.io/api/core/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,7 +40,6 @@ import (
 	"github.com/open-cluster-management/governance-policy-status-sync/controllers/sync"
 	"github.com/open-cluster-management/governance-policy-status-sync/tool"
 	"github.com/open-cluster-management/governance-policy-status-sync/version"
-	//+kubebuilder:scaffold:imports
 )
 
 var (
@@ -58,9 +57,8 @@ func printVersion() {
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1.AddToScheme(eventsScheme))
-
-	utilruntime.Must(policiesv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+	utilruntime.Must(policiesv1.AddToScheme(scheme))
 }
 
 func main() {
@@ -77,7 +75,8 @@ func main() {
 
 	// Get hubconfig to talk to hub apiserver
 	if tool.Options.HubConfigFilePathName == "" {
-		found := false
+		var found bool
+
 		tool.Options.HubConfigFilePathName, found = os.LookupEnv("HUB_CONFIG")
 		if found {
 			log.Info("Found ENV HUB_CONFIG, initializing using", "tool.Options.HubConfigFilePathName",
@@ -86,7 +85,6 @@ func main() {
 	}
 
 	hubCfg, err := clientcmd.BuildConfigFromFlags("", tool.Options.HubConfigFilePathName)
-
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
@@ -94,12 +92,15 @@ func main() {
 
 	// Get managedconfig to talk to managed apiserver
 	var managedCfg *rest.Config
+
 	if tool.Options.ManagedConfigFilePathName == "" {
-		found := false
+		var found bool
+
 		tool.Options.ManagedConfigFilePathName, found = os.LookupEnv("MANAGED_CONFIG")
 		if found {
 			log.Info("Found ENV MANAGED_CONFIG, initializing using", "tool.Options.ManagedConfigFilePathName",
 				tool.Options.ManagedConfigFilePathName)
+
 			managedCfg, err = clientcmd.BuildConfigFromFlags("", tool.Options.ManagedConfigFilePathName)
 			if err != nil {
 				log.Error(err, "")
@@ -122,11 +123,13 @@ func main() {
 	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(hubCfg)
 
 	eventBroadcaster := record.NewBroadcaster()
+
 	namespace, err := tool.GetWatchNamespace()
 	if err != nil {
 		log.Error(err, "Failed to get watch namespace")
 		os.Exit(1)
 	}
+
 	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(namespace)})
 	hubRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: sync.ControllerName})
 
@@ -171,17 +174,18 @@ func main() {
 	}
 
 	// use config check
-	cc, err := addonutils.NewConfigChecker("policy-status-sync", tool.Options.HubConfigFilePathName)
+	configChecker, err := addonutils.NewConfigChecker("policy-status-sync", tool.Options.HubConfigFilePathName)
 	if err != nil {
 		log.Error(err, "unable to setup a configChecker")
 		os.Exit(1)
 	}
 
 	//+kubebuilder:scaffold:builder
-	if err := mgr.AddHealthzCheck("healthz", cc.Check); err != nil {
+	if err := mgr.AddHealthzCheck("healthz", configChecker.Check); err != nil {
 		log.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
+
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		log.Error(err, "unable to set up ready check")
 		os.Exit(1)
@@ -199,9 +203,10 @@ func main() {
 	// resource objects.
 	if tool.Options.EnableLease {
 		ctx := context.TODO()
+
 		operatorNs, err := tool.GetOperatorNamespace()
 		if err != nil {
-			if err == tool.ErrNoNamespace || err == tool.ErrRunLocal {
+			if errors.Is(err, tool.ErrNoNamespace) || errors.Is(err, tool.ErrRunLocal) {
 				log.Info("Skipping lease; not running in a cluster.")
 			} else {
 				log.Error(err, "Failed to get operator namespace")
@@ -226,6 +231,7 @@ func main() {
 	}
 
 	log.Info("starting manager")
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		log.Error(err, "problem running manager")
 		os.Exit(1)

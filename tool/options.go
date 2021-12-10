@@ -96,38 +96,51 @@ func ProcessFlags() {
 // CreateClusterNs creates the cluster namespace on managed cluster if not exists
 func CreateClusterNs(client *kubernetes.Interface, nsName string) error {
 	const clusterLabel = "policy.open-cluster-management.io/isClusterNamespace"
-	ns, err := (*client).CoreV1().Namespaces().Get(context.TODO(), nsName, metav1.GetOptions{})
+
+	nameSpace, err := (*client).CoreV1().Namespaces().Get(context.TODO(), nsName, metav1.GetOptions{})
+
 	log.Info("Checking if cluster namespace exist.", "Namespace", nsName)
+
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// not found, create it
 			log.Info("Cluster namespace not found, creating it...", "Namespace", nsName)
+
 			_, err := (*client).CoreV1().Namespaces().Create(context.TODO(), &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   nsName,
 					Labels: map[string]string{clusterLabel: "true"},
 				},
 			}, metav1.CreateOptions{})
+
 			return err
 		}
+
 		return err
 	}
 	// namespace exists, patching it
 	log.Info("Cluster namespace exists, checking if label exists...", "Namespace", nsName)
-	labels := ns.GetLabels()
+
+	labels := nameSpace.GetLabels()
 	if labels == nil {
 		labels = make(map[string]string)
 	}
+
 	if _, ok := labels[clusterLabel]; !ok {
 		log.Info("Label doesn't exist, patching it...", "Namespace", nsName)
+
 		labels[clusterLabel] = "true"
-		ns.SetLabels(labels)
-		_, err = (*client).CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
+		nameSpace.SetLabels(labels)
+		_, err = (*client).CoreV1().Namespaces().Update(context.TODO(), nameSpace, metav1.UpdateOptions{})
+
 		if err != nil {
 			log.Error(err, "Failed to patch cluster namespace with label.", "Namespace", nsName)
+
 			return err
 		}
 	}
+
 	log.Info("Cluster namespace exists with label", "Namespace", nsName)
+
 	return nil
 }

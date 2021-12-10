@@ -77,6 +77,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	// Fetch the Policy instance
 	instance := &policiesv1.Policy{}
+
 	err := r.ManagedClient.Get(ctx, request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -84,10 +85,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			// check if it was deleted by user by checking if it still exists on hub
 			hubInstance := &policiesv1.Policy{}
 			err = r.HubClient.Get(ctx, request.NamespacedName, hubInstance)
+
 			if err != nil {
 				if errors.IsNotFound(err) {
 					// confirmed deleted on hub, doing nothing
 					reqLogger.Info("Policy was deleted, no status to update...")
+
 					return reconcile.Result{}, nil
 				}
 				// other error, requeue
@@ -96,6 +99,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			// still exist on hub, recover policy on managed
 			hubInstance.SetOwnerReferences(nil)
 			hubInstance.SetResourceVersion("")
+
 			return reconcile.Result{}, r.ManagedClient.Create(ctx, hubInstance)
 		}
 		// Error reading the object - requeue the request.
@@ -104,6 +108,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	// get hub policy
 	hubPlc := &policiesv1.Policy{}
 	err = r.HubClient.Get(ctx, request.NamespacedName, hubPlc)
+
 	if err != nil {
 		// hub policy not found, it has been deleted
 		if errors.IsNotFound(err) {
@@ -116,7 +121,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			// otherwise requeue to delete again
 			return reconcile.Result{}, err
 		}
+
 		reqLogger.Error(err, "Failed to get policy on hub")
+
 		return reconcile.Result{}, err
 	}
 	// found, ensure managed plc matches hub plc
@@ -131,17 +138,15 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	// plc matches hub plc, then get events
 	eventList := &corev1.EventList{}
 	err = r.ManagedClient.List(ctx, eventList, client.InNamespace(instance.GetNamespace()))
+
 	if err != nil {
 		// there is an error to list events, requeue
 		return reconcile.Result{}, err
 	}
 	// filter events to current policy instance and build map
 	eventForPolicyMap := make(map[string]*[]policiesv1.ComplianceHistory)
-	rgx, err := regexp.Compile(`(?i)^policy:\s*([A-Za-z0-9.-]+)\s*\/([A-Za-z0-9.-]+)`)
-	if err != nil {
-		// regexp is wrong, how?
-		return reconcile.Result{}, err
-	}
+	// panic if regexp invalid
+	rgx := regexp.MustCompile(`(?i)^policy:\s*([A-Za-z0-9.-]+)\s*\/([A-Za-z0-9.-]+)`)
 	for _, event := range eventList.Items {
 		// sample event.Reason -- reason: 'policy: calamari/policy-grc-rbactest-example'
 		reason := rgx.FindString(event.Reason)
@@ -153,31 +158,38 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				Message:       strings.TrimSpace(strings.TrimPrefix(event.Message, "(combined from similar events):")),
 				EventName:     event.GetName(),
 			}
+
 			if eventForPolicyMap[templateName] == nil {
 				eventForPolicyMap[templateName] = &[]policiesv1.ComplianceHistory{}
 			}
+
 			templateEvents := append(*eventForPolicyMap[templateName], eventHistory)
 			eventForPolicyMap[templateName] = &templateEvents
 		}
 	}
+
 	oldStatus := *instance.Status.DeepCopy()
 	newStatus := policiesv1.PolicyStatus{}
+
 	for _, policyT := range instance.Spec.PolicyTemplates {
 		object, _, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
 			// failed to decode PolicyTemplate, skipping it
 			break
 		}
+
 		tName := object.(metav1.Object).GetName()
-		var existingDpt = &policiesv1.DetailsPerTemplate{}
+		existingDpt := &policiesv1.DetailsPerTemplate{}
 		// retrieve existingDpt from instance.status.details field
 		found := false
+
 		for _, dpt := range instance.Status.Details {
 			if dpt.TemplateMeta.Name == tName {
 				// found existing status for policyTemplate
-				// retreive it
+				// retrieve it
 				existingDpt = dpt
 				found = true
+
 				break
 			}
 		}
@@ -198,10 +210,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		for _, ech := range existingDpt.History {
 			exists := false
+
 			for _, ch := range history {
 				if ch.LastTimestamp.Time.Equal(ech.LastTimestamp.Time) && ch.EventName == ech.EventName {
 					// do nothing
 					exists = true
+
 					break
 				}
 			}
@@ -216,14 +230,17 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		})
 		// remove duplicates
 		newHistory := []policiesv1.ComplianceHistory{}
-		for i := 0; i < len(history); i++ {
-			newHistory = append(newHistory, history[i])
-			for j := i; j < len(history); j++ {
-				if history[i].EventName == history[j].EventName &&
-					history[i].Message == history[j].Message {
+
+		for historyIndex := 0; historyIndex < len(history); historyIndex++ {
+			newHistory = append(newHistory, history[historyIndex])
+
+			for j := historyIndex; j < len(history); j++ {
+				if history[historyIndex].EventName == history[j].EventName &&
+					history[historyIndex].Message == history[j].Message {
 					// same event, filter it
 				} else {
-					i = j - 1
+					historyIndex = j - 1
+
 					break
 				}
 			}
@@ -233,6 +250,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		if len(newHistory) < 10 {
 			size = len(newHistory)
 		}
+
 		existingDpt.History = newHistory[0:size]
 
 		// set compliancy at different level
@@ -244,18 +262,22 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				existingDpt.ComplianceState = policiesv1.NonCompliant
 			}
 		}
+
 		// append existingDpt to status
 		newStatus.Details = append(newStatus.Details, existingDpt)
+
 		reqLogger.Info("status update complete... ", "PolicyTemplate", tName)
 	}
 
 	instance.Status = newStatus
 	// one violation found in status of one template, set overall compliancy to NonCompliant
 	isCompliant := true
+
 	for _, dpt := range newStatus.Details {
 		if dpt.ComplianceState == "NonCompliant" {
 			instance.Status.ComplianceState = policiesv1.NonCompliant
 			isCompliant = false
+
 			break
 		} else if dpt.ComplianceState == "" {
 			isCompliant = false
@@ -268,13 +290,18 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	// all done, update status on managed and hub
 	// instance.Status.Details = nil
-	if !equality.Semantic.DeepEqual(newStatus.Details, oldStatus.Details) || instance.Status.ComplianceState != oldStatus.ComplianceState {
+	if !equality.Semantic.DeepEqual(newStatus.Details, oldStatus.Details) ||
+		instance.Status.ComplianceState != oldStatus.ComplianceState {
 		reqLogger.Info("status mismatch on managed, update it... ")
+
 		err = r.ManagedClient.Status().Update(ctx, instance)
+
 		if err != nil {
 			reqLogger.Error(err, "Failed to get update policy status on managed")
+
 			return reconcile.Result{}, err
 		}
+
 		r.ManagedRecorder.Event(instance, "Normal", "PolicyStatusSync",
 			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", instance.GetName(),
 				instance.GetNamespace()))
@@ -284,12 +311,16 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	if os.Getenv("ON_MULTICLUSTERHUB") != "true" && !equality.Semantic.DeepEqual(hubPlc.Status, instance.Status) {
 		reqLogger.Info("status not in sync, update the hub... ")
+
 		hubPlc.Status = instance.Status
 		err = r.HubClient.Status().Update(ctx, hubPlc)
+
 		if err != nil {
 			reqLogger.Error(err, "Failed to get update policy status on hub")
+
 			return reconcile.Result{}, err
 		}
+
 		r.HubRecorder.Event(instance, "Normal", "PolicyStatusSync",
 			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
 				hubPlc.GetNamespace()))
@@ -298,5 +329,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	reqLogger.Info("Reconciling complete...")
+
 	return reconcile.Result{}, nil
 }
