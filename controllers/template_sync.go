@@ -70,7 +70,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	// Fetch the Policy instance
 	instance := &policiesv1.Policy{}
-	err := r.Get(context.TODO(), request.NamespacedName, instance)
+	err := r.Get(ctx, request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -161,7 +161,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				fmt.Sprintf("Failed to unmarshal policy template with err: %s", err))
 			continue
 		}
-		eObject, err := res.Get(context.TODO(), tName, metav1.GetOptions{})
+		eObject, err := res.Get(ctx, tName, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				// not found should create it
@@ -189,7 +189,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				overrideRemediationAction(instance, tObjectUnstructured)
 
-				_, err = res.Create(context.TODO(), tObjectUnstructured, metav1.CreateOptions{})
+				_, err = res.Create(ctx, tObjectUnstructured, metav1.CreateOptions{})
 				if err != nil {
 					// failed to create policy template
 					reqLogger.Error(err, "Failed to create policy template...", "PolicyTemplateName", tName)
@@ -239,7 +239,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			reqLogger.Info("existing object and template don't match, updating...", "PolicyTemplateName", tName)
 			eObjectUnstructured["spec"] = tObjectUnstructured.Object["spec"]
 			eObject.SetAnnotations(tObjectUnstructured.GetAnnotations())
-			_, err = res.Update(context.TODO(), eObject, metav1.UpdateOptions{})
+			_, err = res.Update(ctx, eObject, metav1.UpdateOptions{})
 			if err != nil {
 				reqLogger.Error(err, "Failed to update policy template...", "PolicyTemplateName", tName)
 				r.Recorder.Event(instance, "Warning", "PolicyTemplateSync",
