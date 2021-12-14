@@ -1,6 +1,8 @@
 # Temporary Build Files
 build/_output
 build/_test
+.go/
+bin/
 # Created by https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
 ### Emacs ###
 # -*- mode: gitignore; -*-
@@ -75,7 +77,7 @@ tags
 .vscode/*
 .history
 # End of https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
-cmd/manager/__debug_bin
+__debug_bin
 
 /build-harness
 /build-harness-extensions

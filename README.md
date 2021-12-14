@@ -36,10 +36,18 @@ make e2e-test
 make kind-delete-cluster
 ```
 
+### Updating operator.yaml
+
+The `deploy/operator.yaml` file is generated via Kustomize. The `deploy/rbac` directory of
+Kustomize files is managed by the operator-sdk and Kubebuilder using
+[markers](https://book.kubebuilder.io/reference/markers.html). After updating the markers or
+any of the Kustomize files, you may regenerate `deploy/operator.yaml` by running
+`make generate-operator-yaml`.
+
 ## References
 
 - The `governance-policy-spec-sync` is part of the `open-cluster-management` community. For more information, visit: [open-cluster-management.io](https://open-cluster-management.io).
 
 <!---
-Date: 9/22/2021
+Date: 11/08/2021
 -->

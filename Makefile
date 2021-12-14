@@ -30,6 +30,7 @@ GIT_HOST ?= github.com/open-cluster-management
 
 PWD := $(shell pwd)
 BASE_DIR := $(shell basename $(PWD))
+export PATH=$(shell echo $$PATH):$(PWD)/bin
 
 # Keep an existing GOPATH, make a private one if it is undefined
 GOPATH_DEFAULT := $(PWD)/.go
@@ -67,7 +68,7 @@ else
     $(error "This system's OS $(LOCAL_OS) isn't recognized/supported")
 endif
 
-.PHONY: fmt lint test coverage build build-images
+.PHONY: fmt lint test coverage build build-images fmt-dependencies lint-dependencies
 
 USE_VENDORIZED_BUILD_HARNESS ?=
 
@@ -99,11 +100,17 @@ work: $(GOBIN)
 # format section
 ############################################################
 
+fmt-dependencies:
+	$(call go-get-tool,$(PWD)/bin/gci,github.com/daixiang0/gci@v0.2.9)
+	$(call go-get-tool,$(PWD)/bin/gofumpt,mvdan.cc/gofumpt@v0.2.0)
+
 # All available format: format-go format-protos format-python
 # Default value will run all formats, override these make target with your requirements:
 #    eg: fmt: format-go format-protos
-fmt: # format-go format-protos format-python
-	go fmt ./...
+fmt: fmt-dependencies
+	find . -not \( -path "./.go" -prune \) -name "*.go" | xargs gofmt -s -w
+	find . -not \( -path "./.go" -prune \) -name "*.go" | xargs gofumpt -l -w
+	find . -not \( -path "./.go" -prune \) -name "*.go" | xargs gci -w -local "$(shell cat go.mod | head -1 | cut -d " " -f 2)"
 
 ############################################################
 # check section
@@ -111,10 +118,13 @@ fmt: # format-go format-protos format-python
 
 check: lint
 
+lint-dependencies:
+	$(call go-get-tool,$(PWD)/bin/golangci-lint,github.com/golangci/golangci-lint/cmd/golangci-lint@v1.41.1)
+
 # All available linters: lint-dockerfiles lint-scripts lint-yaml lint-copyright-banner lint-go lint-python lint-helm lint-markdown lint-sass lint-typescript lint-protos
 # Default value will run all linters, override these make target with your requirements:
 #    eg: lint: lint-go lint-yaml
-lint: lint-all
+lint: lint-dependencies lint-all
 
 ############################################################
 # test section
@@ -133,12 +143,12 @@ test-dependencies:
 ############################################################
 
 build:
-	@build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
-	@build/common/scripts/gobuild.sh build/_output/bin/uninstall-ns ./cmd/uninstall-ns
+	@build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./
+	@build/common/scripts/gobuild.sh build/_output/bin/uninstall-ns ./uninstall-ns
 
 local:
-	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
-	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/uninstall-ns ./cmd/uninstall-ns
+	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./
+	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/uninstall-ns ./uninstall-ns
 
 ############################################################
 # images section
@@ -161,6 +171,43 @@ clean::
 copyright-check:
 	./build/copyright-check.sh $(TRAVIS_BRANCH)
 
+############################################################
+# Generate manifests
+############################################################
+CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
+KUSTOMIZE = $(shell pwd)/bin/kustomize
+
+.PHONY: manifests
+manifests: controller-gen
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=governance-policy-spec-sync paths="./..." output:rbac:artifacts:config=deploy/rbac
+
+.PHONY: generate
+generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+.PHONY: generate-operator-yaml
+generate-operator-yaml: kustomize manifests
+	$(KUSTOMIZE) build deploy/manager > deploy/operator.yaml
+
+.PHONY: controller-gen
+controller-gen: ## Download controller-gen locally if necessary.
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1)
+
+.PHONY: kustomize
+kustomize: ## Download kustomize locally if necessary.
+	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.8.7)
+
+define go-get-tool
+@[ -f $(1) ] || { \
+set -e ;\
+TMP_DIR=$$(mktemp -d) ;\
+cd $$TMP_DIR ;\
+go mod init tmp ;\
+echo "Downloading $(2)" ;\
+GOBIN=$(PWD)/bin go get $(2) ;\
+rm -rf $$TMP_DIR ;\
+}
+endef
 
 ############################################################
 # e2e test section
@@ -171,20 +218,12 @@ kind-bootstrap-cluster: kind-create-cluster install-crds install-resources kind-
 .PHONY: kind-bootstrap-cluster-dev
 kind-bootstrap-cluster-dev: kind-create-cluster install-crds install-resources
 
-check-env:
-ifndef DOCKER_USER
-	$(error DOCKER_USER is undefined)
-endif
-ifndef DOCKER_PASS
-	$(error DOCKER_PASS is undefined)
-endif
-
-kind-deploy-controller: check-env
+kind-deploy-controller:
 	kubectl create ns $(KIND_NAMESPACE) --kubeconfig=$(PWD)/kubeconfig_managed
 	@echo creating secrets on hub and managed
 	kubectl create secret -n $(KIND_NAMESPACE) generic hub-kubeconfig --from-file=kubeconfig=$(PWD)/kubeconfig_hub_internal --kubeconfig=$(PWD)/kubeconfig_managed
 	@echo installing policy-spec-sync
-	kubectl apply -f deploy/ -n $(KIND_NAMESPACE) --kubeconfig=$(PWD)/kubeconfig_managed
+	kubectl apply -f deploy/operator.yaml -n $(KIND_NAMESPACE) --kubeconfig=$(PWD)/kubeconfig_managed
 
 kind-deploy-controller-dev:
 	@echo Pushing image to KinD cluster
@@ -192,13 +231,13 @@ kind-deploy-controller-dev:
 	@echo Installing $(IMG)
 	kubectl create ns $(KIND_NAMESPACE) --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl create secret -n $(KIND_NAMESPACE) generic hub-kubeconfig --from-file=kubeconfig=$(PWD)/kubeconfig_hub_internal --kubeconfig=$(PWD)/kubeconfig_managed
-	kubectl apply -f deploy/ -n $(KIND_NAMESPACE) --kubeconfig=$(PWD)/kubeconfig_managed
+	kubectl apply -f deploy/operator.yaml -n $(KIND_NAMESPACE) --kubeconfig=$(PWD)/kubeconfig_managed
 	@echo "Patch deployment image"
 	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"imagePullPolicy\":\"Never\"}]}}}}" --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"image\":\"$(REGISTRY)/$(IMG):$(TAG)\"}]}}}}" --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl rollout status -n $(KIND_NAMESPACE) deployment $(IMG) --timeout=180s --kubeconfig=$(PWD)/kubeconfig_managed
 	# Workaround to properly set E2E image to local image
-	sed -i 's%quay.io/open-cluster-management/governance-policy-spec-sync:latest-dev%$(REGISTRY)/$(IMG):$(TAG)%' test/resources/case2_uninstall_ns/case2-uninstall-ns.yaml
+	sed -i 's%quay.io/open-cluster-management/governance-policy-spec-sync:latest%$(REGISTRY)/$(IMG):$(TAG)%' test/resources/case2_uninstall_ns/case2-uninstall-ns.yaml
 	sed -i 's%imagePullPolicy: "Always"%imagePullPolicy: "Never"%' test/resources/case2_uninstall_ns/case2-uninstall-ns.yaml
 	
 
@@ -230,8 +269,9 @@ e2e-test:
 	ginkgo -v --slowSpecThreshold=10 test/e2e
 
 e2e-dependencies:
-	go get github.com/onsi/ginkgo/ginkgo@v1.14.1
-	go get github.com/onsi/gomega/...@v1.10.1
+	go get github.com/onsi/ginkgo/ginkgo@v1.16.5
+	go get github.com/onsi/gomega/...@v1.16.0
+	go get github.com/open-cluster-management/governance-policy-propagator@v0.0.0-20211012174109-95c3b77cce09
 
 e2e-debug:
 	@echo gathering hub info
@@ -248,7 +288,7 @@ e2e-debug:
 # e2e test coverage
 ############################################################
 build-instrumented:
-	go test -covermode=atomic -coverpkg=github.com/open-cluster-management/$(IMG)... -c -tags e2e ./cmd/manager -o build/_output/bin/$(IMG)-instrumented
+	go test -covermode=atomic -coverpkg=github.com/open-cluster-management/$(IMG)... -c -tags e2e ./ -o build/_output/bin/$(IMG)-instrumented
 
 run-instrumented:
 	HUB_CONFIG="$(DEST)/kubeconfig_hub" MANAGED_CONFIG="$(DEST)/kubeconfig_managed" WATCH_NAMESPACE="managed" ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=coverage.out &>/dev/null &
