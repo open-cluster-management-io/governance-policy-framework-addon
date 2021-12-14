@@ -14,7 +14,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/open-cluster-management/governance-policy-status-sync/test/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,6 +24,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
+
+	"github.com/open-cluster-management/governance-policy-status-sync/test/utils"
 )
 
 var (
@@ -52,14 +53,28 @@ func TestE2e(t *testing.T) {
 func init() {
 	klog.SetOutput(GinkgoWriter)
 	klog.InitFlags(nil)
-	flag.StringVar(&kubeconfigHub, "kubeconfig_hub", "../../kubeconfig_hub", "Location of the kubeconfig to use; defaults to KUBECONFIG if not set")
-	flag.StringVar(&kubeconfigManaged, "kubeconfig_managed", "../../kubeconfig_managed", "Location of the kubeconfig to use; defaults to KUBECONFIG if not set")
+	flag.StringVar(
+		&kubeconfigHub,
+		"kubeconfig_hub", "../../kubeconfig_hub",
+		"Location of the kubeconfig to use; defaults to KUBECONFIG if not set")
+	flag.StringVar(
+		&kubeconfigManaged,
+		"kubeconfig_managed", "../../kubeconfig_managed",
+		"Location of the kubeconfig to use; defaults to KUBECONFIG if not set")
 }
 
 var _ = BeforeSuite(func() {
 	By("Setup Hub and Managed client")
-	gvrPolicy = schema.GroupVersionResource{Group: "policy.open-cluster-management.io", Version: "v1", Resource: "policies"}
-	gvrEvent = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "events"}
+	gvrPolicy = schema.GroupVersionResource{
+		Group:    "policy.open-cluster-management.io",
+		Version:  "v1",
+		Resource: "policies",
+	}
+	gvrEvent = schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "events",
+	}
 	clientHub = NewKubeClient("", kubeconfigHub, "")
 	clientHubDynamic = NewKubeClientDynamic("", kubeconfigHub, "")
 	clientManaged = NewKubeClient("", kubeconfigManaged, "")
@@ -69,7 +84,10 @@ var _ = BeforeSuite(func() {
 	defaultTimeoutSeconds = 30
 	By("Create Namespace if needed")
 	namespacesHub := clientHub.CoreV1().Namespaces()
-	if _, err := namespacesHub.Get(context.TODO(), testNamespace, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
+	if _, err := namespacesHub.Get(
+		context.TODO(),
+		testNamespace,
+		metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
 		Expect(namespacesHub.Create(context.TODO(), &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testNamespace,
@@ -77,7 +95,10 @@ var _ = BeforeSuite(func() {
 		}, metav1.CreateOptions{})).NotTo(BeNil())
 	}
 	namespacesManaged := clientHub.CoreV1().Namespaces()
-	if _, err := namespacesManaged.Get(context.TODO(), testNamespace, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
+	if _, err := namespacesManaged.Get(
+		context.TODO(),
+		testNamespace,
+		metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
 		Expect(namespacesManaged.Create(context.TODO(), &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testNamespace,
@@ -92,6 +113,7 @@ var _ = BeforeSuite(func() {
 
 func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {
 	klog.V(5).Infof("Create kubeclient for url %s using kubeconfig path %s\n", url, kubeconfig)
+
 	config, err := LoadConfig(url, kubeconfig, context)
 	if err != nil {
 		panic(err)
@@ -107,6 +129,7 @@ func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {
 
 func NewKubeClientDynamic(url, kubeconfig, context string) dynamic.Interface {
 	klog.V(5).Infof("Create kubeclient dynamic for url %s using kubeconfig path %s\n", url, kubeconfig)
+
 	config, err := LoadConfig(url, kubeconfig, context)
 	if err != nil {
 		panic(err)
@@ -124,12 +147,14 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 	if kubeconfig == "" {
 		kubeconfig = os.Getenv("KUBECONFIG")
 	}
+
 	klog.V(5).Infof("Kubeconfig path %s\n", kubeconfig)
 	// If we have an explicit indication of where the kubernetes config lives, read that.
 	if kubeconfig != "" {
 		if context == "" {
 			return clientcmd.BuildConfigFromFlags(url, kubeconfig)
 		}
+
 		return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 			&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
 			&clientcmd.ConfigOverrides{
@@ -142,12 +167,15 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 	}
 	// If no in-cluster config, try the default location in the user's home directory.
 	if usr, err := user.Current(); err == nil {
-		klog.V(5).Infof("clientcmd.BuildConfigFromFlags for url %s using %s\n", url, filepath.Join(usr.HomeDir, ".kube", "config"))
+		klog.V(5).Infof(
+			"clientcmd.BuildConfigFromFlags for url %s using %s\n",
+			url,
+			filepath.Join(usr.HomeDir, ".kube", "config"))
+
 		if c, err := clientcmd.BuildConfigFromFlags("", filepath.Join(usr.HomeDir, ".kube", "config")); err == nil {
 			return c, nil
 		}
 	}
 
 	return nil, fmt.Errorf("could not create a valid kubeconfig")
-
 }

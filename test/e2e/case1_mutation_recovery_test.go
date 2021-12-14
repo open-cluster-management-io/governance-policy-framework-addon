@@ -5,7 +5,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -14,8 +13,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const case1PolicyName string = "default.case1-test-policy"
-const case1PolicyYaml string = "../resources/case1_mutation_recovery/case1-test-policy.yaml"
+const (
+	case1PolicyName string = "default.case1-test-policy"
+	case1PolicyYaml string = "../resources/case1_mutation_recovery/case1-test-policy.yaml"
+)
 
 var _ = Describe("Test mutation recovery", func() {
 	BeforeEach(func() {
@@ -23,13 +24,25 @@ var _ = Describe("Test mutation recovery", func() {
 		_, err := utils.KubectlWithOutput("apply", "-f", case1PolicyYaml, "-n", testNamespace,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).Should(BeNil())
-		hubPlc := utils.GetWithTimeout(clientHubDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+		hubPlc := utils.GetWithTimeout(
+			clientHubDynamic,
+			gvrPolicy,
+			case1PolicyName,
+			testNamespace,
+			true,
+			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
 		By("Creating a policy on managed cluster in ns:" + testNamespace)
 		_, err = utils.KubectlWithOutput("apply", "-f", case1PolicyYaml, "-n", testNamespace,
 			"--kubeconfig=../../kubeconfig_managed")
 		Expect(err).Should(BeNil())
-		managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+		managedPlc := utils.GetWithTimeout(
+			clientManagedDynamic,
+			gvrPolicy,
+			case1PolicyName,
+			testNamespace,
+			true,
+			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
 	})
 	AfterEach(func() {
@@ -56,15 +69,29 @@ var _ = Describe("Test mutation recovery", func() {
 				_, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace).Update(
 					context.TODO(), managedPlc, metav1.UpdateOptions{},
 				)
+
 				return err
 			},
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeNil())
 		By("Comparing spec between hub and managed policy")
-		hubPlc := utils.GetWithTimeout(clientHubDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+		hubPlc := utils.GetWithTimeout(
+			clientHubDynamic,
+			gvrPolicy,
+			case1PolicyName,
+			testNamespace,
+			true,
+			defaultTimeoutSeconds)
 		Eventually(func() interface{} {
-			managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				case1PolicyName,
+				testNamespace,
+				true,
+				defaultTimeoutSeconds)
+
 			return managedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(hubPlc.Object["spec"]))
 	})
@@ -79,15 +106,29 @@ var _ = Describe("Test mutation recovery", func() {
 				_, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace).Update(
 					context.TODO(), managedPlc, metav1.UpdateOptions{},
 				)
+
 				return err
 			},
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeNil())
 		By("Comparing spec between hub and managed policy")
-		hubPlc := utils.GetWithTimeout(clientHubDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+		hubPlc := utils.GetWithTimeout(
+			clientHubDynamic,
+			gvrPolicy,
+			case1PolicyName,
+			testNamespace,
+			true,
+			defaultTimeoutSeconds)
 		Eventually(func() interface{} {
-			managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				case1PolicyName,
+				testNamespace,
+				true,
+				defaultTimeoutSeconds)
+
 			return managedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(hubPlc.Object["spec"]))
 	})
@@ -97,20 +138,50 @@ var _ = Describe("Test mutation recovery", func() {
 			"--kubeconfig=../../kubeconfig_managed")
 		Expect(err).Should(BeNil())
 		By("Comparing spec between hub and managed policy")
-		hubPlc := utils.GetWithTimeout(clientHubDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+		hubPlc := utils.GetWithTimeout(
+			clientHubDynamic,
+			gvrPolicy,
+			case1PolicyName,
+			testNamespace,
+			true,
+			defaultTimeoutSeconds)
 		Eventually(func() interface{} {
-			managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				case1PolicyName,
+				testNamespace,
+				true,
+				defaultTimeoutSeconds)
+
 			return managedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(hubPlc.Object["spec"]))
 	})
 	It("Should recover status if policy status being modified", func() {
 		By("Generating an compliant event on the policy")
-		managedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+		managedPlc := utils.GetWithTimeout(
+			clientManagedDynamic,
+			gvrPolicy,
+			case1PolicyName,
+			testNamespace,
+			true,
+			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
-		managedRecorder.Event(managedPlc, "Normal", "policy: managed/case1-test-policy-trustedcontainerpolicy", fmt.Sprintf("Compliant; No violation detected"))
+		managedRecorder.Event(
+			managedPlc,
+			"Normal",
+			"policy: managed/case1-test-policy-trustedcontainerpolicy",
+			"Compliant; No violation detected")
 		By("Checking if policy status is compliant")
 		Eventually(func() interface{} {
-			managedPlc = utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+			managedPlc = utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				case1PolicyName,
+				testNamespace,
+				true,
+				defaultTimeoutSeconds)
+
 			return getCompliant(managedPlc)
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
@@ -124,6 +195,7 @@ var _ = Describe("Test mutation recovery", func() {
 				nsPolicy := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace)
 				var err error
 				managedPlc, err = nsPolicy.UpdateStatus(context.TODO(), managedPlc, metav1.UpdateOptions{})
+
 				return err
 			},
 			defaultTimeoutSeconds,
@@ -132,7 +204,14 @@ var _ = Describe("Test mutation recovery", func() {
 		Expect(getCompliant(managedPlc)).To(Equal("NonCompliant"))
 		By("Checking if policy status was recovered to compliant")
 		Eventually(func() interface{} {
-			managedPlc = utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds)
+			managedPlc = utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				case1PolicyName,
+				testNamespace,
+				true,
+				defaultTimeoutSeconds)
+
 			return getCompliant(managedPlc)
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("clean up all events")
