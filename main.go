@@ -20,23 +20,27 @@ import (
 	"github.com/spf13/pflag"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
 var (
-	log    = logf.Log.WithName("setup")
+	log    = ctrl.Log.WithName("setup")
 	scheme = k8sruntime.NewScheme()
 )
 
 func printVersion() {
-	log.Info(fmt.Sprintf("Operator Version: %s", version.Version))
-	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
-	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
+	log.Info(
+		"Using",
+		"OperatorVersion", version.Version,
+		"GoVersion", runtime.Version(),
+		"GOOS", runtime.GOOS,
+		"GOARCH", runtime.GOARCH,
+	)
 }
 
 func init() {
@@ -44,6 +48,8 @@ func init() {
 }
 
 func main() {
+	opts := zap.Options{}
+	opts.BindFlags(flag.CommandLine)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	var enableLeaderElection, legacyLeaderElect bool
@@ -55,7 +61,7 @@ func main() {
 
 	pflag.Parse()
 
-	logf.SetLogger(zap.New())
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	printVersion()
 
@@ -68,7 +74,7 @@ func main() {
 	// Get a config to talk to the apiserver
 	managedCfg, err := config.GetConfig()
 	if err != nil {
-		log.Error(err, "")
+		log.Error(err, "Failed to get the Kubernetes configuration")
 		os.Exit(1)
 	}
 
@@ -99,11 +105,11 @@ func main() {
 	// Create a new manager to provide shared dependencies and start components
 	mgr, err := manager.New(managedCfg, options)
 	if err != nil {
-		log.Error(err, "")
+		log.Error(err, "Unable to start the manager")
 		os.Exit(1)
 	}
 
-	log.Info("Registering Components.")
+	log.Info("Registering components")
 
 	// Setup all Controllers
 	if err := (&synccontrollers.PolicyReconciler{
@@ -112,15 +118,15 @@ func main() {
 		Config:   mgr.GetConfig(),
 		Recorder: mgr.GetEventRecorderFor(synccontrollers.ControllerName),
 	}).SetupWithManager(mgr); err != nil {
-		log.Error(err, "unable to create controller", "controller", synccontrollers.ControllerName)
+		log.Error(err, "Unable to create the controller", "controller", synccontrollers.ControllerName)
 		os.Exit(1)
 	}
 
-	log.Info("Starting the Cmd.")
+	log.Info("Starting the manager")
 
 	// Start the Cmd
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
-		log.Error(err, "Manager exited non-zero")
+		log.Error(err, "Errored while running the manager")
 		os.Exit(1)
 	}
 }

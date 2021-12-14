@@ -22,7 +22,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 var (
@@ -44,9 +45,10 @@ func TestE2e(t *testing.T) {
 	RunSpecs(t, "Policy template sync e2e Suite")
 }
 
+var log = ctrl.Log.WithName("test")
+
 func init() {
-	klog.SetOutput(GinkgoWriter)
-	klog.InitFlags(nil)
+	ctrl.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 }
 
 var _ = BeforeSuite(func() {
@@ -74,7 +76,7 @@ var _ = BeforeSuite(func() {
 })
 
 func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {
-	klog.V(5).Infof("Create kubeclient for url %s using kubeconfig path %s\n", url, kubeconfig)
+	log.V(1).Info("Creating kubeclient", "url", url, "config", kubeconfig)
 	config, err := LoadConfig(url, kubeconfig, context)
 	if err != nil {
 		panic(err)
@@ -89,7 +91,7 @@ func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {
 }
 
 func NewKubeClientDynamic(url, kubeconfig, context string) dynamic.Interface {
-	klog.V(5).Infof("Create kubeclient dynamic for url %s using kubeconfig path %s\n", url, kubeconfig)
+	log.V(1).Info("Creating dynamic kubeclient", "url", url, "kubeconfig", kubeconfig)
 	config, err := LoadConfig(url, kubeconfig, context)
 	if err != nil {
 		panic(err)
@@ -107,7 +109,7 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 	if kubeconfig == "" {
 		kubeconfig = os.Getenv("KUBECONFIG")
 	}
-	klog.V(5).Infof("Kubeconfig path %s\n", kubeconfig)
+	log.V(2).Info("Using", "kubeconfig", kubeconfig)
 	// If we have an explicit indication of where the kubernetes config lives, read that.
 	if kubeconfig != "" {
 		if context == "" {
@@ -125,8 +127,9 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 	}
 	// If no in-cluster config, try the default location in the user's home directory.
 	if usr, err := user.Current(); err == nil {
-		klog.V(5).Infof("clientcmd.BuildConfigFromFlags for url %s using %s\n", url, filepath.Join(usr.HomeDir, ".kube", "config"))
-		if c, err := clientcmd.BuildConfigFromFlags("", filepath.Join(usr.HomeDir, ".kube", "config")); err == nil {
+		defaultKubeConfig := filepath.Join(usr.HomeDir, ".kube", "config")
+		log.V(1).Info("Running clientcmd.BuildConfigFromFlags", "url", url, "path", defaultKubeConfig)
+		if c, err := clientcmd.BuildConfigFromFlags("", defaultKubeConfig); err == nil {
 			return c, nil
 		}
 	}
