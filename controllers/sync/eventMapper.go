@@ -13,7 +13,9 @@ import (
 )
 
 func eventMapper(obj client.Object) []reconcile.Request {
+	//nolint:forcetypeassert
 	event := obj.(*corev1.Event)
+
 	log.Info(
 		fmt.Sprintf(
 			"Reconcile Request for Event %s in namespace %s",
@@ -23,10 +25,12 @@ func eventMapper(obj client.Object) []reconcile.Request {
 	)
 
 	var result []reconcile.Request
+
 	request := reconcile.Request{NamespacedName: types.NamespacedName{
 		Name:      event.InvolvedObject.Name,
 		Namespace: event.InvolvedObject.Namespace,
 	}}
+
 	log.Info(
 		fmt.Sprintf(
 			"Queue event for Policy %s in namespace %s",
@@ -34,5 +38,6 @@ func eventMapper(obj client.Object) []reconcile.Request {
 			event.InvolvedObject.Namespace,
 		),
 	)
+
 	return append(result, request)
 }

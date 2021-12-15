@@ -158,14 +158,14 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8081
+            port: 8082
           initialDelaySeconds: 15
           periodSeconds: 20
         name: governance-policy-status-sync
         readinessProbe:
           httpGet:
             path: /readyz
-            port: 8081
+            port: 8082
           initialDelaySeconds: 5
           periodSeconds: 10
         securityContext:
