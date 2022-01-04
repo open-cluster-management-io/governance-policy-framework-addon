@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 
-	"github.com/open-cluster-management/governance-policy-status-sync/test/utils"
+	"open-cluster-management.io/governance-policy-status-sync/test/utils"
 )
 
 var (
