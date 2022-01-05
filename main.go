@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"strings"
 
-	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/api/v1"
 	"github.com/spf13/pflag"
 
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -25,6 +24,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,9 +35,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	//+kubebuilder:scaffold:imports
-	"github.com/open-cluster-management/governance-policy-spec-sync/controllers/sync"
-	"github.com/open-cluster-management/governance-policy-spec-sync/tool"
-	"github.com/open-cluster-management/governance-policy-spec-sync/version"
+	"open-cluster-management.io/governance-policy-spec-sync/controllers/sync"
+	"open-cluster-management.io/governance-policy-spec-sync/tool"
+	"open-cluster-management.io/governance-policy-spec-sync/version"
 )
 
 // Change below variables to serve metrics on different host or port.

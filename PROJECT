@@ -4,5 +4,5 @@ layout:
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
 projectName: governance-policy-spec-sync
-repo: github.com/open-cluster-management/governance-policy-spec-sync
+repo: open-cluster-management.io/governance-policy-spec-sync
 version: "3"

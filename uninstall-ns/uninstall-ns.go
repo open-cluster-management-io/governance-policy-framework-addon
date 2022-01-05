@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/open-cluster-management/governance-policy-spec-sync/tool"
+	"open-cluster-management.io/governance-policy-spec-sync/tool"
 )
 
 func main() {

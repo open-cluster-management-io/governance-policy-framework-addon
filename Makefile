@@ -271,7 +271,6 @@ e2e-test:
 e2e-dependencies:
 	go get github.com/onsi/ginkgo/ginkgo@v1.16.5
 	go get github.com/onsi/gomega/...@v1.16.0
-	go get github.com/open-cluster-management/governance-policy-propagator@v0.0.0-20211012174109-95c3b77cce09
 
 e2e-debug:
 	@echo gathering hub info
@@ -288,7 +287,7 @@ e2e-debug:
 # e2e test coverage
 ############################################################
 build-instrumented:
-	go test -covermode=atomic -coverpkg=github.com/open-cluster-management/$(IMG)... -c -tags e2e ./ -o build/_output/bin/$(IMG)-instrumented
+	go test -covermode=atomic -coverpkg=open-cluster-management.io/$(IMG)... -c -tags e2e ./ -o build/_output/bin/$(IMG)-instrumented
 
 run-instrumented:
 	HUB_CONFIG="$(DEST)/kubeconfig_hub" MANAGED_CONFIG="$(DEST)/kubeconfig_managed" WATCH_NAMESPACE="managed" ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=coverage.out &>/dev/null &
