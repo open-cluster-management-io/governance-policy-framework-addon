@@ -33,8 +33,6 @@ var (
 	gvrPolicy                 schema.GroupVersionResource
 	gvrEvent                  schema.GroupVersionResource
 	gvrTrustedContainerPolicy schema.GroupVersionResource
-	kubeconfigHub             string
-	kubeconfigManaged         string
 	defaultTimeoutSeconds     int
 
 	defaultImageRegistry string
@@ -53,8 +51,16 @@ func init() {
 
 var _ = BeforeSuite(func() {
 	By("Setup client")
-	gvrPolicy = schema.GroupVersionResource{Group: "policy.open-cluster-management.io", Version: "v1", Resource: "policies"}
-	gvrTrustedContainerPolicy = schema.GroupVersionResource{Group: "policies.ibm.com", Version: "v1alpha1", Resource: "trustedcontainerpolicies"}
+	gvrPolicy = schema.GroupVersionResource{
+		Group:    "policy.open-cluster-management.io",
+		Version:  "v1",
+		Resource: "policies",
+	}
+	gvrTrustedContainerPolicy = schema.GroupVersionResource{
+		Group:    "policies.ibm.com",
+		Version:  "v1alpha1",
+		Resource: "trustedcontainerpolicies",
+	}
 	gvrEvent = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "events"}
 	clientManaged = NewKubeClient("", "", "")
 	clientManagedDynamic = NewKubeClientDynamic("", "", "")
@@ -63,7 +69,8 @@ var _ = BeforeSuite(func() {
 	defaultTimeoutSeconds = 30
 	By("Create Namesapce if needed")
 	namespacesHub := clientManaged.CoreV1().Namespaces()
-	if _, err := namespacesHub.Get(context.TODO(), testNamespace, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
+	if _, err := namespacesHub.Get(context.TODO(), testNamespace, metav1.GetOptions{}); err != nil &&
+		errors.IsNotFound(err) {
 		Expect(namespacesHub.Create(context.TODO(), &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testNamespace,
@@ -77,6 +84,7 @@ var _ = BeforeSuite(func() {
 
 func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {
 	log.V(1).Info("Creating kubeclient", "url", url, "config", kubeconfig)
+
 	config, err := LoadConfig(url, kubeconfig, context)
 	if err != nil {
 		panic(err)
@@ -92,6 +100,7 @@ func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {
 
 func NewKubeClientDynamic(url, kubeconfig, context string) dynamic.Interface {
 	log.V(1).Info("Creating dynamic kubeclient", "url", url, "kubeconfig", kubeconfig)
+
 	config, err := LoadConfig(url, kubeconfig, context)
 	if err != nil {
 		panic(err)
@@ -109,12 +118,14 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 	if kubeconfig == "" {
 		kubeconfig = os.Getenv("KUBECONFIG")
 	}
+
 	log.V(2).Info("Using", "kubeconfig", kubeconfig)
 	// If we have an explicit indication of where the kubernetes config lives, read that.
 	if kubeconfig != "" {
 		if context == "" {
 			return clientcmd.BuildConfigFromFlags(url, kubeconfig)
 		}
+
 		return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 			&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
 			&clientcmd.ConfigOverrides{
@@ -128,12 +139,13 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 	// If no in-cluster config, try the default location in the user's home directory.
 	if usr, err := user.Current(); err == nil {
 		defaultKubeConfig := filepath.Join(usr.HomeDir, ".kube", "config")
+
 		log.V(1).Info("Running clientcmd.BuildConfigFromFlags", "url", url, "path", defaultKubeConfig)
+
 		if c, err := clientcmd.BuildConfigFromFlags("", defaultKubeConfig); err == nil {
 			return c, nil
 		}
 	}
 
 	return nil, fmt.Errorf("could not create a valid kubeconfig")
-
 }

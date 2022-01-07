@@ -10,13 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
 	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/api/v1"
-	synccontrollers "github.com/open-cluster-management/governance-policy-template-sync/controllers"
-	"github.com/open-cluster-management/governance-policy-template-sync/version"
-
 	"github.com/spf13/pflag"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -26,6 +20,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+
+	synccontrollers "github.com/open-cluster-management/governance-policy-template-sync/controllers"
+	"github.com/open-cluster-management/governance-policy-template-sync/version"
 )
 
 var (
@@ -53,6 +50,7 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	var enableLeaderElection, legacyLeaderElect bool
+
 	pflag.BoolVar(&enableLeaderElection, "leader-elect", true,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -142,5 +140,6 @@ func getWatchNamespace() (string, error) {
 	if !found {
 		return "", fmt.Errorf("%s must be set", watchNamespaceEnvVar)
 	}
+
 	return ns, nil
 }

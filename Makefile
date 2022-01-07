@@ -30,6 +30,7 @@ GIT_HOST ?= github.com/open-cluster-management
 
 PWD := $(shell pwd)
 BASE_DIR := $(shell basename $(PWD))
+export PATH=$(shell echo $$PATH):$(PWD)/bin
 
 # Keep an existing GOPATH, make a private one if it is undefined
 GOPATH_DEFAULT := $(PWD)/.go
@@ -98,11 +99,17 @@ work: $(GOBIN)
 # format section
 ############################################################
 
+fmt-dependencies:
+	$(call go-get-tool,$(PWD)/bin/gci,github.com/daixiang0/gci@v0.2.9)
+	$(call go-get-tool,$(PWD)/bin/gofumpt,mvdan.cc/gofumpt@v0.2.0)
+
 # All available format: format-go format-protos format-python
 # Default value will run all formats, override these make target with your requirements:
 #    eg: fmt: format-go format-protos
-fmt: # format-go format-protos format-python
-	go fmt ./...
+fmt: fmt-dependencies
+	find . -not \( -path "./.go" -prune \) -name "*.go" | xargs gofmt -s -w
+	find . -not \( -path "./.go" -prune \) -name "*.go" | xargs gci -w -local "$(shell cat go.mod | head -1 | cut -d " " -f 2)"
+	find . -not \( -path "./.go" -prune \) -name "*.go" | xargs gofumpt -l -w
 
 ############################################################
 # check section
@@ -110,10 +117,13 @@ fmt: # format-go format-protos format-python
 
 check: lint
 
+lint-dependencies:
+	$(call go-get-tool,$(PWD)/bin/golangci-lint,github.com/golangci/golangci-lint/cmd/golangci-lint@v1.41.1)
+
 # All available linters: lint-dockerfiles lint-scripts lint-yaml lint-copyright-banner lint-go lint-python lint-helm lint-markdown lint-sass lint-typescript lint-protos
 # Default value will run all linters, override these make target with your requirements:
 #    eg: lint: lint-go lint-yaml
-lint: lint-all
+lint: lint-dependencies lint-all
 
 ############################################################
 # test section
