@@ -11,7 +11,7 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
 	open-cluster-management.io/addon-framework v0.1.0
-	open-cluster-management.io/governance-policy-propagator v0.5.1-0.20211220161230-0e35d5833c52
+	open-cluster-management.io/governance-policy-propagator v0.6.0
 	sigs.k8s.io/controller-runtime v0.9.2
 )
 
