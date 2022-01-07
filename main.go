@@ -10,8 +10,8 @@ import (
 	"runtime"
 	"strings"
 
-	policiesv1 "github.com/open-cluster-management/governance-policy-propagator/api/v1"
 	"github.com/spf13/pflag"
+	policiesv1 "github.com/stolostron/governance-policy-propagator/api/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -21,8 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
-	synccontrollers "github.com/open-cluster-management/governance-policy-template-sync/controllers"
-	"github.com/open-cluster-management/governance-policy-template-sync/version"
+	synccontrollers "github.com/stolostron/governance-policy-template-sync/controllers"
+	"github.com/stolostron/governance-policy-template-sync/version"
 )
 
 var (
