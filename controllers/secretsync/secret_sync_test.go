@@ -22,7 +22,6 @@ import (
 const (
 	clusterName = "managed"
 	keySize     = 256
-	secretName  = "policy-encryption-key"
 )
 
 func getTestSecret() *corev1.Secret {
@@ -33,7 +32,7 @@ func getTestSecret() *corev1.Secret {
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
+			Name:      SecretName,
 			Namespace: clusterName,
 		},
 		Data: map[string][]byte{
@@ -51,7 +50,7 @@ func TestReconcileSecretHubOnly(t *testing.T) {
 
 	r := SecretReconciler{Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme}
 	request := reconcile.Request{
-		NamespacedName: types.NamespacedName{Name: secretName, Namespace: clusterName},
+		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
 	_, err := r.Reconcile(context.TODO(), request)
 	Expect(err).To(BeNil())
@@ -72,7 +71,7 @@ func TestReconcileSecretAlreadySynced(t *testing.T) {
 
 	managedEncryptionSecret := &corev1.Secret{}
 	request := reconcile.Request{
-		NamespacedName: types.NamespacedName{Name: secretName, Namespace: clusterName},
+		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
 	err := managedClient.Get(context.TODO(), request.NamespacedName, managedEncryptionSecret)
 	Expect(err).To(BeNil())
@@ -99,7 +98,7 @@ func TestReconcileSecretMismatch(t *testing.T) {
 	managedEncryptionSecret.Data["key"] = []byte{byte('A')}
 	managedClient := fake.NewClientBuilder().WithObjects(managedEncryptionSecret).Build()
 	request := reconcile.Request{
-		NamespacedName: types.NamespacedName{Name: secretName, Namespace: clusterName},
+		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
 
 	r := SecretReconciler{Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme}
@@ -122,7 +121,7 @@ func TestReconcileSecretDeletedOnHub(t *testing.T) {
 
 	r := SecretReconciler{Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme}
 	request := reconcile.Request{
-		NamespacedName: types.NamespacedName{Name: secretName, Namespace: clusterName},
+		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
 	_, err := r.Reconcile(context.TODO(), request)
 	Expect(err).To(BeNil())

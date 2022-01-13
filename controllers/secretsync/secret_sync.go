@@ -19,7 +19,8 @@ import (
 
 const (
 	ControllerName = "secret-sync"
-	SecretName     = "policy-encryption-key"
+	// #nosec G101
+	SecretName = "policy-encryption-key"
 )
 
 var log = logf.Log.WithName(ControllerName)
