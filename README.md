@@ -36,13 +36,18 @@ make e2e-test
 make kind-delete-cluster
 ```
 
-### Updating operator.yaml
+### deploy/operator.yaml
 
 The `deploy/operator.yaml` file is generated via Kustomize. The `deploy/rbac` directory of
 Kustomize files is managed by the operator-sdk and Kubebuilder using
 [markers](https://book.kubebuilder.io/reference/markers.html). After updating the markers or
 any of the Kustomize files, you may regenerate `deploy/operator.yaml` by running
 `make generate-operator-yaml`.
+
+The `secret-sync` controller requires access to get, create, update, and delete Secret objects in
+the managed cluster namespace. Since the managed cluster namespace is not known at build time, the
+configuration in `deploy/operator.yaml` grants this access cluster wide. In a production
+environment, limit this to just the managed cluster namespace.
 
 ## References
 

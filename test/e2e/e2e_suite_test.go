@@ -34,6 +34,7 @@ var (
 	gvrPolicy             schema.GroupVersionResource
 	gvrPlacementBinding   schema.GroupVersionResource
 	gvrPlacementRule      schema.GroupVersionResource
+	gvrSecret             schema.GroupVersionResource
 	kubeconfigHub         string
 	kubeconfigManaged     string
 	defaultTimeoutSeconds int
@@ -78,6 +79,10 @@ var _ = BeforeSuite(func() {
 		Group:    "apps.open-cluster-management.io",
 		Version:  "v1",
 		Resource: "placementrules",
+	}
+	gvrSecret = schema.GroupVersionResource{
+		Version:  "v1",
+		Resource: "secrets",
 	}
 	clientHub = NewKubeClient("", kubeconfigHub, "")
 	clientHubDynamic = NewKubeClientDynamic("", kubeconfigHub, "")

@@ -14,6 +14,7 @@ import (
 
 	// to ensure that exec-entrypoint and run can make use of them.
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -35,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	//+kubebuilder:scaffold:imports
+	"open-cluster-management.io/governance-policy-spec-sync/controllers/secretsync"
 	"open-cluster-management.io/governance-policy-spec-sync/controllers/sync"
 	"open-cluster-management.io/governance-policy-spec-sync/tool"
 	"open-cluster-management.io/governance-policy-spec-sync/version"
@@ -135,6 +137,18 @@ func main() {
 	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(namespace)})
 	managedRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: sync.ControllerName})
 
+	// Set a field selector so that a watch on secrets will be limited to just the secret with the policy template
+	// encryption key.
+	newCacheFunc := cache.BuilderWithOptions(
+		cache.Options{
+			SelectorsByObject: cache.SelectorsByObject{
+				&v1.Secret{}: {
+					Field: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+				},
+			},
+		},
+	)
+
 	// Set default manager options
 	options := manager.Options{
 		Scheme:                 scheme,
@@ -146,6 +160,7 @@ func main() {
 		// Override LeaderElectionConfig to managed cluster config.
 		// Otherwise it will improperly use the hub cluster config for leader election.
 		LeaderElectionConfig: managedCfg,
+		NewCache:             newCacheFunc,
 	}
 
 	if tool.Options.LegacyLeaderElection {
@@ -179,7 +194,16 @@ func main() {
 		ManagedRecorder: managedRecorder,
 		Scheme:          mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		log.Error(err, "unable to create controller", "controller", sync.ControllerName)
+		log.Error(err, "Unable to create the controller", "controller", sync.ControllerName)
+		os.Exit(1)
+	}
+
+	if err = (&secretsync.SecretReconciler{
+		Client:        mgr.GetClient(),
+		ManagedClient: managedClient,
+		Scheme:        mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		log.Error(err, "Unable to create the controller", "controller", secretsync.ControllerName)
 		os.Exit(1)
 	}
 

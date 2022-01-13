@@ -69,6 +69,22 @@ rules:
   - get
   - list
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resourceNames:
+  - policy-encryption-key
+  resources:
+  - secrets
+  verbs:
+  - delete
+  - get
+  - update
+- apiGroups:
   - policy.open-cluster-management.io
   resources:
   - policies
