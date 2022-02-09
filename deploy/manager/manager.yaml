@@ -20,7 +20,6 @@ spec:
             - governance-policy-spec-sync
           args:
             - "--hub-cluster-configfile=/var/run/klusterlet/kubeconfig"
-            - "--zap-devel"
           imagePullPolicy: Always
           volumeMounts:
             - name: klusterlet-config
