@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -92,7 +92,7 @@ var _ = BeforeSuite(func() {
 	defaultImagePullSecretName = "multiclusterhub-operator-pull-secret"
 	testNamespace = "managed"
 	defaultTimeoutSeconds = 30
-	By("Create Namesapce if needed")
+	By("Create Namespace if needed")
 	namespacesHub := clientHub.CoreV1().Namespaces()
 	if _, err := namespacesHub.Get(
 		context.TODO(), testNamespace, metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
