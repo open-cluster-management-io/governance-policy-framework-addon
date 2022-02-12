@@ -8,7 +8,7 @@ import (
 	"errors"
 	"os/exec"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stolostron/governance-policy-propagator/controllers/common"
 	"github.com/stolostron/governance-policy-propagator/test/utils"

@@ -87,6 +87,8 @@ OPENSOURCE.check
 !vbh/build-harness
 !vbh/build-harness-extensions 
 report.json
+report_*.json
+gosec.json
+
 .go/
 bin/
-
