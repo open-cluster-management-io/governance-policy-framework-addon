@@ -92,3 +92,4 @@ gosec.json
 
 .go/
 bin/
+vendor/
