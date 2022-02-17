@@ -88,5 +88,6 @@ OPENSOURCE.check
 !vbh/build-harness-extensions 
 kubeconfig_*
 
+vendor/
 .go/
 bin/
