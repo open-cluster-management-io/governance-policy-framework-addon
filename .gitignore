@@ -89,3 +89,4 @@ OPENSOURCE.check
 !vbh/build-harness
 !vbh/build-harness-extensions 
 kubeconfig_*
+vendor/
