@@ -11,7 +11,7 @@ spec:
     metadata:
       labels:
         name: governance-policy-status-sync
-        app: policy-framework
+        app: governance-policy-framework
     spec:
       securityContext:
         runAsNonRoot: true

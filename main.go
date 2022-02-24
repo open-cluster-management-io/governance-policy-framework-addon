@@ -218,7 +218,7 @@ func main() {
 				generatedClient,
 				"governance-policy-framework",
 				operatorNs,
-				lease.CheckAddonPodFunc(generatedClient.CoreV1(), operatorNs, "app=policy-framework"),
+				lease.CheckAddonPodFunc(generatedClient.CoreV1(), operatorNs, "app=governance-policy-framework"),
 			).WithHubLeaseConfig(hubCfg, namespace)
 			go leaseUpdater.Start(ctx)
 		}

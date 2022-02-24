@@ -135,7 +135,7 @@ spec:
   template:
     metadata:
       labels:
-        app: policy-framework
+        app: governance-policy-framework
         name: governance-policy-status-sync
     spec:
       containers:
