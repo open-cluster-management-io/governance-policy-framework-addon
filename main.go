@@ -216,13 +216,9 @@ func main() {
 			log.Info("Starting lease controller to report status")
 			leaseUpdater := lease.NewLeaseUpdater(
 				generatedClient,
-				"policy-controller",
+				"governance-policy-framework",
 				operatorNs,
 				lease.CheckAddonPodFunc(generatedClient.CoreV1(), operatorNs, "app=policy-framework"),
-				// this additional CheckAddonPodFunc is temporary until the
-				// addon framework independently verifies the config-policy-controller via its lease
-				// see https://github.com/open-cluster-management/backlog/issues/11508
-				lease.CheckAddonPodFunc(generatedClient.CoreV1(), operatorNs, "app=policy-config-policy"),
 			).WithHubLeaseConfig(hubCfg, namespace)
 			go leaseUpdater.Start(ctx)
 		}
