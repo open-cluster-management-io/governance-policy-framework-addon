@@ -142,6 +142,8 @@ spec:
       - args:
         - --hub-cluster-configfile=/var/run/klusterlet/kubeconfig
         - --enable-lease=true
+        - --log-level=2
+        - --v=0
         command:
         - governance-policy-status-sync
         env:

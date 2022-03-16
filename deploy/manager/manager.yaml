@@ -24,6 +24,8 @@ spec:
           args:
             - "--hub-cluster-configfile=/var/run/klusterlet/kubeconfig"
             - "--enable-lease=true"
+            - "--log-level=2"
+            - "--v=0"
           imagePullPolicy: Always
           volumeMounts:
             - name: klusterlet-config
