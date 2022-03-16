@@ -156,6 +156,8 @@ spec:
       containers:
       - args:
         - --hub-cluster-configfile=/var/run/klusterlet/kubeconfig
+        - --log-level=2
+        - --v=0
         command:
         - governance-policy-spec-sync
         env:

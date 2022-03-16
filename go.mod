@@ -3,13 +3,15 @@ module open-cluster-management.io/governance-policy-spec-sync
 go 1.17
 
 require (
+	github.com/go-logr/zapr v1.2.3
 	github.com/onsi/ginkgo/v2 v2.1.3
 	github.com/onsi/gomega v1.18.1
 	github.com/spf13/pflag v1.0.5
+	github.com/stolostron/go-log-utils v0.1.0
 	k8s.io/api v0.23.3
 	k8s.io/apimachinery v0.23.3
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.40.1
 	open-cluster-management.io/addon-framework v0.2.0
 	open-cluster-management.io/governance-policy-propagator v0.6.1-0.20220329192459-17e81c48ea1d
 	sigs.k8s.io/controller-runtime v0.11.1
@@ -34,7 +36,6 @@ require (
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 // indirect
 	github.com/go-logr/logr v1.2.2 // indirect
-	github.com/go-logr/zapr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -72,7 +73,6 @@ require (
 	k8s.io/apiextensions-apiserver v0.23.0 // indirect
 	k8s.io/apiserver v0.23.0 // indirect
 	k8s.io/component-base v0.23.0 // indirect
-	k8s.io/klog/v2 v2.40.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65 // indirect
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed // indirect
 	open-cluster-management.io/api v0.6.1-0.20220208144021-3297cac74dc5 // indirect
