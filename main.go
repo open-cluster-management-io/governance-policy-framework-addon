@@ -10,14 +10,16 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/go-logr/zapr"
 	"github.com/spf13/pflag"
+	"github.com/stolostron/go-log-utils/zaputil"
 	policiesv1 "github.com/stolostron/governance-policy-propagator/api/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
@@ -45,8 +47,14 @@ func init() {
 }
 
 func main() {
-	opts := zap.Options{}
-	opts.BindFlags(flag.CommandLine)
+	zflags := zaputil.FlagConfig{
+		LevelName:   "log-level",
+		EncoderName: "log-encoder",
+	}
+
+	zflags.Bind(flag.CommandLine)
+	klog.InitFlags(flag.CommandLine)
+
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	var enableLeaderElection, legacyLeaderElect bool
@@ -59,7 +67,19 @@ func main() {
 
 	pflag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	ctrlZap, err := zflags.BuildForCtrl()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to build zap logger for controller: %v", err))
+	}
+
+	ctrl.SetLogger(zapr.NewLogger(ctrlZap))
+
+	klogZap, err := zaputil.BuildForKlog(zflags.GetConfig(), flag.CommandLine)
+	if err != nil {
+		log.Error(err, "Failed to build zap logger for klog, those logs will not go through zap")
+	} else {
+		klog.SetLogger(zapr.NewLogger(klogZap).WithName("klog"))
+	}
 
 	printVersion()
 

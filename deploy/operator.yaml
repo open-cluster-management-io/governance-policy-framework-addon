@@ -124,7 +124,10 @@ spec:
         name: governance-policy-template-sync
     spec:
       containers:
-      - command:
+      - args:
+        - --log-level=2
+        - --v=0
+        command:
         - governance-policy-template-sync
         env:
         - name: WATCH_NAMESPACE

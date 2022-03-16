@@ -19,6 +19,9 @@ spec:
           image: quay.io/stolostron/governance-policy-template-sync:latest
           command:
           - governance-policy-template-sync
+          args:
+          - "--log-level=2"
+          - "--v=0"
           imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
