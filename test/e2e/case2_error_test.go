@@ -20,8 +20,8 @@ var _ = Describe("Test error handling", func() {
 			"../resources/case2_error_test/remediation-action-not-exists.yaml", "-n", testNamespace)
 		Expect(err).Should(BeNil())
 		Eventually(func() interface{} {
-			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrTrustedContainerPolicy,
-				"case2-remedation-action-not-exists-trustedcontainerpolicy", testNamespace, true,
+			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
+				"case2-remedation-action-not-exists-configpolicy", testNamespace, true,
 				defaultTimeoutSeconds)
 
 			return trustedPlc.Object["spec"].(map[string]interface{})["remediationAction"]
@@ -31,12 +31,12 @@ var _ = Describe("Test error handling", func() {
 		_, err = utils.KubectlWithOutput("apply", "-f",
 			"../resources/case2_error_test/remediation-action-not-exists2.yaml", "-n", testNamespace)
 		Expect(err).Should(BeNil())
-		By("Checking the case2-remedation-action-not-exists-trustedcontainerpolicy CR")
+		By("Checking the case2-remedation-action-not-exists-configpolicy CR")
 		yamlTrustedPlc := utils.ParseYaml(
-			"../resources/case2_error_test/remedation-action-not-exists-trustedcontainerpolicy.yaml")
+			"../resources/case2_error_test/remedation-action-not-exists-configpolicy.yaml")
 		Eventually(func() interface{} {
-			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrTrustedContainerPolicy,
-				"case2-remedation-action-not-exists-trustedcontainerpolicy", testNamespace, true,
+			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
+				"case2-remedation-action-not-exists-configpolicy", testNamespace, true,
 				defaultTimeoutSeconds)
 
 			return trustedPlc.Object["spec"]
@@ -106,7 +106,7 @@ var _ = Describe("Test error handling", func() {
 		violationStringFound := false
 		for _, event := range eventList.Items {
 			if event.Object["message"] == "NonCompliant; Template name must be unique. Policy template with kind: "+
-				"TrustedContainerPolicy name: case2-test-policy-trustedcontainerpolicy already exists in policy "+
+				"ConfigurationPolicy name: case2-config-policy already exists in policy "+
 				"default.case2-test-policy" {
 				violationStringFound = true
 

@@ -11,15 +11,21 @@ spec:
   disabled: false
   policy-templates:
     - objectDefinition:
-        apiVersion: policies.ibm.com/v1alpha1
-        kind: TrustedContainerPolicy
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
         metadata:
-          name: case1-test-policy-trustedcontainerpolicy
+          name: case1-config-policy
         spec:
-          severity: low
-          namespaceSelector:
-            include: ["default"]
-            exclude: ["kube-system"]
           remediationAction: inform
-          imageRegistry: quay.io
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: nginx-pod-e2e
+                  namespace: default
+                spec:
+                  containers:
+                    - name: nginx
 

@@ -40,6 +40,8 @@ DEST ?= $(GOPATH)/src/$(GIT_HOST)/$(BASE_DIR)
 VERSION ?= $(shell cat COMPONENT_VERSION 2> /dev/null)
 IMAGE_NAME_AND_VERSION ?= $(REGISTRY)/$(IMG)
 # Handle KinD configuration
+GITHUB_BASE_REF ?= main # Pull request target branch in Github Action
+BRANCH := $(GITHUB_BASE_REF)
 KIND_NAME ?= test-managed
 KIND_NAMESPACE ?= open-cluster-management-agent-addon
 KIND_VERSION ?= latest
@@ -237,7 +239,8 @@ kind-delete-cluster:
 
 install-crds:
 	@echo installing crds
-	kubectl apply -f https://raw.githubusercontent.com/stolostron/governance-policy-propagator/main/deploy/crds/policy.open-cluster-management.io_policies.yaml
+	kubectl apply -f https://raw.githubusercontent.com/stolostron/governance-policy-propagator/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_policies.yaml
+	kubectl apply -f https://raw.githubusercontent.com/stolostron/config-policy-controller/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_configurationpolicies.yaml
 
 install-resources:
 	@echo creating namespaces

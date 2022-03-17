@@ -16,12 +16,12 @@ import (
 )
 
 const (
-	case1PolicyName                 string = "default.case1-test-policy"
-	case1PolicyYaml                 string = "../resources/case1_template_sync/case1-test-policy.yaml"
-	cast1TrustedContainerPolicyName string = "case1-test-policy-trustedcontainerpolicy"
+	case1PolicyName       string = "default.case1-test-policy"
+	case1PolicyYaml       string = "../resources/case1_template_sync/case1-test-policy.yaml"
+	case1ConfigPolicyName string = "case1-config-policy"
 )
 
-var _ = Describe("Test spec sync", func() {
+var _ = Describe("Test template sync", func() {
 	BeforeEach(func() {
 		By("Creating a policy on managed cluster in ns:" + testNamespace)
 		_, err := utils.KubectlWithOutput("apply", "-f", case1PolicyYaml, "-n", testNamespace)
@@ -41,11 +41,11 @@ var _ = Describe("Test spec sync", func() {
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 	})
 	It("should create policy template on managed cluster", func() {
-		By("Checking the trustedcontainerpolicy CR")
-		yamlTrustedPlc := utils.ParseYaml("../resources/case1_template_sync/case1-trusted-container-policy.yaml")
+		By("Checking the configpolicy CR")
+		yamlTrustedPlc := utils.ParseYaml("../resources/case1_template_sync/case1-config-policy.yaml")
 		Eventually(func() interface{} {
-			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrTrustedContainerPolicy,
-				cast1TrustedContainerPolicyName, testNamespace, true, defaultTimeoutSeconds)
+			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
+				case1ConfigPolicyName, testNamespace, true, defaultTimeoutSeconds)
 
 			return trustedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
@@ -60,11 +60,11 @@ var _ = Describe("Test spec sync", func() {
 		Expect(err).To(BeNil())
 		Expect(plc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("enforce"))
 		By("Checking template policy remediationAction")
-		yamlStr := "../resources/case1_template_sync/case1-trusted-container-policy-enforce.yaml"
+		yamlStr := "../resources/case1_template_sync/case1-config-policy-enforce.yaml"
 		yamlTrustedPlc := utils.ParseYaml(yamlStr)
 		Eventually(func() interface{} {
-			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrTrustedContainerPolicy,
-				cast1TrustedContainerPolicyName, testNamespace, true, defaultTimeoutSeconds)
+			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
+				case1ConfigPolicyName, testNamespace, true, defaultTimeoutSeconds)
 
 			return trustedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
@@ -76,10 +76,10 @@ var _ = Describe("Test spec sync", func() {
 		Expect(err).Should(BeNil())
 		By("Checking template policy remediationAction")
 		yamlTrustedPlc := utils.ParseYaml(
-			"../resources/case1_template_sync/case1-trusted-container-policy-enforce.yaml")
+			"../resources/case1_template_sync/case1-config-policy-enforce.yaml")
 		Eventually(func() interface{} {
-			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrTrustedContainerPolicy,
-				cast1TrustedContainerPolicyName, testNamespace, true, defaultTimeoutSeconds)
+			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
+				case1ConfigPolicyName, testNamespace, true, defaultTimeoutSeconds)
 
 			return trustedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
@@ -88,8 +88,8 @@ var _ = Describe("Test spec sync", func() {
 		By("Checking labels of template policy")
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true,
 			defaultTimeoutSeconds)
-		trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrTrustedContainerPolicy,
-			cast1TrustedContainerPolicyName, testNamespace, true, defaultTimeoutSeconds)
+		trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
+			case1ConfigPolicyName, testNamespace, true, defaultTimeoutSeconds)
 		metadataLabels, ok := plc.Object["metadata"].(map[string]interface{})["labels"].(map[string]interface{})
 		Expect(ok).To(BeTrue())
 		trustedPlcObj, ok := trustedPlc.Object["metadata"].(map[string]interface{})
@@ -112,7 +112,7 @@ var _ = Describe("Test spec sync", func() {
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		By("Checking the existence of template policy")
-		utils.GetWithTimeout(clientManagedDynamic, gvrTrustedContainerPolicy, cast1TrustedContainerPolicyName,
+		utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy, case1ConfigPolicyName,
 			testNamespace, false, defaultTimeoutSeconds)
 	})
 })

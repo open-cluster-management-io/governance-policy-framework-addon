@@ -5,5 +5,5 @@ metadata:
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: default.case1-test-policy
+    policy.open-cluster-management.io/root-policy: default.case2-no-spec
 

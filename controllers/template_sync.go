@@ -36,7 +36,6 @@ const (
 var log = ctrl.Log.WithName(ControllerName)
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=*,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=policies.ibm.com,resources=*,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 
 // SetupWithManager sets up the controller with the Manager.
