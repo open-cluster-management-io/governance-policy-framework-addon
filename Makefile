@@ -39,9 +39,15 @@ export TESTARGS ?= $(TESTARGS_DEFAULT)
 DEST ?= $(GOPATH)/src/$(GIT_HOST)/$(BASE_DIR)
 VERSION ?= $(shell cat COMPONENT_VERSION 2> /dev/null)
 IMAGE_NAME_AND_VERSION ?= $(REGISTRY)/$(IMG)
+# Get the branch of the PR target or Push in Github Action
+ifeq ($(GITHUB_EVENT_NAME), pull_request) # pull request
+	BRANCH := $(GITHUB_BASE_REF)
+else ifeq ($(GITHUB_EVENT_NAME), push) # push
+	BRANCH := $(GITHUB_REF_NAME)
+else # Default to main
+	BRANCH := main
+endif
 # Handle KinD configuration
-GITHUB_BASE_REF ?= main # Pull request target branch in Github Action
-BRANCH := $(GITHUB_BASE_REF)
 KIND_NAME ?= test-managed
 KIND_NAMESPACE ?= open-cluster-management-agent-addon
 KIND_VERSION ?= latest
