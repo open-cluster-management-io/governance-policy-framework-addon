@@ -46,7 +46,7 @@ type PolicyReconciler struct {
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=create;delete;get;list;patch;update;watch
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/finalizers,verbs=update
-//+kubebuilder:rbac:groups=core,resources=events;namespaces,verbs=create;delete;get;list;patch;update;watch
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;delete;get;list;patch;update;watch
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list
 
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
