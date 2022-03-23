@@ -134,11 +134,9 @@ test-dependencies:
 
 build:
 	@build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./
-	@build/common/scripts/gobuild.sh build/_output/bin/uninstall-ns ./uninstall-ns
 
 local:
 	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/$(IMG) ./
-	@GOOS=darwin build/common/scripts/gobuild.sh build/_output/bin/uninstall-ns ./uninstall-ns
 
 ############################################################
 # images section
@@ -153,7 +151,6 @@ build-images:
 ############################################################
 clean::
 	rm -f build/_output/bin/$(IMG)
-	rm -f build/_output/bin/uninstall-ns
 
 ############################################################
 # Generate manifests
@@ -220,10 +217,6 @@ kind-deploy-controller-dev:
 	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"imagePullPolicy\":\"Never\"}]}}}}" --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"image\":\"$(REGISTRY)/$(IMG):$(TAG)\"}]}}}}" --kubeconfig=$(PWD)/kubeconfig_managed
 	kubectl rollout status -n $(KIND_NAMESPACE) deployment $(IMG) --timeout=180s --kubeconfig=$(PWD)/kubeconfig_managed
-	# Workaround to properly set E2E image to local image
-	sed -i 's%quay.io/open-cluster-management/governance-policy-spec-sync:latest%$(REGISTRY)/$(IMG):$(TAG)%' test/resources/case2_uninstall_ns/case2-uninstall-ns.yaml
-	sed -i 's%imagePullPolicy: "Always"%imagePullPolicy: "Never"%' test/resources/case2_uninstall_ns/case2-uninstall-ns.yaml
-	
 
 kind-create-cluster:
 	@echo "creating cluster"
