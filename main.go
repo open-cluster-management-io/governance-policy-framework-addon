@@ -213,13 +213,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// create namespace with labels
-	var generatedClient kubernetes.Interface = kubernetes.NewForConfigOrDie(managedCfg)
-	if err := tool.CreateClusterNs(&generatedClient, namespace); err != nil {
-		log.Error(err, "")
-		os.Exit(1)
-	}
-
 	// This lease is not related to leader election. This is to report the status of the controller
 	// to the addon framework. This can be seen in the "status" section of the ManagedClusterAddOn
 	// resource objects.
@@ -236,6 +229,7 @@ func main() {
 			}
 		} else {
 			log.Info("Starting lease controller to report status")
+			generatedClient := kubernetes.NewForConfigOrDie(managedCfg)
 			leaseUpdater := lease.NewLeaseUpdater(
 				generatedClient,
 				"governance-policy-framework",
