@@ -44,12 +44,19 @@ IMAGE_NAME_AND_VERSION ?= $(REGISTRY)/$(IMG)
 KIND_NAME ?= test-managed
 KIND_NAMESPACE ?= open-cluster-management-agent-addon
 KIND_VERSION ?= latest
+MANAGED_CLUSTER_NAME ?= managed
+WATCH_NAMESPACE ?= $(MANAGED_CLUSTER_NAME)
+HUB_CONFIG ?= $(PWD)/kubeconfig_hub
+HUB_CONFIG_INTERNAL ?= $(PWD)/kubeconfig_hub_internal
+MANAGED_CONFIG ?= $(PWD)/kubeconfig_managed
 ifneq ($(KIND_VERSION), latest)
 	KIND_ARGS = --image kindest/node:$(KIND_VERSION)
 else
 	KIND_ARGS =
 endif
-
+# Fetch Ginkgo/Gomega versions from go.mod
+GINKGO_VERSION := $(shell awk '/github.com\/onsi\/ginkgo/ {print $$2}' go.mod | head -1)
+GOMEGA_VERSION := $(shell awk '/github.com\/onsi\/gomega/ {print $$2}' go.mod)
 LOCAL_OS := $(shell uname)
 ifeq ($(LOCAL_OS),Linux)
     TARGET_OS ?= linux
@@ -239,11 +246,11 @@ install-resources:
 	kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(MANAGED_CONFIG)
 
 e2e-test:
-	ginkgo -v --slowSpecThreshold=10 test/e2e
+	ginkgo -v --slow-spec-threshold=10s test/e2e
 
 e2e-dependencies:
-	go get github.com/onsi/ginkgo/ginkgo@v1.16.4
-	go get github.com/onsi/gomega/...@v1.13.0
+	go get github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
+	go get github.com/onsi/gomega/...@$(GOMEGA_VERSION)
 
 e2e-debug:
 	@echo gathering hub info
