@@ -8,9 +8,11 @@ The governance policy spec sync is a controller that runs on managed clusters, u
 
 The operator watches for changes to Policies in the cluster's namespace on the hub cluster to trigger a reconcile. Every reconcile creates/updates/deletes replicated policies on the managed cluster to match the spec from the hub cluster.
 
-Go to the [Contributing guide](CONTRIBUTING.md) to learn how to get involved.
+## Geting started
 
-## Geting started 
+Go to the
+[Contributing guide](https://github.com/open-cluster-management-io/community/blob/main/sig-policy/contribution-guidelines.md)
+to learn how to get involved.
 
 Check the [Security guide](SECURITY.md) if you need to report a security issue.
 
