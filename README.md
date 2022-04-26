@@ -15,7 +15,11 @@ Every reconcile does the following things:
 
 1. Creates/updates the policy status on the hub and managed cluster in cluster namespace
 
-## Geting started 
+## Geting started
+
+Go to the
+[Contributing guide](https://github.com/open-cluster-management-io/community/blob/main/sig-policy/contribution-guidelines.md)
+to learn how to get involved.
 
 Check the [Security guide](SECURITY.md) if you need to report a security issue.
 
