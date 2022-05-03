@@ -13,18 +13,18 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/spf13/pflag"
 	"github.com/stolostron/go-log-utils/zaputil"
-	policiesv1 "github.com/stolostron/governance-policy-propagator/api/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/klog/v2"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
-	synccontrollers "github.com/stolostron/governance-policy-template-sync/controllers"
-	"github.com/stolostron/governance-policy-template-sync/version"
+	synccontrollers "open-cluster-management.io/governance-policy-template-sync/controllers"
+	"open-cluster-management.io/governance-policy-template-sync/version"
 )
 
 var (

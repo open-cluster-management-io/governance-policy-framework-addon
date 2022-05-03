@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"strings"
 
-	policiesv1 "github.com/stolostron/governance-policy-propagator/api/v1"
-	"github.com/stolostron/governance-policy-propagator/controllers/common"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -23,6 +21,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/record"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
+	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"

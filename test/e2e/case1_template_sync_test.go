@@ -10,9 +10,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/stolostron/governance-policy-propagator/controllers/common"
-	"github.com/stolostron/governance-policy-propagator/test/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"open-cluster-management.io/governance-policy-propagator/controllers/common"
+	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
 const (

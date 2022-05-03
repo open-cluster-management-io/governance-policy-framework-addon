@@ -1,4 +1,4 @@
-module github.com/stolostron/governance-policy-template-sync
+module open-cluster-management.io/governance-policy-template-sync
 
 go 1.17
 
@@ -8,11 +8,11 @@ require (
 	github.com/onsi/gomega v1.18.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stolostron/go-log-utils v0.1.0
-	github.com/stolostron/governance-policy-propagator v0.0.0-20220217025800-1a04477f8f38
 	k8s.io/api v0.23.3
 	k8s.io/apimachinery v0.23.3
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog/v2 v2.40.1
+	open-cluster-management.io/governance-policy-propagator v0.0.0
 	sigs.k8s.io/controller-runtime v0.11.1
 )
 
@@ -62,7 +62,7 @@ require (
 	k8s.io/component-base v0.23.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20220124234850-424119656bbf // indirect
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 // indirect
-	open-cluster-management.io/api v0.6.0 // indirect
+	open-cluster-management.io/api v0.6.1-0.20220208144021-3297cac74dc5 // indirect
 	open-cluster-management.io/multicloud-operators-subscription v0.6.0 // indirect
 	sigs.k8s.io/json v0.0.0-20211208200746-9f7c6b3444d2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
@@ -72,4 +72,5 @@ require (
 replace (
 	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // CVE-2021-43565
 	k8s.io/client-go => k8s.io/client-go v0.23.3
+	open-cluster-management.io/governance-policy-propagator => github.com/stolostron/governance-policy-propagator v0.0.0-20220427184903-387712d230ee
 )
