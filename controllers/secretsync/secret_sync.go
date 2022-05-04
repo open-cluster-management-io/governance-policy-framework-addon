@@ -43,7 +43,7 @@ type SecretReconciler struct {
 
 // WARNING: In production, this should be namespaced to the actual managed cluster namespace.
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=create
-//+kubebuilder:rbac:groups=core,resources=secrets,resourceNames=policy-encryption-key,verbs=delete;get;update
+//+kubebuilder:rbac:groups=core,resources=secrets,resourceNames=policy-encryption-key,verbs=delete;get;update;list
 
 // Reconcile handles updates to the "policy-encryption-key" Secret in the managed cluster namespace on the Hub.
 // The method is responsible for synchronizing the Secret to the managed cluster namespace on the managed cluster.

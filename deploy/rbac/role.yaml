@@ -40,6 +40,7 @@ rules:
   verbs:
   - delete
   - get
+  - list
   - update
 - apiGroups:
   - policy.open-cluster-management.io
