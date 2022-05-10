@@ -85,9 +85,13 @@ work: $(GOBIN)
 # clean section
 ############################################################
 
-.PHONY: clean:
-clean::
-	rm -f build/_output/bin/$(IMG)
+.PHONY: clean
+clean:
+	-rm bin/*
+	-rm build/_output/bin/*
+	-rm coverage*.out
+	-rm report*.json
+	-rm -r vendor/
 
 ############################################################
 # format section
