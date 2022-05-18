@@ -1,14 +1,18 @@
 [comment]: # ( Copyright Contributors to the Open Cluster Management project )
 
-# Governance Policy Template Sync [![KinD tests](https://github.com/stolostron/governance-policy-template-sync/actions/workflows/kind.yml/badge.svg?branch=main&event=push)](https://github.com/stolostron/governance-policy-template-sync/actions/workflows/kind.yml)
+# Governance Policy Template Sync [![KinD tests](https://github.com/open-cluster-management-io/governance-policy-template-sync/actions/workflows/kind.yml/badge.svg?branch=main&event=push)](https://github.com/open-cluster-management-io/governance-policy-template-sync/actions/workflows/kind.yml)[![License](https://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 
 ## Description
 
-The governance policy template sync runs on managed clusters and updates objects defined in the templates of `Policies` in the cluster namespace. This controller is a part of the [governance-policy-framework](https://github.com/stolostron/governance-policy-framework).
+The governance policy template sync runs on managed clusters and updates objects defined in the templates of `Policies` in the cluster namespace. This controller is a part of the [governance-policy-framework](https://github.com/open-cluster-management-io/governance-policy-framework).
 
 This operator watches for changes on `Policies` in the cluster namespace on the managed cluster to trigger a reconcile. On each reconcile, it creates/updates/deletes objects defined in the `spec.policy-templates` of those `Policies`.
 
-## Geting started 
+## Geting started
+
+Go to the
+[Contributing guide](https://github.com/open-cluster-management-io/community/blob/main/sig-policy/contribution-guidelines.md)
+to learn how to get involved.
 
 Check the [Security guide](SECURITY.md) if you need to report a security issue.
 

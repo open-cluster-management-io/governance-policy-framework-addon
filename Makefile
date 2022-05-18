@@ -52,9 +52,20 @@ export COVERAGE_MIN ?= 70
 # Use your own docker registry and image name for dev/test by overridding the IMG and REGISTRY environment variable.
 IMG ?= $(shell cat COMPONENT_NAME 2> /dev/null)
 VERSION ?= $(shell cat COMPONENT_VERSION 2> /dev/null)
-REGISTRY ?= quay.io/stolostron
+REGISTRY ?= quay.io/open-cluster-management
 TAG ?= latest
 IMAGE_NAME_AND_VERSION ?= $(REGISTRY)/$(IMG)
+
+LOCAL_OS := $(shell uname)
+ifeq ($(LOCAL_OS),Linux)
+    TARGET_OS ?= linux
+    XARGS_FLAGS="-r"
+else ifeq ($(LOCAL_OS),Darwin)
+    TARGET_OS ?= darwin
+    XARGS_FLAGS=
+else
+    $(error "This system's OS $(LOCAL_OS) isn't recognized/supported")
+endif
 
 # go-get-tool will 'go install' any package $1 and install it to LOCAL_BIN.
 define go-get-tool
@@ -250,8 +261,8 @@ kind-delete-cluster:
 .PHONY: install-crds
 install-crds:
 	@echo installing crds
-	kubectl apply -f https://raw.githubusercontent.com/stolostron/governance-policy-propagator/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_policies.yaml
-	kubectl apply -f https://raw.githubusercontent.com/stolostron/config-policy-controller/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_configurationpolicies.yaml
+	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/governance-policy-propagator/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_policies.yaml
+	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/config-policy-controller/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_configurationpolicies.yaml
 
 .PHONY: install-resources
 install-resources:

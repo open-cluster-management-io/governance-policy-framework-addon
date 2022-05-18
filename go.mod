@@ -12,7 +12,7 @@ require (
 	k8s.io/apimachinery v0.23.3
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog/v2 v2.40.1
-	open-cluster-management.io/governance-policy-propagator v0.0.0
+	open-cluster-management.io/governance-policy-propagator v0.6.1-0.20220329192459-17e81c48ea1d
 	sigs.k8s.io/controller-runtime v0.11.1
 )
 
@@ -72,5 +72,4 @@ require (
 replace (
 	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // CVE-2021-43565
 	k8s.io/client-go => k8s.io/client-go v0.23.3
-	open-cluster-management.io/governance-policy-propagator => github.com/stolostron/governance-policy-propagator v0.0.0-20220427184903-387712d230ee
 )

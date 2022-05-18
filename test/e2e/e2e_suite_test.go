@@ -63,7 +63,7 @@ var _ = BeforeSuite(func() {
 	gvrEvent = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "events"}
 	clientManaged = NewKubeClient("", "", "")
 	clientManagedDynamic = NewKubeClientDynamic("", "", "")
-	defaultImageRegistry = "quay.io/stolostron"
+	defaultImageRegistry = "quay.io/open-cluster-management"
 	testNamespace = "managed"
 	defaultTimeoutSeconds = 30
 	By("Create Namesapce if needed")
