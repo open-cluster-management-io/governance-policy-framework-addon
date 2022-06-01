@@ -56,17 +56,6 @@ REGISTRY ?= quay.io/open-cluster-management
 TAG ?= latest
 IMAGE_NAME_AND_VERSION ?= $(REGISTRY)/$(IMG)
 
-LOCAL_OS := $(shell uname)
-ifeq ($(LOCAL_OS),Linux)
-    TARGET_OS ?= linux
-    XARGS_FLAGS="-r"
-else ifeq ($(LOCAL_OS),Darwin)
-    TARGET_OS ?= darwin
-    XARGS_FLAGS=
-else
-    $(error "This system's OS $(LOCAL_OS) isn't recognized/supported")
-endif
-
 # go-get-tool will 'go install' any package $1 and install it to LOCAL_BIN.
 define go-get-tool
 @set -e ;\
@@ -287,7 +276,7 @@ e2e-build-instrumented:
 
 .PHONY: e2e-run-instrumented
 e2e-run-instrumented: e2e-build-instrumented
-	WATCH_NAMESPACE=$(WATCH_NAMESPACE) ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=coverage_e2e.out &>/dev/null &
+	WATCH_NAMESPACE=$(WATCH_NAMESPACE) ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=coverage_e2e.out &>build/_output/controller.log &
 
 .PHONY: e2e-stop-instrumented
 e2e-stop-instrumented:
@@ -295,10 +284,10 @@ e2e-stop-instrumented:
 
 .PHONY: e2e-debug
 e2e-debug:
-	kubectl get all -n $(KIND_NAMESPACE)
-	kubectl get Policy.policy.open-cluster-management.io --all-namespaces
-	kubectl describe pods -n $(KIND_NAMESPACE)
-	kubectl logs $$(kubectl get pods -n $(KIND_NAMESPACE) -o name | grep $(IMG)) -n $(KIND_NAMESPACE)
+	@echo local controller log:
+	-cat build/_output/controller.log
+	@echo remote controller log:
+	-kubectl logs $$(kubectl get pods -n $(KIND_NAMESPACE) -o name | grep $(IMG)) -n $(KIND_NAMESPACE)
 
 ############################################################
 # test coverage
