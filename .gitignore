@@ -90,3 +90,7 @@ OPENSOURCE.check
 !vbh/build-harness-extensions 
 kubeconfig_*
 vendor/
+
+report.json
+report_*.json
+gosec.json
