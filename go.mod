@@ -1,6 +1,6 @@
 module open-cluster-management.io/governance-policy-spec-sync
 
-go 1.17
+go 1.18
 
 require (
 	github.com/go-logr/zapr v1.2.3
