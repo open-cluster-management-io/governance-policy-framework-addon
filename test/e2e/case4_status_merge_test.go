@@ -65,6 +65,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			case4PolicyYaml,
 			"-n",
 			testNamespace,
+			"--ignore-not-found",
 			"--kubeconfig=../../kubeconfig_managed")
 		Expect(err).Should(BeNil())
 		opt := metav1.ListOptions{}

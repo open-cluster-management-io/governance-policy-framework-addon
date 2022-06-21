@@ -50,8 +50,15 @@ var _ = Describe("Test mutation recovery", func() {
 		_, err := utils.KubectlWithOutput("delete", "-f", case1PolicyYaml, "-n", testNamespace,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).Should(BeNil())
-		_, err = utils.KubectlWithOutput("delete", "-f", case1PolicyYaml, "-n", testNamespace,
-			"--kubeconfig=../../kubeconfig_managed")
+		_, err = utils.KubectlWithOutput(
+			"delete",
+			"-f",
+			case1PolicyYaml,
+			"-n",
+			testNamespace,
+			"--ignore-not-found",
+			"--kubeconfig=../../kubeconfig_managed",
+		)
 		Expect(err).Should(BeNil())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
@@ -134,8 +141,15 @@ var _ = Describe("Test mutation recovery", func() {
 	})
 	It("Should recover policy on managed if being deleted", func() {
 		By("Deleting " + case1PolicyYaml + " on managed with spec.policyTemplate = {}")
-		_, err := utils.KubectlWithOutput("delete", "-f", case1PolicyYaml, "-n", testNamespace,
-			"--kubeconfig=../../kubeconfig_managed")
+		_, err := utils.KubectlWithOutput(
+			"delete",
+			"-f",
+			case1PolicyYaml,
+			"-n",
+			testNamespace,
+			"--ignore-not-found",
+			"--kubeconfig=../../kubeconfig_managed",
+		)
 		Expect(err).Should(BeNil())
 		By("Comparing spec between hub and managed policy")
 		hubPlc := utils.GetWithTimeout(

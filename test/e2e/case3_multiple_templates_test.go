@@ -64,8 +64,15 @@ var _ = Describe("Test status sync with multiple templates", func() {
 		_, err := utils.KubectlWithOutput("delete", "-f", case3PolicyYaml, "-n", testNamespace,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).To(BeNil())
-		_, err = utils.KubectlWithOutput("delete", "-f", case3PolicyYaml, "-n", testNamespace,
-			"--kubeconfig=../../kubeconfig_managed")
+		_, err = utils.KubectlWithOutput(
+			"delete",
+			"-f",
+			case3PolicyYaml,
+			"-n",
+			testNamespace,
+			"--ignore-not-found",
+			"--kubeconfig=../../kubeconfig_managed",
+		)
 		Expect(err).To(BeNil())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)

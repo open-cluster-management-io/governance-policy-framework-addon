@@ -70,6 +70,7 @@ var _ = Describe("Test event message handling", func() {
 			case6PolicyYaml,
 			"-n",
 			testNamespace,
+			"--ignore-not-found",
 			"--kubeconfig=../../kubeconfig_managed")
 		Expect(err).Should(BeNil())
 		opt := metav1.ListOptions{}

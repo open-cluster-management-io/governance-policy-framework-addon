@@ -36,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"open-cluster-management.io/governance-policy-status-sync/controllers/sync"
@@ -46,14 +45,18 @@ import (
 
 var (
 	eventsScheme = k8sruntime.NewScheme()
-	log          = logf.Log.WithName("setup")
+	log          = ctrl.Log.WithName("setup")
 	scheme       = k8sruntime.NewScheme()
 )
 
 func printVersion() {
-	log.Info(fmt.Sprintf("Operator Version: %s", version.Version))
-	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
-	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
+	log.Info(
+		"Using",
+		"OperatorVersion", version.Version,
+		"GoVersion", runtime.Version(),
+		"GOOS", runtime.GOOS,
+		"GOARCH", runtime.GOARCH,
+	)
 }
 
 func init() {
@@ -108,7 +111,7 @@ func main() {
 
 	hubCfg, err := clientcmd.BuildConfigFromFlags("", tool.Options.HubConfigFilePathName)
 	if err != nil {
-		log.Error(err, "")
+		log.Error(err, "Failed to build hub cluster config")
 		os.Exit(1)
 	}
 
@@ -125,13 +128,13 @@ func main() {
 
 			managedCfg, err = clientcmd.BuildConfigFromFlags("", tool.Options.ManagedConfigFilePathName)
 			if err != nil {
-				log.Error(err, "")
+				log.Error(err, "Failed to build managed cluster config")
 				os.Exit(1)
 			}
 		} else {
 			managedCfg, err = config.GetConfig()
 			if err != nil {
-				log.Error(err, "")
+				log.Error(err, "Failed to build managed cluster config")
 				os.Exit(1)
 			}
 		}

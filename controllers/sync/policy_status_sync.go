@@ -24,14 +24,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const ControllerName string = "policy-status-sync"
 
-var log = logf.Log.WithName(ControllerName)
+var log = ctrl.Log.WithName(ControllerName)
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -73,7 +72,7 @@ type PolicyReconciler struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling Policy...")
+	reqLogger.Info("Reconciling the policy")
 
 	// Fetch the Policy instance
 	instance := &policiesv1.Policy{}
@@ -89,11 +88,13 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			if err != nil {
 				if errors.IsNotFound(err) {
 					// confirmed deleted on hub, doing nothing
-					reqLogger.Info("Policy was deleted, no status to update...")
+					reqLogger.Info("Policy was deleted, no status to update")
 
 					return reconcile.Result{}, nil
 				}
 				// other error, requeue
+				reqLogger.Error(err, "Failed to get the policy, will requeue the request")
+
 				return reconcile.Result{}, err
 			}
 			// still exist on hub, recover policy on managed
@@ -103,6 +104,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			return reconcile.Result{}, r.ManagedClient.Create(ctx, hubInstance)
 		}
 		// Error reading the object - requeue the request.
+		reqLogger.Error(err, "Error reading the policy object, will requeue the request")
+
 		return reconcile.Result{}, err
 	}
 	// get hub policy
@@ -112,13 +115,18 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	if err != nil {
 		// hub policy not found, it has been deleted
 		if errors.IsNotFound(err) {
+			reqLogger.Info("Hub policy not found, it has been deleted")
 			// try to delete local one
 			err = r.ManagedClient.Delete(ctx, instance)
 			if err == nil || errors.IsNotFound(err) {
 				// no err or err is not found means local policy has been deleted
+				reqLogger.Info("Managed policy was deleted")
+
 				return reconcile.Result{}, nil
 			}
 			// otherwise requeue to delete again
+			reqLogger.Error(err, "Failed to delete the managed policy, will requeue the request")
+
 			return reconcile.Result{}, err
 		}
 
@@ -132,6 +140,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		instance.SetAnnotations(hubPlc.GetAnnotations())
 		instance.Spec = hubPlc.Spec
 		// update and stop here
+		reqLogger.Info("Found mismatch with hub and managed policies, updating")
+
 		return reconcile.Result{}, r.ManagedClient.Update(ctx, instance)
 	}
 
@@ -141,6 +151,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	if err != nil {
 		// there is an error to list events, requeue
+		reqLogger.Error(err, "Error listing events, will requeue the request")
+
 		return reconcile.Result{}, err
 	}
 	// filter events to current policy instance and build map
@@ -171,10 +183,14 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	oldStatus := *instance.Status.DeepCopy()
 	newStatus := policiesv1.PolicyStatus{}
 
+	reqLogger.Info("Updating status for policy templates")
+
 	for _, policyT := range instance.Spec.PolicyTemplates {
 		object, _, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
 			// failed to decode PolicyTemplate, skipping it
+			reqLogger.Error(err, "Failed to decode policy template, skipping it")
+
 			break
 		}
 
@@ -189,6 +205,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				// retrieve it
 				existingDpt = dpt
 				found = true
+
+				reqLogger.Info("Found existing status, retrieving it", "PolicyTemplate", tName)
 
 				break
 			}
@@ -266,7 +284,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// append existingDpt to status
 		newStatus.Details = append(newStatus.Details, existingDpt)
 
-		reqLogger.Info("status update complete... ", "PolicyTemplate", tName)
+		reqLogger.Info("Status update complete", "PolicyTemplate", tName)
 	}
 
 	instance.Status = newStatus
@@ -292,7 +310,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	// instance.Status.Details = nil
 	if !equality.Semantic.DeepEqual(newStatus.Details, oldStatus.Details) ||
 		instance.Status.ComplianceState != oldStatus.ComplianceState {
-		reqLogger.Info("status mismatch on managed, update it... ")
+		reqLogger.Info("status mismatch on managed, update it")
 
 		err = r.ManagedClient.Status().Update(ctx, instance)
 
@@ -306,11 +324,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", instance.GetName(),
 				instance.GetNamespace()))
 	} else {
-		reqLogger.Info("status match on managed, nothing to update... ")
+		reqLogger.Info("status match on managed, nothing to update")
 	}
 
 	if os.Getenv("ON_MULTICLUSTERHUB") != "true" && !equality.Semantic.DeepEqual(hubPlc.Status, instance.Status) {
-		reqLogger.Info("status not in sync, update the hub... ")
+		reqLogger.Info("status not in sync, update the hub")
 
 		hubPlc.Status = instance.Status
 		err = r.HubClient.Status().Update(ctx, hubPlc)
@@ -325,10 +343,10 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
 				hubPlc.GetNamespace()))
 	} else {
-		reqLogger.Info("status match on hub, nothing to update... ")
+		reqLogger.Info("status match on hub, nothing to update")
 	}
 
-	reqLogger.Info("Reconciling complete...")
+	reqLogger.Info("Reconciling complete")
 
 	return reconcile.Result{}, nil
 }

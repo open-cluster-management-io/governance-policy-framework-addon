@@ -23,7 +23,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog/v2"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"open-cluster-management.io/governance-policy-status-sync/test/utils"
 )
@@ -50,9 +51,10 @@ func TestE2e(t *testing.T) {
 	RunSpecs(t, "Policy status sync e2e Suite")
 }
 
+var log = ctrl.Log.WithName("test")
+
 func init() {
-	klog.SetOutput(GinkgoWriter)
-	klog.InitFlags(nil)
+	ctrl.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	flag.StringVar(
 		&kubeconfigHub,
 		"kubeconfig_hub", "../../kubeconfig_hub",
@@ -112,7 +114,7 @@ var _ = BeforeSuite(func() {
 })
 
 func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {
-	klog.V(5).Infof("Create kubeclient for url %s using kubeconfig path %s\n", url, kubeconfig)
+	log.V(5).Info(fmt.Sprintf("Create kubeclient for url %s using kubeconfig path %s\n", url, kubeconfig))
 
 	config, err := LoadConfig(url, kubeconfig, context)
 	if err != nil {
@@ -128,7 +130,7 @@ func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {
 }
 
 func NewKubeClientDynamic(url, kubeconfig, context string) dynamic.Interface {
-	klog.V(5).Infof("Create kubeclient dynamic for url %s using kubeconfig path %s\n", url, kubeconfig)
+	log.V(5).Info(fmt.Sprintf("Create kubeclient dynamic for url %s using kubeconfig path %s\n", url, kubeconfig))
 
 	config, err := LoadConfig(url, kubeconfig, context)
 	if err != nil {
@@ -148,7 +150,7 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 		kubeconfig = os.Getenv("KUBECONFIG")
 	}
 
-	klog.V(5).Infof("Kubeconfig path %s\n", kubeconfig)
+	log.V(5).Info(fmt.Sprintf("Kubeconfig path %s\n", kubeconfig))
 	// If we have an explicit indication of where the kubernetes config lives, read that.
 	if kubeconfig != "" {
 		if context == "" {
@@ -167,10 +169,10 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 	}
 	// If no in-cluster config, try the default location in the user's home directory.
 	if usr, err := user.Current(); err == nil {
-		klog.V(5).Infof(
+		log.V(5).Info(fmt.Sprintf(
 			"clientcmd.BuildConfigFromFlags for url %s using %s\n",
 			url,
-			filepath.Join(usr.HomeDir, ".kube", "config"))
+			filepath.Join(usr.HomeDir, ".kube", "config")))
 
 		if c, err := clientcmd.BuildConfigFromFlags("", filepath.Join(usr.HomeDir, ".kube", "config")); err == nil {
 			return c, nil
