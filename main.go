@@ -34,7 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
@@ -53,15 +52,8 @@ var (
 
 var (
 	eventsScheme = k8sruntime.NewScheme()
-	log          = logf.Log.WithName("setup")
 	scheme       = k8sruntime.NewScheme()
 )
-
-func printVersion() {
-	log.Info(fmt.Sprintf("Operator Version: %s", version.Version))
-	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
-	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
-}
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -79,9 +71,7 @@ func main() {
 	zflags.Bind(flag.CommandLine)
 	klog.InitFlags(flag.CommandLine)
 	tool.ProcessFlags()
-
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-
 	pflag.Parse()
 
 	ctrlZap, err := zflags.BuildForCtrl()
@@ -90,19 +80,21 @@ func main() {
 	}
 
 	ctrl.SetLogger(zapr.NewLogger(ctrlZap))
+	setupLog := ctrl.Log.WithName("setup")
 
 	klogZap, err := zaputil.BuildForKlog(zflags.GetConfig(), flag.CommandLine)
 	if err != nil {
-		log.Error(err, "Failed to build zap logger for klog, those logs will not go through zap")
+		setupLog.Error(err, "Failed to build zap logger for klog, those logs will not go through zap")
 	} else {
 		klog.SetLogger(zapr.NewLogger(klogZap).WithName("klog"))
 	}
 
-	printVersion()
+	setupLog.Info("Using", "OperatorVersion", version.Version, "GoVersion", runtime.Version(),
+		"GOOS", runtime.GOOS, "GOARCH", runtime.GOARCH)
 
 	namespace, err := tool.GetWatchNamespace()
 	if err != nil {
-		log.Error(err, "Failed to get watch namespace")
+		setupLog.Error(err, "Failed to get watch namespace")
 		os.Exit(1)
 	}
 
@@ -112,14 +104,14 @@ func main() {
 		tool.Options.HubConfigFilePathName, found = os.LookupEnv("HUB_CONFIG")
 
 		if found {
-			log.Info("Found ENV HUB_CONFIG, initializing using", "tool.Options.HubConfigFilePathName",
+			setupLog.Info("Found ENV HUB_CONFIG, initializing using", "tool.Options.HubConfigFilePathName",
 				tool.Options.HubConfigFilePathName)
 		}
 	}
 
 	hubCfg, err := clientcmd.BuildConfigFromFlags("", tool.Options.HubConfigFilePathName)
 	if err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "Unable to build hub config from flags")
 		os.Exit(1)
 	}
 
@@ -131,19 +123,19 @@ func main() {
 		tool.Options.ManagedConfigFilePathName, found = os.LookupEnv("MANAGED_CONFIG")
 
 		if found {
-			log.Info("Found ENV MANAGED_CONFIG, initializing using", "tool.Options.ManagedConfigFilePathName",
+			setupLog.Info("Found ENV MANAGED_CONFIG, initializing using", "tool.Options.ManagedConfigFilePathName",
 				tool.Options.ManagedConfigFilePathName)
 
 			managedCfg, err = clientcmd.BuildConfigFromFlags("", tool.Options.ManagedConfigFilePathName)
 
 			if err != nil {
-				log.Error(err, "")
+				setupLog.Error(err, "Unable to build managed config from flags")
 				os.Exit(1)
 			}
 		} else {
 			managedCfg, err = config.GetConfig()
 			if err != nil {
-				log.Error(err, "")
+				setupLog.Error(err, "Unable to get managed config")
 				os.Exit(1)
 			}
 		}
@@ -151,7 +143,7 @@ func main() {
 
 	managedClient, err := client.New(managedCfg, client.Options{Scheme: scheme})
 	if err != nil {
-		log.Error(err, "Failed to generate client to the managed cluster")
+		setupLog.Error(err, "Failed to generate client to the managed cluster")
 		os.Exit(1)
 	}
 
@@ -205,11 +197,11 @@ func main() {
 	// Create a new manager to provide shared dependencies and start components
 	mgr, err := ctrl.NewManager(hubCfg, options)
 	if err != nil {
-		log.Error(err, "Failed to start manager")
+		setupLog.Error(err, "Failed to start manager")
 		os.Exit(1)
 	}
 
-	log.Info("Registering Components.")
+	setupLog.Info("Registering Components.")
 
 	// Setup all Controllers
 	if err = (&sync.PolicyReconciler{
@@ -218,7 +210,7 @@ func main() {
 		ManagedRecorder: managedRecorder,
 		Scheme:          mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		log.Error(err, "Unable to create the controller", "controller", sync.ControllerName)
+		setupLog.Error(err, "Unable to create the controller", "controller", sync.ControllerName)
 		os.Exit(1)
 	}
 
@@ -227,32 +219,32 @@ func main() {
 		ManagedClient: managedClient,
 		Scheme:        mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		log.Error(err, "Unable to create the controller", "controller", secretsync.ControllerName)
+		setupLog.Error(err, "Unable to create the controller", "controller", secretsync.ControllerName)
 		os.Exit(1)
 	}
 
 	// use config check
 	configChecker, err := addonutils.NewConfigChecker("policy-spec-sync", tool.Options.HubConfigFilePathName)
 	if err != nil {
-		log.Error(err, "unable to setup a configChecker")
+		setupLog.Error(err, "unable to setup a configChecker")
 		os.Exit(1)
 	}
 
 	//+kubebuilder:scaffold:builder
 	if err := mgr.AddHealthzCheck("healthz", configChecker.Check); err != nil {
-		log.Error(err, "unable to set up health check")
+		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
 
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		log.Error(err, "unable to set up ready check")
+		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 
-	log.Info("Starting manager.")
+	setupLog.Info("Starting manager.")
 
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
-		log.Error(err, "Manager exited non-zero")
+		setupLog.Error(err, "Manager exited non-zero")
 		os.Exit(1)
 	}
 }

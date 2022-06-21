@@ -49,7 +49,7 @@ type SecretReconciler struct {
 // The method is responsible for synchronizing the Secret to the managed cluster namespace on the managed cluster.
 func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.V(1).Info("Reconciling Secret")
+	reqLogger.Info("Reconciling Secret")
 	// The cache configuration of SelectorsByObject should prevent this from happening, but add this as a precaution.
 	if request.Name != SecretName {
 		log.Info("Got a reconciliation request for an unexpected Secret. This should have been filtered out.")
@@ -114,13 +114,13 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			return reconcile.Result{}, err
 		}
 
-		reqLogger.V(1).Info("Reconciliation complete")
+		reqLogger.Info("Reconciliation complete")
 
 		return reconcile.Result{}, nil
 	}
 
 	if !equality.Semantic.DeepEqual(hubEncryptionSecret.Data, managedEncryptionSecret.Data) {
-		log.V(1).Info("Updating the replicated secret due to it not matching the source on the Hub")
+		log.Info("Updating the replicated secret due to it not matching the source on the Hub")
 
 		managedEncryptionSecret.Data = hubEncryptionSecret.Data
 
@@ -132,7 +132,7 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 	}
 
-	reqLogger.V(1).Info("Reconciliation complete")
+	reqLogger.Info("Reconciliation complete")
 
 	return reconcile.Result{}, nil
 }
