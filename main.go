@@ -20,6 +20,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
@@ -58,12 +59,14 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	var enableLeaderElection, legacyLeaderElect bool
+	var probeAddr string
 
 	pflag.BoolVar(&enableLeaderElection, "leader-elect", true,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	pflag.BoolVar(&legacyLeaderElect, "legacy-leader-elect", false,
 		"Use a legacy leader election method for controller manager instead of the lease API.")
+	pflag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 
 	pflag.Parse()
 
@@ -98,11 +101,12 @@ func main() {
 
 	// Set default manager options
 	options := manager.Options{
-		Scheme:             scheme,
-		Namespace:          namespace,
-		MetricsBindAddress: "0",
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "governance-policy-template-sync.open-cluster-management.io",
+		Scheme:                 scheme,
+		Namespace:              namespace,
+		MetricsBindAddress:     "0",
+		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "governance-policy-template-sync.open-cluster-management.io",
 	}
 
 	// Add support for MultiNamespace set in WATCH_NAMESPACE (e.g ns1,ns2)
@@ -137,6 +141,16 @@ func main() {
 		Recorder: mgr.GetEventRecorderFor(synccontrollers.ControllerName),
 	}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "Unable to create the controller", "controller", synccontrollers.ControllerName)
+		os.Exit(1)
+	}
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		log.Error(err, "Unable to set up health check")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		log.Error(err, "Unable to set up ready check")
 		os.Exit(1)
 	}
 
