@@ -66,7 +66,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	pflag.BoolVar(&legacyLeaderElect, "legacy-leader-elect", false,
 		"Use a legacy leader election method for controller manager instead of the lease API.")
-	pflag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	pflag.StringVar(&probeAddr, "health-probe-bind-address", ":8083", "The address the probe endpoint binds to.")
 
 	pflag.Parse()
 
