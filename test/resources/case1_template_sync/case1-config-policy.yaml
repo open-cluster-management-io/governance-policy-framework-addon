@@ -4,6 +4,7 @@ metadata:
   name: case1-config-policy
 spec:
   remediationAction: inform
+  pruneObjectBehavior: "None"
   object-templates:
     - complianceType: musthave
       objectDefinition:
