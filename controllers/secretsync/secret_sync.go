@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -39,6 +40,8 @@ type SecretReconciler struct {
 	client.Client
 	ManagedClient client.Client
 	Scheme        *runtime.Scheme
+	// The namespace that the secret should be synced to.
+	TargetNamespace string
 }
 
 // WARNING: In production, this should be namespaced to the actual managed cluster namespace.
@@ -48,7 +51,9 @@ type SecretReconciler struct {
 // Reconcile handles updates to the "policy-encryption-key" Secret in the managed cluster namespace on the Hub.
 // The method is responsible for synchronizing the Secret to the managed cluster namespace on the managed cluster.
 func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	reqLogger := log.WithValues(
+		"Request.Namespace", request.Namespace, "Request.Name", request.Name, "TargetNamespace", r.TargetNamespace,
+	)
 	reqLogger.Info("Reconciling Secret")
 	// The cache configuration of SelectorsByObject should prevent this from happening, but add this as a precaution.
 	if request.Name != SecretName {
@@ -74,7 +79,7 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      request.Name,
-					Namespace: request.Namespace,
+					Namespace: r.TargetNamespace,
 				},
 			},
 		)
@@ -88,7 +93,9 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	managedEncryptionSecret := &corev1.Secret{}
-	err = r.ManagedClient.Get(ctx, request.NamespacedName, managedEncryptionSecret)
+	err = r.ManagedClient.Get(
+		ctx, types.NamespacedName{Namespace: r.TargetNamespace, Name: request.Name}, managedEncryptionSecret,
+	)
 
 	if err != nil {
 		if !errors.IsNotFound(err) {
@@ -102,7 +109,7 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		managedEncryptionSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      request.Name,
-				Namespace: request.Namespace,
+				Namespace: r.TargetNamespace,
 			},
 			Data: hubEncryptionSecret.Data,
 		}

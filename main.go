@@ -60,6 +60,7 @@ func init() {
 	utilruntime.Must(v1.AddToScheme(eventsScheme))
 	//+kubebuilder:scaffold:scheme
 	utilruntime.Must(policiesv1.AddToScheme(scheme))
+	utilruntime.Must(policiesv1.AddToScheme(eventsScheme))
 }
 
 func main() {
@@ -149,8 +150,20 @@ func main() {
 
 	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(managedCfg)
 
+	var targetNamespace string
+	if tool.Options.TargetNamespace == "" {
+		targetNamespace = namespace
+	} else {
+		targetNamespace = tool.Options.TargetNamespace
+		setupLog.Info(
+			"Replicated policies from the Hub will be copied to the input target namespace",
+			"namespace",
+			targetNamespace,
+		)
+	}
+
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(namespace)})
+	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(targetNamespace)})
 	managedRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: sync.ControllerName})
 
 	// Set a field selector so that a watch on secrets will be limited to just the secret with the policy template
@@ -209,15 +222,17 @@ func main() {
 		ManagedClient:   managedClient,
 		ManagedRecorder: managedRecorder,
 		Scheme:          mgr.GetScheme(),
+		TargetNamespace: targetNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Unable to create the controller", "controller", sync.ControllerName)
 		os.Exit(1)
 	}
 
 	if err = (&secretsync.SecretReconciler{
-		Client:        mgr.GetClient(),
-		ManagedClient: managedClient,
-		Scheme:        mgr.GetScheme(),
+		Client:          mgr.GetClient(),
+		ManagedClient:   managedClient,
+		Scheme:          mgr.GetScheme(),
+		TargetNamespace: targetNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Unable to create the controller", "controller", secretsync.ControllerName)
 		os.Exit(1)

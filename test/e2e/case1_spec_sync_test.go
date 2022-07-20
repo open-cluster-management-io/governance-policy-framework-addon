@@ -27,7 +27,7 @@ var _ = Describe("Test spec sync", func() {
 			clientManagedDynamic,
 			gvrPolicy,
 			case1PolicyName,
-			testNamespace,
+			targetNamespace,
 			true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
@@ -45,7 +45,7 @@ var _ = Describe("Test spec sync", func() {
 			clientManagedDynamic,
 			gvrPolicy,
 			case1PolicyName,
-			testNamespace,
+			targetNamespace,
 			true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
@@ -72,7 +72,7 @@ var _ = Describe("Test spec sync", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case1PolicyName,
-				testNamespace,
+				targetNamespace,
 				true,
 				defaultTimeoutSeconds)
 
@@ -99,7 +99,7 @@ var _ = Describe("Test spec sync", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case1PolicyName,
-				testNamespace,
+				targetNamespace,
 				true,
 				defaultTimeoutSeconds)
 

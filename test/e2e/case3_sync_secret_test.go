@@ -37,7 +37,7 @@ var _ = Describe("Test spec sync", func() {
 			clientManagedDynamic,
 			gvrSecret,
 			secretsync.SecretName,
-			testNamespace,
+			targetNamespace,
 			true,
 			defaultTimeoutSeconds,
 		)
@@ -54,7 +54,7 @@ var _ = Describe("Test spec sync", func() {
 			clientManagedDynamic,
 			gvrSecret,
 			"not-the-policy-encryption-key",
-			testNamespace,
+			targetNamespace,
 			false,
 			defaultTimeoutSeconds,
 		)

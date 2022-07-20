@@ -48,7 +48,9 @@ func TestReconcileSecretHubOnly(t *testing.T) {
 	hubClient := fake.NewClientBuilder().WithObjects(encryptionSecret).Build()
 	managedClient := fake.NewClientBuilder().Build()
 
-	r := SecretReconciler{Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme}
+	r := SecretReconciler{
+		Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme, TargetNamespace: clusterName,
+	}
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
@@ -58,6 +60,32 @@ func TestReconcileSecretHubOnly(t *testing.T) {
 	// Verify that the Secret was synced to the managed cluster by the Reconciler.
 	managedEncryptionSecret := &corev1.Secret{}
 	err = managedClient.Get(context.TODO(), request.NamespacedName, managedEncryptionSecret)
+	Expect(err).To(BeNil())
+	Expect(len(managedEncryptionSecret.Data["key"])).To(Equal(keySize / 8))
+}
+
+func TestReconcileSecretHubOnlyDiffTargetNS(t *testing.T) {
+	RegisterFailHandler(Fail)
+
+	encryptionSecret := getTestSecret()
+	targetNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "other-ns"}}
+	hubClient := fake.NewClientBuilder().WithObjects(encryptionSecret, targetNamespace).Build()
+	managedClient := fake.NewClientBuilder().Build()
+
+	r := SecretReconciler{
+		Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme, TargetNamespace: "other-ns",
+	}
+	request := reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
+	}
+	_, err := r.Reconcile(context.TODO(), request)
+	Expect(err).To(BeNil())
+
+	// Verify that the Secret was synced to the managed cluster by the Reconciler.
+	managedEncryptionSecret := &corev1.Secret{}
+	err = managedClient.Get(
+		context.TODO(), types.NamespacedName{Name: SecretName, Namespace: "other-ns"}, managedEncryptionSecret,
+	)
 	Expect(err).To(BeNil())
 	Expect(len(managedEncryptionSecret.Data["key"])).To(Equal(keySize / 8))
 }
@@ -78,7 +106,9 @@ func TestReconcileSecretAlreadySynced(t *testing.T) {
 
 	version := managedEncryptionSecret.ObjectMeta.ResourceVersion
 
-	r := SecretReconciler{Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme}
+	r := SecretReconciler{
+		Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme, TargetNamespace: clusterName,
+	}
 	_, err = r.Reconcile(context.TODO(), request)
 	Expect(err).To(BeNil())
 
@@ -101,7 +131,9 @@ func TestReconcileSecretMismatch(t *testing.T) {
 		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
 
-	r := SecretReconciler{Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme}
+	r := SecretReconciler{
+		Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme, TargetNamespace: clusterName,
+	}
 	_, err := r.Reconcile(context.TODO(), request)
 	Expect(err).To(BeNil())
 
@@ -119,7 +151,9 @@ func TestReconcileSecretDeletedOnHub(t *testing.T) {
 	hubClient := fake.NewClientBuilder().Build()
 	managedClient := fake.NewClientBuilder().WithObjects(encryptionSecret).Build()
 
-	r := SecretReconciler{Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme}
+	r := SecretReconciler{
+		Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme, TargetNamespace: clusterName,
+	}
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
@@ -142,7 +176,9 @@ func TestReconcileInvalidSecretName(t *testing.T) {
 	hubClient := fake.NewClientBuilder().WithObjects(encryptionSecret).Build()
 	managedClient := fake.NewClientBuilder().Build()
 
-	r := SecretReconciler{Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme}
+	r := SecretReconciler{
+		Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme, TargetNamespace: clusterName,
+	}
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{Name: "not-the-secret", Namespace: clusterName},
 	}

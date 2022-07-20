@@ -74,6 +74,13 @@ jobs:
         export GOPATH=$(go env GOPATH)
         make e2e-test-coverage
 
+    - name: E2E Tests That Simulate Hosted Mode
+      run: |
+        export GOPATH=$(go env GOPATH)
+        export E2E_TARGET_NAMESPACE="other-namespace"
+        export COVERAGE_E2E_OUT=coverage_e2e_hosted_mode.out
+        make e2e-test-coverage
+
     - name: Test Coverage Verification
       if: ${{ github.event_name == 'pull_request' }}
       run: |

@@ -20,6 +20,9 @@ type PolicySpecSyncOptions struct {
 	ManagedConfigFilePathName string
 	LegacyLeaderElection      bool
 	ProbeAddr                 string
+	// The namespace that the replicated policies should be synced to. This defaults to the same namespace as on the
+	// Hub.
+	TargetNamespace string
 }
 
 // Options default value
@@ -77,6 +80,14 @@ func ProcessFlags() {
 		"health-probe-bind-address",
 		":8081",
 		"The address the probe endpoint binds to.",
+	)
+
+	flag.StringVar(
+		&Options.TargetNamespace,
+		"target-namespace",
+		"",
+		"The namespace that the replicated policies should be synced to. This defaults to the same namespace as on "+
+			"the Hub",
 	)
 }
 

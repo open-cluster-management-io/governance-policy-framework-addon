@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
@@ -41,6 +42,8 @@ type PolicyReconciler struct {
 	ManagedClient   client.Client
 	ManagedRecorder record.EventRecorder
 	Scheme          *runtime.Scheme
+	// The namespace that the replicated policies should be synced to.
+	TargetNamespace string
 }
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=create;delete;get;list;patch;update;watch
@@ -55,7 +58,9 @@ type PolicyReconciler struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	reqLogger := log.WithValues(
+		"Request.Namespace", request.Namespace, "Request.Name", request.Name, "TargetNamespace", r.TargetNamespace,
+	)
 	reqLogger.Info("Reconciling Policy...")
 
 	// Fetch the Policy instance
@@ -74,7 +79,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      request.Name,
-					Namespace: request.Namespace,
+					Namespace: r.TargetNamespace,
 				},
 			})
 
@@ -93,7 +98,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	managedPlc := &policiesv1.Policy{}
-	err = r.ManagedClient.Get(ctx, request.NamespacedName, managedPlc)
+	err = r.ManagedClient.Get(ctx, types.NamespacedName{Namespace: r.TargetNamespace, Name: request.Name}, managedPlc)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -101,6 +106,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			reqLogger.Info("Policy not found on managed cluster, creating it...")
 
 			managedPlc = instance.DeepCopy()
+			managedPlc.Namespace = r.TargetNamespace
+
+			if managedPlc.Labels["policy.open-cluster-management.io/cluster-namespace"] != "" {
+				managedPlc.Labels["policy.open-cluster-management.io/cluster-namespace"] = r.TargetNamespace
+			}
+
 			managedPlc.SetOwnerReferences(nil)
 			managedPlc.SetResourceVersion("")
 			err = r.ManagedClient.Create(ctx, managedPlc)
@@ -111,9 +122,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				return reconcile.Result{}, err
 			}
 
-			r.ManagedRecorder.Event(instance, "Normal", "PolicySpecSync",
+			r.ManagedRecorder.Event(managedPlc, "Normal", "PolicySpecSync",
 				fmt.Sprintf("Policy %s was synchronized to cluster namespace %s", instance.GetName(),
-					instance.GetNamespace()))
+					r.TargetNamespace))
 		} else {
 			reqLogger.Error(err, "Failed to get policy from managed...")
 
@@ -134,9 +145,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			return reconcile.Result{}, err
 		}
 
-		r.ManagedRecorder.Event(instance, "Normal", "PolicySpecSync",
+		r.ManagedRecorder.Event(managedPlc, "Normal", "PolicySpecSync",
 			fmt.Sprintf("Policy %s was updated in cluster namespace %s", instance.GetName(),
-				instance.GetNamespace()))
+				r.TargetNamespace))
 	}
 
 	reqLogger.Info("Reconciliation complete.")

@@ -38,6 +38,7 @@ var (
 	kubeconfigHub         string
 	kubeconfigManaged     string
 	defaultTimeoutSeconds int
+	targetNamespace       string
 
 	defaultImageRegistry       string
 	defaultImagePullSecretName string
@@ -104,6 +105,21 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(namespacesHub.Get(context.TODO(), testNamespace, metav1.GetOptions{})).NotTo(BeNil())
 	Expect(clientManaged.CoreV1().Namespaces().Get(context.TODO(), testNamespace, metav1.GetOptions{})).NotTo(BeNil())
+
+	if os.Getenv("E2E_TARGET_NAMESPACE") != "" {
+		targetNamespace = os.Getenv("E2E_TARGET_NAMESPACE")
+
+		_, err := clientManaged.CoreV1().Namespaces().Create(
+			context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: targetNamespace}},
+			metav1.CreateOptions{},
+		)
+		if !errors.IsAlreadyExists(err) {
+			Expect(err).Should(BeNil())
+		}
+	} else {
+		targetNamespace = testNamespace
+	}
 })
 
 func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {
