@@ -23,15 +23,15 @@ const (
 
 var _ = Describe("Test status sync", func() {
 	BeforeEach(func() {
-		By("Creating a policy on hub cluster in ns:" + testNamespace)
-		_, err := utils.KubectlWithOutput("apply", "-f", case2PolicyYaml, "-n", testNamespace,
+		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err := utils.KubectlWithOutput("apply", "-f", case2PolicyYaml, "-n", clusterNamespaceOnHub,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).To(BeNil())
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
 			gvrPolicy,
 			case2PolicyName,
-			testNamespace,
+			clusterNamespaceOnHub,
 			true,
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
@@ -49,8 +49,8 @@ var _ = Describe("Test status sync", func() {
 		Expect(managedPlc).NotTo(BeNil())
 	})
 	AfterEach(func() {
-		By("Deleting a policy on hub cluster in ns:" + testNamespace)
-		_, err := utils.KubectlWithOutput("delete", "-f", case2PolicyYaml, "-n", testNamespace,
+		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err := utils.KubectlWithOutput("delete", "-f", case2PolicyYaml, "-n", clusterNamespaceOnHub,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).To(BeNil())
 		_, err = utils.KubectlWithOutput(
@@ -100,7 +100,7 @@ var _ = Describe("Test status sync", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case2PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 
@@ -154,7 +154,7 @@ var _ = Describe("Test status sync", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case2PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 
@@ -208,7 +208,7 @@ var _ = Describe("Test status sync", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case2PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 
@@ -308,7 +308,7 @@ var _ = Describe("Test status sync", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case2PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 

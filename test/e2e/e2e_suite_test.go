@@ -40,6 +40,7 @@ var (
 	kubeconfigHub         string
 	kubeconfigManaged     string
 	defaultTimeoutSeconds int
+	clusterNamespaceOnHub string
 
 	defaultImageRegistry string
 
@@ -85,14 +86,21 @@ var _ = BeforeSuite(func() {
 	testNamespace = "managed"
 	defaultTimeoutSeconds = 30
 	By("Create Namespace if needed")
+
+	if os.Getenv("E2E_CLUSTER_NAMESPACE") == "" {
+		clusterNamespaceOnHub = testNamespace
+	} else {
+		clusterNamespaceOnHub = os.Getenv("E2E_CLUSTER_NAMESPACE")
+	}
+
 	namespacesHub := clientHub.CoreV1().Namespaces()
 	if _, err := namespacesHub.Get(
 		context.TODO(),
-		testNamespace,
+		clusterNamespaceOnHub,
 		metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
 		Expect(namespacesHub.Create(context.TODO(), &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: testNamespace,
+				Name: clusterNamespaceOnHub,
 			},
 		}, metav1.CreateOptions{})).NotTo(BeNil())
 	}

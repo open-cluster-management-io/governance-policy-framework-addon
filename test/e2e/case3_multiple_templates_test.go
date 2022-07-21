@@ -34,15 +34,15 @@ func getCompliant(policy *unstructured.Unstructured) string {
 
 var _ = Describe("Test status sync with multiple templates", func() {
 	BeforeEach(func() {
-		By("Creating a policy on hub cluster in ns:" + testNamespace)
-		_, err := utils.KubectlWithOutput("apply", "-f", case3PolicyYaml, "-n", testNamespace,
+		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err := utils.KubectlWithOutput("apply", "-f", case3PolicyYaml, "-n", clusterNamespaceOnHub,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).To(BeNil())
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
 			gvrPolicy,
 			case3PolicyName,
-			testNamespace,
+			clusterNamespaceOnHub,
 			true,
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
@@ -60,8 +60,8 @@ var _ = Describe("Test status sync with multiple templates", func() {
 		Expect(managedPlc).NotTo(BeNil())
 	})
 	AfterEach(func() {
-		By("Deleting a policy on hub cluster in ns:" + testNamespace)
-		_, err := utils.KubectlWithOutput("delete", "-f", case3PolicyYaml, "-n", testNamespace,
+		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err := utils.KubectlWithOutput("delete", "-f", case3PolicyYaml, "-n", clusterNamespaceOnHub,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).To(BeNil())
 		_, err = utils.KubectlWithOutput(
@@ -162,7 +162,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case3PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 
@@ -221,7 +221,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case3PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 
@@ -266,7 +266,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case3PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 
@@ -328,7 +328,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case3PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 
@@ -390,7 +390,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case3PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 
@@ -435,14 +435,14 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			"-f",
 			"../resources/case3_multiple_templates/case3-test-policy-without-template1.yaml",
 			"-n",
-			testNamespace,
+			clusterNamespaceOnHub,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).To(BeNil())
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
 			gvrPolicy,
 			case3PolicyName,
-			testNamespace,
+			clusterNamespaceOnHub,
 			true,
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
@@ -485,7 +485,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case3PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 
@@ -530,14 +530,14 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			"-f",
 			"../resources/case3_multiple_templates/case3-test-policy-without-template2.yaml",
 			"-n",
-			testNamespace,
+			clusterNamespaceOnHub,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).To(BeNil())
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
 			gvrPolicy,
 			case3PolicyName,
-			testNamespace,
+			clusterNamespaceOnHub,
 			true,
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
@@ -580,7 +580,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				clientHubDynamic,
 				gvrPolicy,
 				case3PolicyName,
-				testNamespace,
+				clusterNamespaceOnHub,
 				true,
 				defaultTimeoutSeconds)
 

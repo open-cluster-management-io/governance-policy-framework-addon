@@ -20,15 +20,15 @@ const (
 
 var _ = Describe("Test mutation recovery", func() {
 	BeforeEach(func() {
-		By("Creating a policy on hub cluster in ns:" + testNamespace)
-		_, err := utils.KubectlWithOutput("apply", "-f", case1PolicyYaml, "-n", testNamespace,
+		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err := utils.KubectlWithOutput("apply", "-f", case1PolicyYaml, "-n", clusterNamespaceOnHub,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).Should(BeNil())
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
 			gvrPolicy,
 			case1PolicyName,
-			testNamespace,
+			clusterNamespaceOnHub,
 			true,
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
@@ -46,8 +46,8 @@ var _ = Describe("Test mutation recovery", func() {
 		Expect(managedPlc).NotTo(BeNil())
 	})
 	AfterEach(func() {
-		By("Deleting a policy on hub cluster in ns:" + testNamespace)
-		_, err := utils.KubectlWithOutput("delete", "-f", case1PolicyYaml, "-n", testNamespace,
+		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err := utils.KubectlWithOutput("delete", "-f", case1PolicyYaml, "-n", clusterNamespaceOnHub,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).Should(BeNil())
 		_, err = utils.KubectlWithOutput(
@@ -87,7 +87,7 @@ var _ = Describe("Test mutation recovery", func() {
 			clientHubDynamic,
 			gvrPolicy,
 			case1PolicyName,
-			testNamespace,
+			clusterNamespaceOnHub,
 			true,
 			defaultTimeoutSeconds)
 		Eventually(func() interface{} {
@@ -124,7 +124,7 @@ var _ = Describe("Test mutation recovery", func() {
 			clientHubDynamic,
 			gvrPolicy,
 			case1PolicyName,
-			testNamespace,
+			clusterNamespaceOnHub,
 			true,
 			defaultTimeoutSeconds)
 		Eventually(func() interface{} {
@@ -156,7 +156,7 @@ var _ = Describe("Test mutation recovery", func() {
 			clientHubDynamic,
 			gvrPolicy,
 			case1PolicyName,
-			testNamespace,
+			clusterNamespaceOnHub,
 			true,
 			defaultTimeoutSeconds)
 		Eventually(func() interface{} {

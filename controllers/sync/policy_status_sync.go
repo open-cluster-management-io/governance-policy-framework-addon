@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
@@ -51,11 +52,12 @@ var _ reconcile.Reconciler = &PolicyReconciler{}
 type PolicyReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	HubClient       client.Client
-	ManagedClient   client.Client
-	HubRecorder     record.EventRecorder
-	ManagedRecorder record.EventRecorder
-	Scheme          *runtime.Scheme
+	HubClient             client.Client
+	ManagedClient         client.Client
+	HubRecorder           record.EventRecorder
+	ManagedRecorder       record.EventRecorder
+	Scheme                *runtime.Scheme
+	ClusterNamespaceOnHub string
 }
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=get;list;watch;create;update;patch;delete
@@ -71,7 +73,9 @@ type PolicyReconciler struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	reqLogger := log.WithValues(
+		"Request.Namespace", request.Namespace, "Request.Name", request.Name, "HubNamespace", r.ClusterNamespaceOnHub,
+	)
 	reqLogger.Info("Reconciling the policy")
 
 	// Fetch the Policy instance
@@ -80,10 +84,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	err := r.ManagedClient.Get(ctx, request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// repliated policy on hub was deleted
+			// The replicated policy on the managed cluster was deleted.
 			// check if it was deleted by user by checking if it still exists on hub
 			hubInstance := &policiesv1.Policy{}
-			err = r.HubClient.Get(ctx, request.NamespacedName, hubInstance)
+			err = r.HubClient.Get(
+				ctx, types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}, hubInstance,
+			)
 
 			if err != nil {
 				if errors.IsNotFound(err) {
@@ -97,11 +103,19 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				return reconcile.Result{}, err
 			}
-			// still exist on hub, recover policy on managed
-			hubInstance.SetOwnerReferences(nil)
-			hubInstance.SetResourceVersion("")
 
-			return reconcile.Result{}, r.ManagedClient.Create(ctx, hubInstance)
+			// still exist on hub, recover policy on managed
+			managedInstance := hubInstance.DeepCopy()
+			managedInstance.Namespace = request.Namespace
+
+			if managedInstance.Labels["policy.open-cluster-management.io/cluster-namespace"] != "" {
+				managedInstance.Labels["policy.open-cluster-management.io/cluster-namespace"] = request.Namespace
+			}
+
+			managedInstance.SetOwnerReferences(nil)
+			managedInstance.SetResourceVersion("")
+
+			return reconcile.Result{}, r.ManagedClient.Create(ctx, managedInstance)
 		}
 		// Error reading the object - requeue the request.
 		reqLogger.Error(err, "Error reading the policy object, will requeue the request")
@@ -110,7 +124,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 	// get hub policy
 	hubPlc := &policiesv1.Policy{}
-	err = r.HubClient.Get(ctx, request.NamespacedName, hubPlc)
+	err = r.HubClient.Get(ctx, types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}, hubPlc)
 
 	if err != nil {
 		// hub policy not found, it has been deleted
@@ -339,7 +353,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			return reconcile.Result{}, err
 		}
 
-		r.HubRecorder.Event(instance, "Normal", "PolicyStatusSync",
+		r.HubRecorder.Event(hubPlc, "Normal", "PolicyStatusSync",
 			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
 				hubPlc.GetNamespace()))
 	} else {

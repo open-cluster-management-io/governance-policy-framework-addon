@@ -64,6 +64,7 @@ func init() {
 	utilruntime.Must(v1.AddToScheme(eventsScheme))
 	//+kubebuilder:scaffold:scheme
 	utilruntime.Must(policiesv1.AddToScheme(scheme))
+	utilruntime.Must(policiesv1.AddToScheme(eventsScheme))
 }
 
 func main() {
@@ -155,7 +156,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(namespace)})
+	var clusterNamespaceOnHub string
+	if tool.Options.ClusterNamespaceOnHub == "" {
+		clusterNamespaceOnHub = namespace
+	} else {
+		clusterNamespaceOnHub = tool.Options.ClusterNamespaceOnHub
+		log.Info(
+			"The Hub will receive status updates in the input cluster namespace", "namespace", clusterNamespaceOnHub,
+		)
+	}
+
+	eventBroadcaster.StartRecordingToSink(
+		&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(clusterNamespaceOnHub)},
+	)
+
 	hubRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: sync.ControllerName})
 
 	options := manager.Options{
@@ -188,11 +202,12 @@ func main() {
 	}
 
 	if err = (&sync.PolicyReconciler{
-		HubClient:       hubClient,
-		HubRecorder:     hubRecorder,
-		ManagedClient:   mgr.GetClient(),
-		ManagedRecorder: mgr.GetEventRecorderFor(sync.ControllerName),
-		Scheme:          mgr.GetScheme(),
+		ClusterNamespaceOnHub: clusterNamespaceOnHub,
+		HubClient:             hubClient,
+		HubRecorder:           hubRecorder,
+		ManagedClient:         mgr.GetClient(),
+		ManagedRecorder:       mgr.GetEventRecorderFor(sync.ControllerName),
+		Scheme:                mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "unable to create controller", "controller", "Policy")
 		os.Exit(1)

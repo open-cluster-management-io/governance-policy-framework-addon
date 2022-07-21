@@ -12,8 +12,7 @@ var log = ctrl.Log.WithName("cmd")
 
 // PolicySpecSyncOptions for command line flag parsing
 type PolicySpecSyncOptions struct {
-	ClusterName               string
-	ClusterNamespace          string
+	ClusterNamespaceOnHub     string
 	HubConfigFilePathName     string
 	ManagedConfigFilePathName string
 	EnableLease               bool
@@ -30,17 +29,10 @@ func ProcessFlags() {
 	flag := pflag.CommandLine
 
 	flag.StringVar(
-		&Options.ClusterName,
-		"cluster-name",
-		Options.ClusterName,
-		"Name of this endpoint.",
-	)
-
-	flag.StringVar(
-		&Options.ClusterNamespace,
+		&Options.ClusterNamespaceOnHub,
 		"cluster-namespace",
-		Options.ClusterNamespace,
-		"Cluster Namespace of this endpoint in hub.",
+		Options.ClusterNamespaceOnHub,
+		"The cluster namespace on the Hub. This defaults to the namespace that the controller watches.",
 	)
 
 	flag.StringVar(

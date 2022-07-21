@@ -19,24 +19,24 @@ const (
 
 var _ = Describe("Test event message handling", func() {
 	BeforeEach(func() {
-		By("Creating a policy on hub cluster in ns:" + testNamespace)
+		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err := utils.KubectlWithOutput(
 			"apply",
 			"-f",
 			case6PolicyYaml,
 			"-n",
-			testNamespace,
+			clusterNamespaceOnHub,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).Should(BeNil())
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
 			gvrPolicy,
 			case6PolicyName,
-			testNamespace,
+			clusterNamespaceOnHub,
 			true,
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
-		By("Creating a policy on managed cluster in ns:" + testNamespace)
+		By("Creating a policy on managed cluster in ns:" + clusterNamespaceOnHub)
 		_, err = utils.KubectlWithOutput(
 			"apply",
 			"-f",
@@ -55,13 +55,13 @@ var _ = Describe("Test event message handling", func() {
 		Expect(managedPlc).NotTo(BeNil())
 	})
 	AfterEach(func() {
-		By("Deleting a policy on hub cluster in ns:" + testNamespace)
+		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err := utils.KubectlWithOutput(
 			"delete",
 			"-f",
 			case6PolicyYaml,
 			"-n",
-			testNamespace,
+			clusterNamespaceOnHub,
 			"--kubeconfig=../../kubeconfig_hub")
 		Expect(err).Should(BeNil())
 		_, err = utils.KubectlWithOutput(
