@@ -13,8 +13,10 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/spf13/pflag"
 	"github.com/stolostron/go-log-utils/zaputil"
+	corev1 "k8s.io/api/core/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -107,6 +109,32 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "governance-policy-template-sync.open-cluster-management.io",
+		// Override the EventBroadcaster so that the spam filter will not ignore events for the policy but with
+		// different messages if a large amount of events for that policy are sent in a short time.
+		EventBroadcaster: record.NewBroadcasterWithCorrelatorOptions(
+			record.CorrelatorOptions{
+				// This essentially disables event aggregation of the same events but with different messages.
+				MaxIntervalInSeconds: 1,
+				// This is the default spam key function except it adds the reason and message as well.
+				// https://github.com/kubernetes/client-go/blob/v0.23.3/tools/record/events_cache.go#L70-L82
+				SpamKeyFunc: func(event *corev1.Event) string {
+					return strings.Join(
+						[]string{
+							event.Source.Component,
+							event.Source.Host,
+							event.InvolvedObject.Kind,
+							event.InvolvedObject.Namespace,
+							event.InvolvedObject.Name,
+							string(event.InvolvedObject.UID),
+							event.InvolvedObject.APIVersion,
+							event.Reason,
+							event.Message,
+						},
+						"",
+					)
+				},
+			},
+		),
 	}
 
 	// Add support for MultiNamespace set in WATCH_NAMESPACE (e.g ns1,ns2)
