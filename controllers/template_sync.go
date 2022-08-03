@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -25,6 +26,7 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -43,6 +45,7 @@ func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(ControllerName).
 		For(&policiesv1.Policy{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
 
@@ -118,22 +121,42 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, nil
 	}
 
-	// In certain situations, we should requeue without an error, *after* other logic.
-	// Use this in non-error returns to correctly handle those situations.
-	result := reconcile.Result{}
+	// Do not exit early from the loop - store an error to return later and `continue`. Be careful
+	// not to overwrite the error in a way that it becomes nil, which would prevent a requeue.
+	// As a quirk of the error handling, only the last occurring error is "returned" by Reconcile.
+	var resultError error
 
 	// PolicyTemplates is not empty
 	// loop through policy templates
-	for _, policyT := range instance.Spec.PolicyTemplates {
+	for tIndex, policyT := range instance.Spec.PolicyTemplates {
 		object, gvk, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
-			// failed to decode PolicyTemplate, skipping it, should throw violation
-			reqLogger.Error(err, "Failed to decode the policy template")
-			r.Recorder.Event(instance, "Warning", "PolicyTemplateSync",
-				fmt.Sprintf("Failed to decode policy template with err: %s", err))
+			resultError = err
+			errMsg := fmt.Sprintf("Failed to decode policy template with err: %s", err)
+
+			r.emitTemplateError(instance, tIndex, fmt.Sprintf("[template %v]", tIndex), errMsg)
+			reqLogger.Error(resultError, "Failed to decode the policy template", "templateIndex", tIndex)
 
 			continue
 		}
+
+		var tName string
+		if tMetaObj, ok := object.(metav1.Object); ok {
+			tName = tMetaObj.GetName()
+		}
+
+		if tName == "" {
+			errMsg := fmt.Sprintf("Failed to get name from policy template at index %v", tIndex)
+			resultError = errors.NewBadRequest(errMsg)
+
+			r.emitTemplateError(instance, tIndex, fmt.Sprintf("[template %v]", tIndex), errMsg)
+			reqLogger.Error(resultError, "Failed to process the policy template", "templateIndex", tIndex)
+
+			continue
+		}
+
+		tLogger := reqLogger.WithValues("template", tName)
+
 		var rsrc schema.GroupVersionResource
 
 		mapping, err := rMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -141,22 +164,15 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		if mapping != nil {
 			rsrc = mapping.Resource
 		} else {
-			// mapping not found, should create a violation event
-			reqLogger.Error(
-				err,
-				"Could not find an API mapping for the object definition",
+			resultError = err
+			errMsg := fmt.Sprintf("Mapping not found, please check if you have CRD deployed: %s", err)
+
+			r.emitTemplateError(instance, tIndex, tName, errMsg)
+			tLogger.Error(err, "Could not find an API mapping for the object definition",
 				"group", gvk.Group,
 				"version", gvk.Version,
 				"kind", gvk.Kind,
 			)
-			r.Recorder.Event(instance, "Warning", "PolicyTemplateSync",
-				fmt.Sprintf("Mapping not found with err: %s", err))
-			mappingErrMsg := fmt.Sprintf("NonCompliant; %s, please check if you have CRD deployed.", err)
-			r.Recorder.Event(instance, "Warning",
-				fmt.Sprintf(policyFmtStr, instance.GetNamespace(), object.(metav1.Object).GetName()), mappingErrMsg)
-
-			// Requeue so that when the CRD is installed, the object will automatically be created.
-			result.Requeue = true
 
 			continue
 		}
@@ -166,37 +182,27 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			// if not configuration policies ,do a simple check for templates {{hub and reject
 			// only checking for hub and not {{ as they could be valid cases where they are valid chars.
 			if strings.Contains(string(policyT.ObjectDefinition.Raw), "{{hub ") {
-				reqLogger.Error(
-					errors.NewBadRequest("Templates are not supported for this policy kind"),
-					"Failed to process the policy template",
-					"kind",
-					gvk.Kind,
-				)
+				errMsg := fmt.Sprintf("Templates are not supported for kind : %s", gvk.Kind)
+				resultError = errors.NewBadRequest(errMsg)
 
-				templatesErrMsg := fmt.Sprintf("Templates are not supported for kind : %s", gvk.Kind)
+				r.emitTemplateError(instance, tIndex, tName, errMsg)
+				tLogger.Error(resultError, "Failed to process the policy template")
 
-				r.Recorder.Event(instance, "Warning", "PolicyTemplateSync", templatesErrMsg)
-				r.Recorder.Event(instance, "Warning",
-					fmt.Sprintf(
-						policyFmtStr, instance.GetNamespace(), object.(metav1.Object).GetName(),
-					), "NonCompliant; "+templatesErrMsg)
-
-				// continue to the next policy template
 				continue
 			}
 		}
 
 		// fetch resource
 		res := dClient.Resource(rsrc).Namespace(instance.GetNamespace())
-		tName := object.(metav1.Object).GetName()
 		tObjectUnstructured := &unstructured.Unstructured{}
 		err = json.Unmarshal(policyT.ObjectDefinition.Raw, tObjectUnstructured)
 
 		if err != nil {
-			// failed to decode PolicyTemplate, skipping it, should throw violation
-			reqLogger.Error(err, "Failed to unmarshal the policy template")
-			r.Recorder.Event(instance, "Warning", "PolicyTemplateSync",
-				fmt.Sprintf("Failed to unmarshal policy template with err: %s", err))
+			resultError = err
+			errMsg := fmt.Sprintf("Failed to unmarshal the policy template: %s", err)
+
+			r.emitTemplateError(instance, tIndex, tName, errMsg)
+			tLogger.Error(resultError, "Failed to unmarshal the policy template")
 
 			continue
 		}
@@ -233,59 +239,52 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				_, err = res.Create(ctx, tObjectUnstructured, metav1.CreateOptions{})
 				if err != nil {
-					// failed to create policy template
-					reqLogger.Error(err, "Failed to create the policy template", "PolicyTemplateName", tName)
-					r.Recorder.Event(instance, "Warning", "PolicyTemplateSync",
-						fmt.Sprintf("Failed to create policy template %s", tName))
+					resultError = err
+					errMsg := fmt.Sprintf("Failed to create policy template: %s", err)
 
-					createErrMsg := fmt.Sprintf("NonCompliant; Failed to create policy template %s", err)
+					r.emitTemplateError(instance, tIndex, tName, errMsg)
+					tLogger.Error(resultError, "Failed to create policy template")
 
-					r.Recorder.Event(instance, "Warning",
-						fmt.Sprintf(policyFmtStr, instance.GetNamespace(), object.(metav1.Object).GetName()),
-						createErrMsg)
-
-					return reconcile.Result{}, err
+					continue
 				}
 
-				reqLogger.Info("Policy template created successfully", "PolicyTemplateName", tName)
-				r.Recorder.Event(instance, "Normal", "PolicyTemplateSync",
-					fmt.Sprintf("Policy template %s was created successfully", tName))
+				successMsg := fmt.Sprintf("Policy template %s created successfully", tName)
+				tLogger.Info("Policy template created successfully", "PolicyTemplateName", tName)
 
-				// The policy template was created successfully, so requeue for further processing
-				// of the other policy templates
-				return reconcile.Result{Requeue: true}, nil
+				err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res)
+				if err != nil {
+					resultError = err
+					tLogger.Error(resultError, "Error after creating template (will requeue)")
+				}
+
+				continue
+			} else {
+				// a different error getting template object from cluster
+				resultError = err
+				errMsg := fmt.Sprintf("Failed to get the object in the policy template: %s", err)
+
+				r.emitTemplateError(instance, tIndex, tName, errMsg)
+				tLogger.Error(err, "Failed to get the object in the policy template",
+					"namespace", instance.GetNamespace(),
+					"kind", gvk.Kind,
+				)
+
+				continue
 			}
-
-			// other error
-			reqLogger.Error(
-				err,
-				"Failed to get the object in the policy template",
-				"name", tName,
-				"namespace", instance.GetNamespace(),
-				"kind", gvk.Kind,
-			)
-			r.Recorder.Event(instance, "Warning", "PolicyTemplateSync",
-				fmt.Sprintf("Failed to create policy template %s", tName))
-
-			return reconcile.Result{}, err
 		}
 
 		refName := eObject.GetOwnerReferences()[0].Name
 		// violation if object reference and policy don't match
 		if instance.GetName() != refName {
-			alreadyExistsErrMsg := fmt.Sprintf(
+			errMsg := fmt.Sprintf(
 				"Template name must be unique. Policy template with kind: %s name: %s already exists in policy %s",
 				tObjectUnstructured.Object["kind"],
 				tName,
 				refName)
-			r.Recorder.Event(instance, "Warning",
-				fmt.Sprintf(policyFmtStr, instance.GetNamespace(), tName), "NonCompliant; "+alreadyExistsErrMsg)
-			r.Recorder.Event(instance, "Warning", "PolicyTemplateSync", alreadyExistsErrMsg)
-			reqLogger.Error(
-				errors.NewBadRequest(alreadyExistsErrMsg),
-				"Failed to create the policy template",
-				"PolicyTemplateName", tName,
-			)
+			resultError = errors.NewBadRequest(errMsg)
+
+			r.emitTemplateError(instance, tIndex, tName, errMsg)
+			tLogger.Error(resultError, "Failed to create the policy template")
 
 			continue
 		}
@@ -296,7 +295,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		if (!equality.Semantic.DeepEqual(eObjectUnstructured["spec"], tObjectUnstructured.Object["spec"])) ||
 			(!equality.Semantic.DeepEqual(eObject.GetAnnotations(), tObjectUnstructured.GetAnnotations())) {
 			// doesn't match
-			reqLogger.Info("Existing object and template didn't match, will update", "PolicyTemplateName", tName)
+			tLogger.Info("Existing object and template didn't match, will update")
 
 			eObjectUnstructured["spec"] = tObjectUnstructured.Object["spec"]
 
@@ -304,24 +303,38 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			_, err = res.Update(ctx, eObject, metav1.UpdateOptions{})
 			if err != nil {
-				reqLogger.Error(err, "Failed to update the policy template", "PolicyTemplateName", tName)
-				r.Recorder.Event(instance, "Warning", "PolicyTemplateSync",
-					fmt.Sprintf("Failed to update policy template %s", tName))
+				resultError = err
+				errMsg := fmt.Sprintf("Failed to update policy template %s: %s", tName, err)
 
-				return reconcile.Result{}, err
+				r.emitTemplateError(instance, tIndex, tName, errMsg)
+				tLogger.Error(err, "Failed to update the policy template")
+
+				continue
 			}
 
-			reqLogger.Info("Existing object has been updated", "PolicyTemplateName", tName)
-			r.Recorder.Event(instance, "Normal", "PolicyTemplateSync",
-				fmt.Sprintf("Policy template %s was updated successfully", tName))
+			successMsg := fmt.Sprintf("Policy template %s was updated successfully", tName)
+
+			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res)
+			if err != nil {
+				resultError = err
+				tLogger.Error(resultError, "Error after updating template (will requeue)")
+			}
+
+			tLogger.Info("Existing object has been updated")
 		} else {
-			reqLogger.Info("Existing object matches the policy template", "PolicyTemplateName", tName)
+			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, "", res)
+			if err != nil {
+				resultError = err
+				tLogger.Error(resultError, "Error after confirming template matches (will requeue)")
+			}
+
+			tLogger.Info("Existing object matches the policy template")
 		}
 	}
 
 	reqLogger.Info("Completed the reconciliation")
 
-	return result, nil
+	return reconcile.Result{}, resultError
 }
 
 func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured *unstructured.Unstructured) {
@@ -334,4 +347,73 @@ func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured 
 			}
 		}
 	}
+}
+
+// emitTemplateError performs actions that ensure correct reporting of template errors in the
+// policy framework. If the policy's status already reflects the current error, then no actions
+// are taken.
+func (r *PolicyReconciler) emitTemplateError(pol *policiesv1.Policy, tIndex int, tName, errMsg string) {
+	// check if the error is already present in the policy status - if so, return early
+	if strings.Contains(getLatestStatusMessage(pol, tIndex), errMsg) {
+		return
+	}
+
+	// emit the non-compliance event
+	policyComplianceReason := fmt.Sprintf(policyFmtStr, pol.GetNamespace(), tName)
+	r.Recorder.Event(pol, "Warning", policyComplianceReason, "NonCompliant; template-error; "+errMsg)
+
+	// emit an informational event
+	r.Recorder.Event(pol, "Warning", "PolicyTemplateSync", errMsg)
+}
+
+// handleSyncSuccess performs common actions that should be run whenever a template is in sync,
+// whether there were changes or not. If no changes occurred, an empty message should be passed in.
+// If the given policy template was in a template-error state (determined by checking the status),
+// then the template object's `status.compliant` field (complianceState) will be reset. When this
+// occurs, the relevant policy controller must re-populate it, and emit a new compliance event for
+// the framework to observe.
+func (r *PolicyReconciler) handleSyncSuccess(
+	ctx context.Context,
+	pol *policiesv1.Policy,
+	tIndex int,
+	tName string,
+	msg string,
+	resInt dynamic.ResourceInterface,
+) error {
+	if msg != "" {
+		r.Recorder.Event(pol, "Normal", "PolicyTemplateSync", msg)
+	}
+
+	// Only do additional steps if a template-error is the most recent status
+	if !strings.Contains(getLatestStatusMessage(pol, tIndex), "template-error;") {
+		return nil
+	}
+
+	jsonPatch := []byte(`[{"op":"remove","path":"/status/compliant"}]`)
+
+	_, err := resInt.Patch(ctx, tName, types.JSONPatchType, jsonPatch, metav1.PatchOptions{}, "status")
+	if err != nil {
+		return fmt.Errorf("unable to reset the status of policy template %v: %w", tName, err)
+	}
+
+	return nil
+}
+
+// getLatestStatusMessage examines the policy and returns the most recent status message for
+// the given template. Returns an empty string if no status is present for the template.
+func getLatestStatusMessage(pol *policiesv1.Policy, tIndex int) string {
+	if tIndex >= len(pol.Status.Details) {
+		return ""
+	}
+
+	tmplDetails := pol.Status.Details[tIndex]
+	if tmplDetails == nil {
+		return ""
+	}
+
+	if len(tmplDetails.History) == 0 {
+		return ""
+	}
+
+	return tmplDetails.History[0].Message
 }
