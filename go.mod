@@ -1,4 +1,4 @@
-module open-cluster-management.io/governance-policy-status-sync
+module open-cluster-management.io/governance-policy-syncer
 
 go 1.18
 

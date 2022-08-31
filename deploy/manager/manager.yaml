@@ -1,26 +1,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: governance-policy-status-sync
+  name: governance-policy-syncer
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: governance-policy-status-sync
+      name: governance-policy-syncer
   template:
     metadata:
       labels:
-        name: governance-policy-status-sync
+        name: governance-policy-syncer
         app: governance-policy-framework
     spec:
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: governance-policy-status-sync
+      serviceAccountName: governance-policy-syncer
       containers:
-        - name: governance-policy-status-sync
-          image: quay.io/open-cluster-management/governance-policy-status-sync:latest
+        - name: governance-policy-syncer
+          image: quay.io/open-cluster-management/governance-policy-syncer:latest
           command:
-            - governance-policy-status-sync
+            - governance-policy-syncer
           args:
             - "--hub-cluster-configfile=/var/run/klusterlet/kubeconfig"
             - "--enable-lease=true"
@@ -38,7 +38,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: "governance-policy-status-sync"
+              value: "governance-policy-syncer"
           securityContext:
             allowPrivilegeEscalation: false
           livenessProbe:

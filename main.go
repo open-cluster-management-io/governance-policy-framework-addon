@@ -38,9 +38,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"open-cluster-management.io/governance-policy-status-sync/controllers/sync"
-	"open-cluster-management.io/governance-policy-status-sync/tool"
-	"open-cluster-management.io/governance-policy-status-sync/version"
+	"open-cluster-management.io/governance-policy-syncer/controllers/sync"
+	"open-cluster-management.io/governance-policy-syncer/tool"
+	"open-cluster-management.io/governance-policy-syncer/version"
 )
 
 var (

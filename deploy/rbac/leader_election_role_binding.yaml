@@ -1,12 +1,12 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: governance-policy-status-sync-leader-election
+  name: governance-policy-syncer-leader-election
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: governance-policy-status-sync-leader-election
+  name: governance-policy-syncer-leader-election
 subjects:
 - kind: ServiceAccount
-  name: governance-policy-status-sync
+  name: governance-policy-syncer
   namespace: open-cluster-management-agent-addon

@@ -26,7 +26,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"open-cluster-management.io/governance-policy-status-sync/test/utils"
+	"open-cluster-management.io/governance-policy-syncer/test/utils"
 )
 
 var (

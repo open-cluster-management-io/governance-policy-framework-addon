@@ -13,7 +13,7 @@ on:
 defaults:
   run:
     shell: bash
-    working-directory: governance-policy-status-sync
+    working-directory: governance-policy-syncer
 
 jobs:
   kind-tests:
@@ -33,13 +33,13 @@ jobs:
     - name: Checkout Governance Policy Status Sync
       uses: actions/checkout@v2
       with:
-        path: governance-policy-status-sync
+        path: governance-policy-syncer
         fetch-depth: 0 # Fetch all history for all tags and branches
 
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version-file: governance-policy-status-sync/go.mod
+        go-version-file: governance-policy-syncer/go.mod
 
     - name: Verify modules
       run: |

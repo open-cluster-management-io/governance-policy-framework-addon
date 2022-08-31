@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: governance-policy-status-sync
+  name: governance-policy-syncer
   namespace: open-cluster-management-agent-addon
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: governance-policy-status-sync-leader-election
+  name: governance-policy-syncer-leader-election
   namespace: open-cluster-management-agent-addon
 rules:
 - apiGroups:
@@ -46,7 +46,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: governance-policy-status-sync
+  name: governance-policy-syncer
 rules:
 - apiGroups:
   - ""
@@ -97,45 +97,45 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: governance-policy-status-sync-leader-election
+  name: governance-policy-syncer-leader-election
   namespace: open-cluster-management-agent-addon
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: governance-policy-status-sync-leader-election
+  name: governance-policy-syncer-leader-election
 subjects:
 - kind: ServiceAccount
-  name: governance-policy-status-sync
+  name: governance-policy-syncer
   namespace: open-cluster-management-agent-addon
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: governance-policy-status-sync
+  name: governance-policy-syncer
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: governance-policy-status-sync
+  name: governance-policy-syncer
 subjects:
 - kind: ServiceAccount
-  name: governance-policy-status-sync
+  name: governance-policy-syncer
   namespace: open-cluster-management-agent-addon
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: governance-policy-status-sync
+  name: governance-policy-syncer
   namespace: open-cluster-management-agent-addon
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: governance-policy-status-sync
+      name: governance-policy-syncer
   template:
     metadata:
       labels:
         app: governance-policy-framework
-        name: governance-policy-status-sync
+        name: governance-policy-syncer
     spec:
       containers:
       - args:
@@ -144,7 +144,7 @@ spec:
         - --log-level=2
         - --v=0
         command:
-        - governance-policy-status-sync
+        - governance-policy-syncer
         env:
         - name: WATCH_NAMESPACE
           value: managed
@@ -153,8 +153,8 @@ spec:
             fieldRef:
               fieldPath: metadata.name
         - name: OPERATOR_NAME
-          value: governance-policy-status-sync
-        image: quay.io/open-cluster-management/governance-policy-status-sync:latest
+          value: governance-policy-syncer
+        image: quay.io/open-cluster-management/governance-policy-syncer:latest
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -162,7 +162,7 @@ spec:
             port: 8082
           initialDelaySeconds: 15
           periodSeconds: 20
-        name: governance-policy-status-sync
+        name: governance-policy-syncer
         readinessProbe:
           httpGet:
             path: /readyz
@@ -176,7 +176,7 @@ spec:
           name: klusterlet-config
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: governance-policy-status-sync
+      serviceAccountName: governance-policy-syncer
       volumes:
       - name: klusterlet-config
         secret:

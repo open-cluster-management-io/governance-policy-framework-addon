@@ -11,7 +11,7 @@ env:
   RELEASE_VERSION: ${{ github.ref_name }}
 defaults:
   run:
-    working-directory: go/src/open-cluster-management.io/governance-policy-status-sync
+    working-directory: go/src/open-cluster-management.io/governance-policy-syncer
 
 jobs:
   release:
@@ -22,23 +22,23 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
-          path: go/src/open-cluster-management.io/governance-policy-status-sync
+          path: go/src/open-cluster-management.io/governance-policy-syncer
       - name: install Go
         uses: actions/setup-go@v3
         with:
-          go-version-file: go/src/open-cluster-management.io/governance-policy-status-sync/go.mod
+          go-version-file: go/src/open-cluster-management.io/governance-policy-syncer/go.mod
       - name: build images
         run:  |
           make build-images
       - name: push image
         run: |
           echo ${{ secrets.DOCKER_PASSWORD }} | docker login quay.io --username ${{ secrets.DOCKER_USER }} --password-stdin
-          docker push quay.io/open-cluster-management/governance-policy-status-sync:$RELEASE_VERSION
+          docker push quay.io/open-cluster-management/governance-policy-syncer:$RELEASE_VERSION
       - name: generate changelog
         run: |
-          echo "# Governance-policy-status-sync $RELEASE_VERSION" > /home/runner/work/changelog.txt
-          echo "- See the [CHANGELOG](https://github.com/open-cluster-management-io/governance-policy-status-sync/blob/main/CHANGELOG/CHANGELOG-${RELEASE_VERSION}.md) for more details." >> /home/runner/work/changelog.txt
-          echo "- The released image is quay.io/open-cluster-management/governance-policy-status-sync:$RELEASE_VERSION" >> /home/runner/work/changelog.txt
+          echo "# governance-policy-syncer $RELEASE_VERSION" > /home/runner/work/changelog.txt
+          echo "- See the [CHANGELOG](https://github.com/open-cluster-management-io/governance-policy-syncer/blob/main/CHANGELOG/CHANGELOG-${RELEASE_VERSION}.md) for more details." >> /home/runner/work/changelog.txt
+          echo "- The released image is quay.io/open-cluster-management/governance-policy-syncer:$RELEASE_VERSION" >> /home/runner/work/changelog.txt
       - name: publish release
         uses: softprops/action-gh-release@v0.1.5
         env:

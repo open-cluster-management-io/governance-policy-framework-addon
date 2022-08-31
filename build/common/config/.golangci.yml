@@ -79,7 +79,7 @@ linters-settings:
     check-shadowing: false
   gci:
     sections:
-      - prefix(open-cluster-management.io/governance-policy-status-sync)
+      - prefix(open-cluster-management.io/governance-policy-syncer)
   golint:
     # minimal confidence for issues, default is 0.8
     min-confidence: 0.0
