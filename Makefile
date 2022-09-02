@@ -31,7 +31,6 @@ KIND_NAME ?= test-managed
 KIND_NAMESPACE ?= open-cluster-management-agent-addon
 KIND_VERSION ?= latest
 MANAGED_CLUSTER_NAME ?= managed
-WATCH_NAMESPACE ?= $(MANAGED_CLUSTER_NAME)
 HUB_CONFIG ?= $(PWD)/kubeconfig_hub
 HUB_CONFIG_INTERNAL ?= $(PWD)/kubeconfig_hub_internal
 MANAGED_CONFIG ?= $(PWD)/kubeconfig_managed
@@ -178,7 +177,7 @@ local:
 
 .PHONY: run
 run:
-	HUB_CONFIG=$(HUB_CONFIG) MANAGED_CONFIG=$(MANAGED_CONFIG) WATCH_NAMESPACE=$(WATCH_NAMESPACE) go run ./main.go --leader-elect=false
+	HUB_CONFIG=$(HUB_CONFIG) MANAGED_CONFIG=$(MANAGED_CONFIG) go run ./main.go --leader-elect=false --cluster-namespace=$(MANAGED_CLUSTER_NAME)
 
 ############################################################
 # images section
@@ -266,7 +265,7 @@ install-crds:
 .PHONY: install-resources
 install-resources:
 	@echo creating namespace on hub
-	kubectl create ns $(WATCH_NAMESPACE) --kubeconfig=$(HUB_CONFIG)
+	kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(HUB_CONFIG)
 	@echo creating namespace on managed
 	kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(MANAGED_CONFIG)
 
@@ -288,7 +287,7 @@ e2e-build-instrumented:
 
 .PHONY: e2e-run-instrumented
 e2e-run-instrumented: e2e-build-instrumented
-	HUB_CONFIG=$(HUB_CONFIG) MANAGED_CONFIG=$(MANAGED_CONFIG) WATCH_NAMESPACE=$(WATCH_NAMESPACE) ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=$(COVERAGE_E2E_OUT) &>build/_output/controller.log &
+	HUB_CONFIG=$(HUB_CONFIG) MANAGED_CONFIG=$(MANAGED_CONFIG) MANAGED_CLUSTER_NAME=$(MANAGED_CLUSTER_NAME) ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=$(COVERAGE_E2E_OUT) &>build/_output/controller.log &
 
 .PHONY: e2e-stop-instrumented
 e2e-stop-instrumented:

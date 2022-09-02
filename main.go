@@ -8,9 +8,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"runtime"
-	"strings"
+	"sync"
 
 	"github.com/go-logr/zapr"
 	"github.com/spf13/pflag"
@@ -18,6 +21,7 @@ import (
 
 	// to ensure that exec-entrypoint and run can make use of them.
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -38,7 +42,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"open-cluster-management.io/governance-policy-syncer/controllers/sync"
+	"open-cluster-management.io/governance-policy-syncer/controllers/secretsync"
+	"open-cluster-management.io/governance-policy-syncer/controllers/specsync"
+	"open-cluster-management.io/governance-policy-syncer/controllers/statussync"
 	"open-cluster-management.io/governance-policy-syncer/tool"
 	"open-cluster-management.io/governance-policy-syncer/version"
 )
@@ -99,6 +105,15 @@ func main() {
 
 	printVersion()
 
+	if tool.Options.ClusterNamespace == "" {
+		log.Info("The --cluster-namespace flag must be provided")
+		os.Exit(1)
+	}
+
+	if tool.Options.ClusterNamespaceOnHub == "" {
+		tool.Options.ClusterNamespaceOnHub = tool.Options.ClusterNamespace
+	}
+
 	// Get hubconfig to talk to hub apiserver
 	if tool.Options.HubConfigFilePathName == "" {
 		var found bool
@@ -141,98 +156,21 @@ func main() {
 		}
 	}
 
-	hubClient, err := client.New(hubCfg, client.Options{Scheme: scheme})
-	if err != nil {
-		log.Error(err, "Failed to generate client to the hub cluster")
-		os.Exit(1)
-	}
-	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(hubCfg)
-
-	eventBroadcaster := record.NewBroadcaster()
-
-	namespace, err := tool.GetWatchNamespace()
-	if err != nil {
-		log.Error(err, "Failed to get watch namespace")
-		os.Exit(1)
-	}
-
-	var clusterNamespaceOnHub string
-	if tool.Options.ClusterNamespaceOnHub == "" {
-		clusterNamespaceOnHub = namespace
-	} else {
-		clusterNamespaceOnHub = tool.Options.ClusterNamespaceOnHub
-		log.Info(
-			"The Hub will receive status updates in the input cluster namespace", "namespace", clusterNamespaceOnHub,
-		)
-	}
-
-	eventBroadcaster.StartRecordingToSink(
-		&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(clusterNamespaceOnHub)},
-	)
-
-	hubRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: sync.ControllerName})
-
-	options := manager.Options{
-		LeaderElection:         tool.Options.EnableLeaderElection,
-		LeaderElectionID:       "policy-status-sync.open-cluster-management.io",
-		HealthProbeBindAddress: tool.Options.ProbeAddr,
+	mgrOptionsBase := manager.Options{
+		LeaderElection: tool.Options.EnableLeaderElection,
 		// Disable the metrics endpoint
 		MetricsBindAddress: "0",
-		Namespace:          namespace,
 		Scheme:             scheme,
 	}
+
 	if tool.Options.LegacyLeaderElection {
 		// If legacyLeaderElection is enabled, then that means the lease API is not available.
 		// In this case, use the legacy leader election method of a ConfigMap.
-		options.LeaderElectionResourceLock = "configmaps"
+		mgrOptionsBase.LeaderElectionResourceLock = "configmaps"
 	} else {
 		// use the leases leader election by default for controller-runtime 0.11 instead of
 		// the default of configmapsleases (leases is the new default in 0.12)
-		options.LeaderElectionResourceLock = "leases"
-	}
-	// Add support for MultiNamespace set in WATCH_NAMESPACE (e.g ns1,ns2)
-	// Note that this is not intended to be used for excluding namespaces, this is better done via a Predicate
-	// Also note that you may face performance issues when using this with a high number of namespaces.
-	// More Info: https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/cache#MultiNamespacedCacheBuilder
-	if strings.Contains(namespace, ",") {
-		options.Namespace = ""
-		options.NewCache = cache.MultiNamespacedCacheBuilder(strings.Split(namespace, ","))
-	}
-
-	mgr, err := ctrl.NewManager(managedCfg, options)
-	if err != nil {
-		log.Error(err, "unable to start manager")
-		os.Exit(1)
-	}
-
-	if err = (&sync.PolicyReconciler{
-		ClusterNamespaceOnHub: clusterNamespaceOnHub,
-		HubClient:             hubClient,
-		HubRecorder:           hubRecorder,
-		ManagedClient:         mgr.GetClient(),
-		ManagedRecorder:       mgr.GetEventRecorderFor(sync.ControllerName),
-		Scheme:                mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		log.Error(err, "unable to create controller", "controller", "Policy")
-		os.Exit(1)
-	}
-
-	// use config check
-	configChecker, err := addonutils.NewConfigChecker("policy-status-sync", tool.Options.HubConfigFilePathName)
-	if err != nil {
-		log.Error(err, "unable to setup a configChecker")
-		os.Exit(1)
-	}
-
-	//+kubebuilder:scaffold:builder
-	if err := mgr.AddHealthzCheck("healthz", configChecker.Check); err != nil {
-		log.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		log.Error(err, "unable to set up ready check")
-		os.Exit(1)
+		mgrOptionsBase.LeaderElectionResourceLock = "leases"
 	}
 
 	// This lease is not related to leader election. This is to report the status of the controller
@@ -253,21 +191,300 @@ func main() {
 			log.Info("Starting lease controller to report status")
 			generatedClient := kubernetes.NewForConfigOrDie(managedCfg)
 			leaseUpdater := lease.NewLeaseUpdater(
-				generatedClient,
-				"governance-policy-framework",
-				operatorNs,
-				lease.CheckAddonPodFunc(generatedClient.CoreV1(), operatorNs, "app=governance-policy-framework"),
-			).WithHubLeaseConfig(hubCfg, namespace)
+				generatedClient, "governance-policy-framework", operatorNs,
+			).WithHubLeaseConfig(hubCfg, tool.Options.ClusterNamespaceOnHub)
 			go leaseUpdater.Start(ctx)
 		}
 	} else {
 		log.Info("Status reporting is not enabled")
 	}
 
-	log.Info("starting manager")
-
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		log.Error(err, "problem running manager")
+	mgrHealthAddr, err := getFreeLocalAddr()
+	if err != nil {
+		log.Error(err, "Failed to get a free port for the health endpoint")
 		os.Exit(1)
 	}
+
+	mgr := getManager(mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg)
+
+	hubMgrHealthAddr, err := getFreeLocalAddr()
+	if err != nil {
+		log.Error(err, "Failed to get a free port for the health endpoint")
+		os.Exit(1)
+	}
+
+	hubMgr := getHubManager(mgrOptionsBase, hubMgrHealthAddr, hubCfg, managedCfg)
+
+	log.Info("Starting the controller managers")
+
+	mgrCtx := ctrl.SetupSignalHandler()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go startHealthProxy(mgrCtx, &wg, mgrHealthAddr, hubMgrHealthAddr)
+
+	var errorExit bool
+
+	wg.Add(1)
+
+	go func() {
+		if err := mgr.Start(mgrCtx); err != nil {
+			log.Error(err, "problem running manager")
+
+			errorExit = true
+		}
+
+		wg.Done()
+	}()
+
+	wg.Add(1)
+
+	go func() {
+		if err := hubMgr.Start(mgrCtx); err != nil {
+			log.Error(err, "problem running hub manager")
+
+			errorExit = true
+		}
+
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	if errorExit {
+		os.Exit(1)
+	}
+}
+
+// getManager return a controller Manager object that watches on the managed cluster and has the controllers registered.
+func getManager(
+	options manager.Options, healthAddr string, hubCfg *rest.Config, managedCfg *rest.Config,
+) manager.Manager {
+	hubClient, err := client.New(hubCfg, client.Options{Scheme: scheme})
+	if err != nil {
+		log.Error(err, "Failed to generate client to the hub cluster")
+		os.Exit(1)
+	}
+	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(hubCfg)
+
+	eventBroadcaster := record.NewBroadcaster()
+
+	eventBroadcaster.StartRecordingToSink(
+		&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(tool.Options.ClusterNamespaceOnHub)},
+	)
+
+	hubRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: statussync.ControllerName})
+
+	options.LeaderElectionID = "policy-syncer.open-cluster-management.io"
+	options.HealthProbeBindAddress = healthAddr
+
+	mgr, err := ctrl.NewManager(managedCfg, options)
+	if err != nil {
+		log.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
+	if err = (&statussync.PolicyReconciler{
+		ClusterNamespaceOnHub: tool.Options.ClusterNamespaceOnHub,
+		HubClient:             hubClient,
+		HubRecorder:           hubRecorder,
+		ManagedClient:         mgr.GetClient(),
+		ManagedRecorder:       mgr.GetEventRecorderFor(statussync.ControllerName),
+		Scheme:                mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		log.Error(err, "unable to create controller", "controller", "Policy")
+		os.Exit(1)
+	}
+
+	// use config check
+	configChecker, err := addonutils.NewConfigChecker("policy-syncer", tool.Options.HubConfigFilePathName)
+	if err != nil {
+		log.Error(err, "unable to setup a configChecker")
+		os.Exit(1)
+	}
+
+	//+kubebuilder:scaffold:builder
+	if err := mgr.AddHealthzCheck("healthz", configChecker.Check); err != nil {
+		log.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		log.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+
+	return mgr
+}
+
+// getHubManager return a controller Manager object that watches on the Hub and has the controllers registered.
+func getHubManager(
+	options manager.Options, healthAddr string, hubCfg *rest.Config, managedCfg *rest.Config,
+) manager.Manager {
+	managedClient, err := client.New(managedCfg, client.Options{Scheme: scheme})
+	if err != nil {
+		log.Error(err, "Failed to generate client to the managed cluster")
+		os.Exit(1)
+	}
+
+	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(managedCfg)
+
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(
+		&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(tool.Options.ClusterNamespace)},
+	)
+
+	managedRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: specsync.ControllerName})
+
+	// Set a field selector so that a watch on secrets will be limited to just the secret with the policy template
+	// encryption key.
+	newCacheFunc := cache.BuilderWithOptions(
+		cache.Options{
+			SelectorsByObject: cache.SelectorsByObject{
+				&v1.Secret{}: {
+					Field: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+				},
+			},
+		},
+	)
+
+	// Set default manager options
+	options.HealthProbeBindAddress = healthAddr
+	options.LeaderElectionID = "policy-syncer2.open-cluster-management.io"
+	options.NewCache = newCacheFunc
+
+	// Create a new manager to provide shared dependencies and start components
+	mgr, err := ctrl.NewManager(hubCfg, options)
+	if err != nil {
+		log.Error(err, "Failed to start manager")
+		os.Exit(1)
+	}
+
+	// Setup all Controllers
+	if err = (&specsync.PolicyReconciler{
+		HubClient:       mgr.GetClient(),
+		ManagedClient:   managedClient,
+		ManagedRecorder: managedRecorder,
+		Scheme:          mgr.GetScheme(),
+		TargetNamespace: tool.Options.ClusterNamespace,
+	}).SetupWithManager(mgr); err != nil {
+		log.Error(err, "Unable to create the controller", "controller", specsync.ControllerName)
+		os.Exit(1)
+	}
+
+	if err = (&secretsync.SecretReconciler{
+		Client:          mgr.GetClient(),
+		ManagedClient:   managedClient,
+		Scheme:          mgr.GetScheme(),
+		TargetNamespace: tool.Options.ClusterNamespace,
+	}).SetupWithManager(mgr); err != nil {
+		log.Error(err, "Unable to create the controller", "controller", secretsync.ControllerName)
+		os.Exit(1)
+	}
+
+	// use config check
+	configChecker, err := addonutils.NewConfigChecker("policy-syncer2", tool.Options.HubConfigFilePathName)
+	if err != nil {
+		log.Error(err, "unable to setup a configChecker")
+		os.Exit(1)
+	}
+
+	//+kubebuilder:scaffold:builder
+	if err := mgr.AddHealthzCheck("healthz", configChecker.Check); err != nil {
+		log.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		log.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+
+	return mgr
+}
+
+// startHealthProxy responds to /healthz and /readyz HTTP requests and combines the status together of the input
+// addresses representing the managers.
+func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...string) {
+	for _, endpoint := range []string{"/healthz", "/readyz"} {
+		http.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			for _, address := range addresses {
+				req, err := http.NewRequestWithContext(
+					ctx, http.MethodGet, fmt.Sprintf("http://%s%s", address, endpoint), nil,
+				)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("manager: %s", err.Error()), http.StatusInternalServerError)
+
+					return
+				}
+
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("manager: %s", err.Error()), http.StatusInternalServerError)
+
+					return
+				}
+
+				defer func() { resp.Body.Close() }()
+
+				if resp.StatusCode != http.StatusOK {
+					body := []byte{}
+
+					_, err = resp.Body.Read(body)
+					if err != nil {
+						http.Error(w, "not ok", resp.StatusCode)
+
+						return
+					}
+
+					http.Error(w, string(body), resp.StatusCode)
+
+					return
+				}
+			}
+
+			_, err := io.WriteString(w, "ok")
+			if err != nil {
+				http.Error(w, fmt.Sprintf("manager: %s", err.Error()), http.StatusInternalServerError)
+			}
+		})
+	}
+
+	server := &http.Server{Addr: tool.Options.ProbeAddr}
+
+	// Once the context is done, shutdown the server
+	go func() {
+		<-ctx.Done()
+
+		// nolint: contextcheck
+		err := server.Shutdown(context.TODO())
+		if err != nil {
+			log.Error(err, "Failed to shutdown the health endpoints")
+		}
+	}()
+
+	err := server.ListenAndServe()
+	if !errors.Is(err, http.ErrServerClosed) {
+		log.Error(err, "Failed to setup the health endpoints")
+	}
+
+	wg.Done()
+}
+
+// getFreeLocalAddr returns an address on the localhost interface with a random free port assigned.
+func getFreeLocalAddr() (string, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return "", err
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return "", err
+	}
+
+	defer l.Close()
+
+	return fmt.Sprintf("127.0.0.1:%d", l.Addr().(*net.TCPAddr).Port), nil
 }

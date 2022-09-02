@@ -36,11 +36,13 @@ var (
 	clientManaged         kubernetes.Interface
 	clientManagedDynamic  dynamic.Interface
 	gvrPolicy             schema.GroupVersionResource
+	gvrSecret             schema.GroupVersionResource
 	gvrEvent              schema.GroupVersionResource
 	kubeconfigHub         string
 	kubeconfigManaged     string
 	defaultTimeoutSeconds int
 	clusterNamespaceOnHub string
+	clusterNamespace      string
 
 	defaultImageRegistry string
 
@@ -49,7 +51,7 @@ var (
 
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Policy status sync e2e Suite")
+	RunSpecs(t, "Policy Syncer e2e Suite")
 }
 
 var log = ctrl.Log.WithName("test")
@@ -73,6 +75,10 @@ var _ = BeforeSuite(func() {
 		Version:  "v1",
 		Resource: "policies",
 	}
+	gvrSecret = schema.GroupVersionResource{
+		Version:  "v1",
+		Resource: "secrets",
+	}
 	gvrEvent = schema.GroupVersionResource{
 		Group:    "",
 		Version:  "v1",
@@ -87,10 +93,10 @@ var _ = BeforeSuite(func() {
 	defaultTimeoutSeconds = 30
 	By("Create Namespace if needed")
 
-	if os.Getenv("E2E_CLUSTER_NAMESPACE") == "" {
+	if os.Getenv("E2E_CLUSTER_NAMESPACE_ON_HUB") == "" {
 		clusterNamespaceOnHub = testNamespace
 	} else {
-		clusterNamespaceOnHub = os.Getenv("E2E_CLUSTER_NAMESPACE")
+		clusterNamespaceOnHub = os.Getenv("E2E_CLUSTER_NAMESPACE_ON_HUB")
 	}
 
 	namespacesHub := clientHub.CoreV1().Namespaces()
@@ -119,6 +125,21 @@ var _ = BeforeSuite(func() {
 	var err error
 	managedRecorder, err = utils.CreateRecorder(clientManaged, "status-sync-controller-test")
 	Expect(err).To(BeNil())
+
+	if os.Getenv("E2E_CLUSTER_NAMESPACE") != "" {
+		clusterNamespace = os.Getenv("E2E_CLUSTER_NAMESPACE")
+
+		_, err := clientManaged.CoreV1().Namespaces().Create(
+			context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterNamespace}},
+			metav1.CreateOptions{},
+		)
+		if !errors.IsAlreadyExists(err) {
+			Expect(err).Should(BeNil())
+		}
+	} else {
+		clusterNamespace = testNamespace
+	}
 })
 
 func NewKubeClient(url, kubeconfig, context string) kubernetes.Interface {

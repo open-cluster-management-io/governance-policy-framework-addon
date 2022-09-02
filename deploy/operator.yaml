@@ -68,6 +68,23 @@ rules:
   - get
   - list
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resourceNames:
+  - policy-encryption-key
+  resources:
+  - secrets
+  verbs:
+  - delete
+  - get
+  - list
+  - update
+- apiGroups:
   - policy.open-cluster-management.io
   resources:
   - policies
@@ -140,14 +157,13 @@ spec:
       containers:
       - args:
         - --hub-cluster-configfile=/var/run/klusterlet/kubeconfig
+        - --cluster-namespace=managed
         - --enable-lease=true
         - --log-level=2
         - --v=0
         command:
         - governance-policy-syncer
         env:
-        - name: WATCH_NAMESPACE
-          value: managed
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -159,14 +175,14 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8082
+            port: 8080
           initialDelaySeconds: 15
           periodSeconds: 20
         name: governance-policy-syncer
         readinessProbe:
           httpGet:
             path: /readyz
-            port: 8082
+            port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
         securityContext:

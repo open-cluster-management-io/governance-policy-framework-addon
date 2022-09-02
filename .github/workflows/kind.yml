@@ -30,7 +30,7 @@ jobs:
           - 'latest'
     name: KinD tests
     steps:
-    - name: Checkout Governance Policy Status Sync
+    - name: Checkout Governance Policy Syncer
       uses: actions/checkout@v2
       with:
         path: governance-policy-syncer
@@ -75,6 +75,7 @@ jobs:
       run: |
         export GOPATH=$(go env GOPATH)
         export E2E_CLUSTER_NAMESPACE="other-namespace"
+        export E2E_CLUSTER_NAMESPACE_ON_HUB="other-namespace"
         export COVERAGE_E2E_OUT=coverage_e2e_hosted_mode.out
         make e2e-test-coverage
 

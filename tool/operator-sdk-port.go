@@ -19,10 +19,6 @@ const (
 	ForceRunModeEnv             = "OSDK_FORCE_RUN_MODE"
 	LocalRunMode    RunModeType = "local"
 	ClusterRunMode  RunModeType = "cluster"
-	// WatchNamespaceEnvVar is the constant for env variable WATCH_NAMESPACE
-	// which specifies the Namespace to watch.
-	// An empty value means the operator is running with cluster scope.
-	watchNamespaceEnvVar = "WATCH_NAMESPACE"
 )
 
 // ErrNoNamespace indicates that a namespace could not be found for the current
@@ -35,16 +31,6 @@ var ErrRunLocal = fmt.Errorf("operator run mode forced to local")
 
 func isRunModeLocal() bool {
 	return os.Getenv(ForceRunModeEnv) == string(LocalRunMode)
-}
-
-// GetWatchNamespace returns the Namespace the operator should be watching for changes
-func GetWatchNamespace() (string, error) {
-	ns, found := os.LookupEnv(watchNamespaceEnvVar)
-	if !found {
-		return "", fmt.Errorf("%s must be set", watchNamespaceEnvVar)
-	}
-
-	return ns, nil
 }
 
 // GetOperatorNamespace returns the namespace the operator should be running in.

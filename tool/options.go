@@ -11,7 +11,7 @@ import (
 var log = ctrl.Log.WithName("cmd")
 
 // PolicySpecSyncOptions for command line flag parsing
-type PolicySpecSyncOptions struct {
+type SyncerOptions struct {
 	ClusterNamespaceOnHub     string
 	HubConfigFilePathName     string
 	ManagedConfigFilePathName string
@@ -19,20 +19,30 @@ type PolicySpecSyncOptions struct {
 	EnableLeaderElection      bool
 	LegacyLeaderElection      bool
 	ProbeAddr                 string
+	// The namespace that the replicated policies should be synced to. This defaults to the same namespace as on the
+	// Hub.
+	ClusterNamespace string
 }
 
 // Options default value
-var Options = PolicySpecSyncOptions{}
+var Options = SyncerOptions{}
 
 // ProcessFlags parses command line parameters into Options
 func ProcessFlags() {
 	flag := pflag.CommandLine
 
 	flag.StringVar(
-		&Options.ClusterNamespaceOnHub,
+		&Options.ClusterNamespace,
 		"cluster-namespace",
+		Options.ClusterNamespace,
+		"The namespace that the replicated policies should be synced to. This is required.",
+	)
+
+	flag.StringVar(
+		&Options.ClusterNamespaceOnHub,
+		"cluster-namespace-on-hub",
 		Options.ClusterNamespaceOnHub,
-		"The cluster namespace on the Hub. This defaults to the namespace that the controller watches.",
+		"The cluster namespace on the Hub. This defaults to the namespace provided with --cluster-namespace.",
 	)
 
 	flag.StringVar(
@@ -74,7 +84,7 @@ func ProcessFlags() {
 	flag.StringVar(
 		&Options.ProbeAddr,
 		"health-probe-bind-address",
-		":8082",
-		"The address the probe endpoint binds to.",
+		":8080",
+		"The address the first probe endpoint binds to.",
 	)
 }

@@ -4,9 +4,25 @@
 
 ## Description
 
-The governance policy status sync runs on managed clusters, updating `Policy` statuses on both the hub and (local) managed clusters, based on events and changes in the managed cluster. This controller is a part of the [governance-policy-framework](https://github.com/open-cluster-management-io/governance-policy-framework).
+### Secret Sync Controller
 
-This operator watches for the following changes to trigger a reconcile:
+The secret sync controller runs on managed clusters and syncs the `policy-encryption-key` `Secret` from the Hub to the
+managed cluster. This controller requires access to get, create, update, and delete `Secret` objects in
+the managed cluster namespace. Since the managed cluster namespace is not known at build time, the
+configuration in `deploy/operator.yaml` grants this access cluster wide. In a production
+environment, limit this to just the managed cluster namespace.
+
+### Spec Sync Controller
+
+The spec sync controller runs on managed clusters, updating local `Policy` specs to match `Policies` in the cluster's namespace on the hub cluster.
+
+The controller watches for changes to Policies in the cluster's namespace on the hub cluster to trigger a reconcile. Every reconcile creates/updates/deletes replicated policies on the managed cluster to match the spec from the hub cluster.
+
+### Status Sync Controller
+
+The status sync controller runs on managed clusters, updating `Policy` statuses on both the hub and (local) managed clusters, based on events and changes in the managed cluster.
+
+This controller watches for the following changes to trigger a reconcile:
 
 1. policy changes in the watched cluster namespace on the managed cluster
 2. events on policies in the watched cluster namespace on the managed cluster
@@ -45,7 +61,7 @@ make e2e-test
 make kind-delete-cluster
 ```
 
-### Updating operator.yaml
+### deploy/operator.yaml
 
 The `deploy/operator.yaml` file is generated via Kustomize. The `deploy/rbac` directory of
 Kustomize files is managed by the operator-sdk and Kubebuilder using

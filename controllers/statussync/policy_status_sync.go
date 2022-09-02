@@ -1,7 +1,7 @@
 // Copyright (c) 2020 Red Hat, Inc.
 // Copyright Contributors to the Open Cluster Management project
 
-package sync
+package statussync
 
 import (
 	"context"
@@ -42,6 +42,7 @@ func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(eventMapper),
 			builder.WithPredicates(eventPredicateFuncs),
 		).
+		Named(ControllerName).
 		Complete(r)
 }
 

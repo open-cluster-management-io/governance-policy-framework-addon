@@ -23,6 +23,7 @@ spec:
             - governance-policy-syncer
           args:
             - "--hub-cluster-configfile=/var/run/klusterlet/kubeconfig"
+            - --cluster-namespace=managed
             - "--enable-lease=true"
             - "--log-level=2"
             - "--v=0"
@@ -31,26 +32,24 @@ spec:
             - name: klusterlet-config
               mountPath: /var/run/klusterlet
           env:
-            - name: WATCH_NAMESPACE
-              value: managed
             - name: POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: "governance-policy-syncer"
+              value: governance-policy-syncer
           securityContext:
             allowPrivilegeEscalation: false
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8082
+              port: 8080
             initialDelaySeconds: 15
             periodSeconds: 20
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8082
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
       volumes:
