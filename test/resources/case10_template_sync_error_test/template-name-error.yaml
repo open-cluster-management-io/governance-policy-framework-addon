@@ -1,11 +1,11 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: default.case2-template-name-error
+  name: case10-template-name-error
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: default.case2-template-name-error
+    policy.open-cluster-management.io/root-policy: case10-template-name-error
 spec:
   remediationAction: inform
   disabled: false

@@ -1,20 +1,20 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: default.case1-test-policy
+  name: case7-test-policy
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: default.case1-test-policy
+    policy.open-cluster-management.io/root-policy: case7-test-policy
 spec:
   remediationAction: inform
-  disabled: false
+  disabled: true
   policy-templates:
     - objectDefinition:
-        apiVersion: policies.ibm.com/v1alpha1
-        kind: TrustedContainerPolicy
+        apiVersion: xxxxx
+        kind: xxxxxx
         metadata:
-          name: case1-test-policy-trustedcontainerpolicy
+          name: case7-test-policy-configurationpolicy
         spec:
           severity: low
           namespaceSelector:

@@ -1,9 +1,9 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: default.case2-no-spec
+  name: case10-no-spec
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: default.case2-no-spec
+    policy.open-cluster-management.io/root-policy: case10-no-spec
 

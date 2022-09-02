@@ -1,11 +1,11 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: default.case2-template-decode-error
+  name: case10-template-decode-error
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: default.case1-test-policy
+    policy.open-cluster-management.io/root-policy: case1-test-policy
 spec:
   remediationAction: inform
   disabled: false
@@ -14,7 +14,7 @@ spec:
         apiVersion: policy.open-cluster-management.io/v1
         # kind: ConfigurationPolicy # missing kind
         metadata:
-          name: case2-remedation-action-not-exists-configpolicy
+          name: case10-remedation-action-not-exists-configpolicy
         spec:
           object-templates:
             - complianceType: musthave

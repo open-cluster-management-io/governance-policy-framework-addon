@@ -1,11 +1,11 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: default.case2-test-policy-duplicate
+  name: case10-test-policy-duplicate
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: default.case2-test-policy-duplicate
+    policy.open-cluster-management.io/root-policy: case10-test-policy-duplicate
 spec:
   remediationAction: inform
   disabled: false
@@ -14,7 +14,7 @@ spec:
         apiVersion: policy.open-cluster-management.io/v1
         kind: ConfigurationPolicy
         metadata:
-          name: case2-config-policy
+          name: case10-config-policy
         spec:
           remediationAction: inform
           object-templates:

@@ -1,11 +1,11 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: default.case2-bad-hubtemplate
+  name: case10-bad-hubtemplate
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: default.case2-bad-hubtemplate
+    policy.open-cluster-management.io/root-policy: case10-bad-hubtemplate
 spec:
   remediationAction: inform
   disabled: false
@@ -14,6 +14,6 @@ spec:
         apiVersion: policy.open-cluster-management.io/v1
         kind: Policy
         metadata:
-          name: case2-bad-hubtemplate-policy
+          name: case10-bad-hubtemplate-policy
         spec:
           foo: 'I come from {{hub the land down under hub}}'

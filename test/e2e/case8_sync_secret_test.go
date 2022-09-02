@@ -14,25 +14,19 @@ import (
 )
 
 const (
-	case8SecretYAML          = "../resources/case3_sync_secret/secret.yaml"
-	case8UnrelatedSecretYAML = "../resources/case3_sync_secret/unrelated_secret.yaml"
+	case8SecretYAML          = "../resources/case8_sync_secret/secret.yaml"
+	case8UnrelatedSecretYAML = "../resources/case8_sync_secret/unrelated_secret.yaml"
 )
 
 var _ = Describe("Test spec sync", func() {
 	AfterEach(func() {
 		By("Deleting the test secrets on the Hub")
-		_, _ = utils.KubectlWithOutput(
-			"delete", "-f", case8SecretYAML, "-n", testNamespace, "--kubeconfig=../../kubeconfig_hub",
-		)
-		_, _ = utils.KubectlWithOutput(
-			"delete", "-f", case8UnrelatedSecretYAML, "-n", testNamespace, "--kubeconfig=../../kubeconfig_hub",
-		)
+		_, _ = kubectlHub("delete", "-f", case8SecretYAML, "-n", clusterNamespaceOnHub)
+		_, _ = kubectlHub("delete", "-f", case8UnrelatedSecretYAML, "-n", clusterNamespaceOnHub)
 	})
 
 	It("should sync the secret to the managed cluster when created on the hub", func() {
-		_, _ = utils.KubectlWithOutput(
-			"apply", "-f", case8SecretYAML, "-n", testNamespace, "--kubeconfig=../../kubeconfig_hub",
-		)
+		_, _ = kubectlHub("apply", "-f", case8SecretYAML, "-n", clusterNamespaceOnHub)
 		managedSecret := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrSecret,
@@ -45,9 +39,7 @@ var _ = Describe("Test spec sync", func() {
 	})
 
 	It("should not sync the unrelated secret to the managed cluster when created on the hub", func() {
-		_, _ = utils.KubectlWithOutput(
-			"apply", "-f", case8UnrelatedSecretYAML, "-n", testNamespace, "--kubeconfig=../../kubeconfig_hub",
-		)
+		_, _ = kubectlHub("apply", "-f", case8UnrelatedSecretYAML, "-n", clusterNamespaceOnHub)
 		// Sleep 5 seconds to ensure the secret isn't synced.
 		time.Sleep(5 * time.Second)
 		managedSecret := utils.GetWithTimeout(

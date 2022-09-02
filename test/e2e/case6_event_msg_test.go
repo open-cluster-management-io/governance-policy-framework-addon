@@ -13,20 +13,20 @@ import (
 )
 
 const (
-	case6PolicyName string = "default.case6-test-policy"
+	case6PolicyName string = "case6-test-policy"
 	case6PolicyYaml string = "../resources/case6_event_msg/case6-test-policy.yaml"
 )
 
 var _ = Describe("Test event message handling", func() {
 	BeforeEach(func() {
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := utils.KubectlWithOutput(
+		_, err := kubectlHub(
 			"apply",
 			"-f",
 			case6PolicyYaml,
 			"-n",
 			clusterNamespaceOnHub,
-			"--kubeconfig=../../kubeconfig_hub")
+		)
 		Expect(err).Should(BeNil())
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
@@ -36,42 +36,33 @@ var _ = Describe("Test event message handling", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
-		By("Creating a policy on managed cluster in ns:" + clusterNamespaceOnHub)
-		_, err = utils.KubectlWithOutput(
+		By("Creating a policy on the hub in ns:" + clusterNamespaceOnHub)
+		_, err = kubectlHub(
 			"apply",
 			"-f",
 			case6PolicyYaml,
 			"-n",
-			testNamespace,
-			"--kubeconfig=../../kubeconfig_managed")
+			clusterNamespaceOnHub,
+		)
 		Expect(err).Should(BeNil())
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
 			case6PolicyName,
-			testNamespace,
+			clusterNamespace,
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
 	})
 	AfterEach(func() {
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := utils.KubectlWithOutput(
+		_, err := kubectlHub(
 			"delete",
 			"-f",
 			case6PolicyYaml,
 			"-n",
 			clusterNamespaceOnHub,
-			"--kubeconfig=../../kubeconfig_hub")
-		Expect(err).Should(BeNil())
-		_, err = utils.KubectlWithOutput(
-			"delete",
-			"-f",
-			case6PolicyYaml,
-			"-n",
-			testNamespace,
-			"--ignore-not-found",
-			"--kubeconfig=../../kubeconfig_managed")
+		)
 		Expect(err).Should(BeNil())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(
@@ -89,29 +80,29 @@ var _ = Describe("Test event message handling", func() {
 			true,
 			defaultTimeoutSeconds)
 		By("clean up all events")
-		_, err = utils.KubectlWithOutput(
+		_, err = kubectlManaged(
 			"delete",
 			"events",
 			"-n",
-			testNamespace,
+			clusterNamespace,
 			"--all",
-			"--kubeconfig=../../kubeconfig_managed")
+		)
 		Expect(err).Should(BeNil())
 	})
 	It("Should remove `(combined from similar events):` prefix but still noncompliant", func() {
-		By("Generating an event in ns:" + testNamespace + " that contains `(combined from similar events):` prefix")
+		By("Generating an event in ns:" + clusterNamespace + " that contains `(combined from similar events):` prefix")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
 			case6PolicyName,
-			testNamespace,
+			clusterNamespace,
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
 		managedRecorder.Event(
 			managedPlc,
 			"Warning",
-			"policy: managed/case6-test-policy-trustedcontainerpolicy",
+			"policy: managed/case6-test-policy-configurationpolicy",
 			"(combined from similar events): NonCompliant; Violation detected")
 		By("Checking if violation message contains the prefix")
 		var plc *policiesv1.Policy
@@ -120,7 +111,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
@@ -136,7 +127,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
@@ -153,7 +144,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 
@@ -161,19 +152,19 @@ var _ = Describe("Test event message handling", func() {
 		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 	})
 	It("Should remove `(combined from similar events):` prefix but still compliant", func() {
-		By("Generating an event in ns:" + testNamespace + " that contains `(combined from similar events):` prefix")
+		By("Generating an event in ns:" + clusterNamespace + " that contains `(combined from similar events):` prefix")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
 			case6PolicyName,
-			testNamespace,
+			clusterNamespace,
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
 		managedRecorder.Event(
 			managedPlc,
 			"Normal",
-			"policy: managed/case6-test-policy-trustedcontainerpolicy",
+			"policy: managed/case6-test-policy-configurationpolicy",
 			"(combined from similar events): Compliant; no violation detected")
 		By("Checking if violation message contains the prefix")
 		var plc *policiesv1.Policy
@@ -182,7 +173,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
@@ -198,7 +189,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
@@ -215,7 +206,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 
@@ -223,19 +214,19 @@ var _ = Describe("Test event message handling", func() {
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 	})
 	It("Should handle violation msg with just NonCompliant", func() {
-		By("Generating an event in ns:" + testNamespace + " that only contains `NonCompliant`")
+		By("Generating an event in ns:" + clusterNamespace + " that only contains `NonCompliant`")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
 			case6PolicyName,
-			testNamespace,
+			clusterNamespace,
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
 		managedRecorder.Event(
 			managedPlc,
 			"Warning",
-			"policy: managed/case6-test-policy-trustedcontainerpolicy",
+			"policy: managed/case6-test-policy-configurationpolicy",
 			"NonCompliant")
 		By("Checking if violation message is in history")
 		var plc *policiesv1.Policy
@@ -244,7 +235,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
@@ -260,7 +251,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
@@ -277,7 +268,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 
@@ -285,19 +276,19 @@ var _ = Describe("Test event message handling", func() {
 		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 	})
 	It("Should handle violation msg with just Compliant", func() {
-		By("Generating an event in ns:" + testNamespace + " that only contains `Compliant`")
+		By("Generating an event in ns:" + clusterNamespace + " that only contains `Compliant`")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
 			case6PolicyName,
-			testNamespace,
+			clusterNamespace,
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
 		managedRecorder.Event(
 			managedPlc,
 			"Normal",
-			"policy: managed/case6-test-policy-trustedcontainerpolicy",
+			"policy: managed/case6-test-policy-configurationpolicy",
 			"Compliant")
 		By("Checking if violation message is in history")
 		var plc *policiesv1.Policy
@@ -306,7 +297,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
@@ -322,7 +313,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
@@ -339,7 +330,7 @@ var _ = Describe("Test event message handling", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case6PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 

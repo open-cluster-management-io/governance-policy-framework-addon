@@ -14,15 +14,14 @@ import (
 )
 
 const (
-	case1PolicyName string = "default.case1-test-policy"
+	case1PolicyName string = "case1-test-policy"
 	case1PolicyYaml string = "../resources/case1_mutation_recovery/case1-test-policy.yaml"
 )
 
 var _ = Describe("Test mutation recovery", func() {
 	BeforeEach(func() {
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := utils.KubectlWithOutput("apply", "-f", case1PolicyYaml, "-n", clusterNamespaceOnHub,
-			"--kubeconfig=../../kubeconfig_hub")
+		_, err := kubectlHub("apply", "-f", case1PolicyYaml, "-n", clusterNamespaceOnHub)
 		Expect(err).Should(BeNil())
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
@@ -32,33 +31,10 @@ var _ = Describe("Test mutation recovery", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
-		By("Creating a policy on managed cluster in ns:" + testNamespace)
-		_, err = utils.KubectlWithOutput("apply", "-f", case1PolicyYaml, "-n", testNamespace,
-			"--kubeconfig=../../kubeconfig_managed")
-		Expect(err).Should(BeNil())
-		managedPlc := utils.GetWithTimeout(
-			clientManagedDynamic,
-			gvrPolicy,
-			case1PolicyName,
-			testNamespace,
-			true,
-			defaultTimeoutSeconds)
-		Expect(managedPlc).NotTo(BeNil())
 	})
 	AfterEach(func() {
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := utils.KubectlWithOutput("delete", "-f", case1PolicyYaml, "-n", clusterNamespaceOnHub,
-			"--kubeconfig=../../kubeconfig_hub")
-		Expect(err).Should(BeNil())
-		_, err = utils.KubectlWithOutput(
-			"delete",
-			"-f",
-			case1PolicyYaml,
-			"-n",
-			testNamespace,
-			"--ignore-not-found",
-			"--kubeconfig=../../kubeconfig_managed",
-		)
+		_, err := kubectlHub("delete", "-f", case1PolicyYaml, "-n", clusterNamespaceOnHub)
 		Expect(err).Should(BeNil())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
@@ -69,11 +45,11 @@ var _ = Describe("Test mutation recovery", func() {
 		Eventually(
 			func() interface{} {
 				managedPlc := utils.GetWithTimeout(
-					clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds,
+					clientManagedDynamic, gvrPolicy, case1PolicyName, clusterNamespace, true, defaultTimeoutSeconds,
 				)
 				Expect(managedPlc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("inform"))
 				managedPlc.Object["spec"].(map[string]interface{})["remediationAction"] = "enforce"
-				_, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace).Update(
+				_, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(clusterNamespace).Update(
 					context.TODO(), managedPlc, metav1.UpdateOptions{},
 				)
 
@@ -95,7 +71,7 @@ var _ = Describe("Test mutation recovery", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case1PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 
@@ -107,10 +83,10 @@ var _ = Describe("Test mutation recovery", func() {
 		Eventually(
 			func() interface{} {
 				managedPlc := utils.GetWithTimeout(
-					clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds,
+					clientManagedDynamic, gvrPolicy, case1PolicyName, clusterNamespace, true, defaultTimeoutSeconds,
 				)
 				managedPlc.Object["spec"].(map[string]interface{})["policy-templates"] = []*policiesv1.PolicyTemplate{}
-				_, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace).Update(
+				_, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(clusterNamespace).Update(
 					context.TODO(), managedPlc, metav1.UpdateOptions{},
 				)
 
@@ -132,7 +108,7 @@ var _ = Describe("Test mutation recovery", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case1PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 
@@ -141,14 +117,13 @@ var _ = Describe("Test mutation recovery", func() {
 	})
 	It("Should recover policy on managed if being deleted", func() {
 		By("Deleting " + case1PolicyYaml + " on managed with spec.policyTemplate = {}")
-		_, err := utils.KubectlWithOutput(
+		_, err := kubectlManaged(
 			"delete",
 			"-f",
 			case1PolicyYaml,
 			"-n",
-			testNamespace,
+			clusterNamespace,
 			"--ignore-not-found",
-			"--kubeconfig=../../kubeconfig_managed",
 		)
 		Expect(err).Should(BeNil())
 		By("Comparing spec between hub and managed policy")
@@ -164,7 +139,7 @@ var _ = Describe("Test mutation recovery", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case1PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 
@@ -177,14 +152,14 @@ var _ = Describe("Test mutation recovery", func() {
 			clientManagedDynamic,
 			gvrPolicy,
 			case1PolicyName,
-			testNamespace,
+			clusterNamespace,
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
 		managedRecorder.Event(
 			managedPlc,
 			"Normal",
-			"policy: managed/case1-test-policy-trustedcontainerpolicy",
+			"policy: managed/case1-test-policy-configurationpolicy",
 			"Compliant; No violation detected")
 		By("Checking if policy status is compliant")
 		Eventually(func() interface{} {
@@ -192,7 +167,7 @@ var _ = Describe("Test mutation recovery", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case1PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 
@@ -203,10 +178,10 @@ var _ = Describe("Test mutation recovery", func() {
 		Eventually(
 			func() interface{} {
 				managedPlc = utils.GetWithTimeout(
-					clientManagedDynamic, gvrPolicy, case1PolicyName, testNamespace, true, defaultTimeoutSeconds,
+					clientManagedDynamic, gvrPolicy, case1PolicyName, clusterNamespace, true, defaultTimeoutSeconds,
 				)
 				managedPlc.Object["status"].(map[string]interface{})["compliant"] = "NonCompliant"
-				nsPolicy := clientManagedDynamic.Resource(gvrPolicy).Namespace(testNamespace)
+				nsPolicy := clientManagedDynamic.Resource(gvrPolicy).Namespace(clusterNamespace)
 				var err error
 				managedPlc, err = nsPolicy.UpdateStatus(context.TODO(), managedPlc, metav1.UpdateOptions{})
 
@@ -222,15 +197,14 @@ var _ = Describe("Test mutation recovery", func() {
 				clientManagedDynamic,
 				gvrPolicy,
 				case1PolicyName,
-				testNamespace,
+				clusterNamespace,
 				true,
 				defaultTimeoutSeconds)
 
 			return getCompliant(managedPlc)
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("clean up all events")
-		_, err := utils.KubectlWithOutput("delete", "events", "-n", testNamespace, "--all",
-			"--kubeconfig=../../kubeconfig_managed")
+		_, err := kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
 		Expect(err).Should(BeNil())
 	})
 })

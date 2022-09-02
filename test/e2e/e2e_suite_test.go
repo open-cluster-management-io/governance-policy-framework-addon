@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+	propagatorutils "open-cluster-management.io/governance-policy-propagator/test/utils"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -215,4 +216,16 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 	}
 
 	return nil, fmt.Errorf("could not create a valid kubeconfig")
+}
+
+func kubectlHub(args ...string) (string, error) {
+	args = append(args, "--kubeconfig=../../kubeconfig_hub")
+
+	return propagatorutils.KubectlWithOutput(args...)
+}
+
+func kubectlManaged(args ...string) (string, error) {
+	args = append(args, "--kubeconfig=../../kubeconfig_managed")
+
+	return propagatorutils.KubectlWithOutput(args...)
 }

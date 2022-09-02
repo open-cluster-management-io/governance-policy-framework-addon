@@ -1,24 +1,30 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: default.case4-test-policy
+  name: case4-test-policy
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: default.case4-test-policy
+    policy.open-cluster-management.io/root-policy: case4-test-policy
 spec:
   remediationAction: inform
   disabled: false
   policy-templates:
     - objectDefinition:
-        apiVersion: policies.ibm.com/v1alpha1
-        kind: TrustedContainerPolicy
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
         metadata:
-          name: case4-test-policy-trustedcontainerpolicy
+          name: case4-test-policy-configurationpolicy
         spec:
-          severity: low
-          namespaceSelector:
-            include: ["default"]
-            exclude: ["kube-system"]
           remediationAction: inform
-          imageRegistry: quay.io
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: nginx-pod-e2e
+                  namespace: default
+                spec:
+                  containers:
+                    - name: nginx
