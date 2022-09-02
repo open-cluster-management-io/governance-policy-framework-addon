@@ -31,6 +31,12 @@ Every reconcile does the following things:
 
 1. Creates/updates the policy status on the hub and managed cluster in cluster namespace
 
+### Template Sync Controller
+
+The template sync controller runs on managed clusters and updates objects defined in the templates of `Policies` in the cluster namespace.
+
+This controller watches for changes on `Policies` in the cluster namespace on the managed cluster to trigger a reconcile. On each reconcile, it creates/updates/deletes objects defined in the `spec.policy-templates` of those `Policies`.
+
 ## Geting started
 
 Go to the

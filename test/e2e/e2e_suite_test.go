@@ -30,19 +30,20 @@ import (
 )
 
 var (
-	testNamespace         string
-	clientHub             kubernetes.Interface
-	clientHubDynamic      dynamic.Interface
-	clientManaged         kubernetes.Interface
-	clientManagedDynamic  dynamic.Interface
-	gvrPolicy             schema.GroupVersionResource
-	gvrSecret             schema.GroupVersionResource
-	gvrEvent              schema.GroupVersionResource
-	kubeconfigHub         string
-	kubeconfigManaged     string
-	defaultTimeoutSeconds int
-	clusterNamespaceOnHub string
-	clusterNamespace      string
+	testNamespace          string
+	clientHub              kubernetes.Interface
+	clientHubDynamic       dynamic.Interface
+	clientManaged          kubernetes.Interface
+	clientManagedDynamic   dynamic.Interface
+	gvrPolicy              schema.GroupVersionResource
+	gvrSecret              schema.GroupVersionResource
+	gvrEvent               schema.GroupVersionResource
+	gvrConfigurationPolicy schema.GroupVersionResource
+	kubeconfigHub          string
+	kubeconfigManaged      string
+	defaultTimeoutSeconds  int
+	clusterNamespaceOnHub  string
+	clusterNamespace       string
 
 	defaultImageRegistry string
 
@@ -83,6 +84,11 @@ var _ = BeforeSuite(func() {
 		Group:    "",
 		Version:  "v1",
 		Resource: "events",
+	}
+	gvrConfigurationPolicy = schema.GroupVersionResource{
+		Group:    "policy.open-cluster-management.io",
+		Version:  "v1",
+		Resource: "configurationpolicies",
 	}
 	clientHub = NewKubeClient("", kubeconfigHub, "")
 	clientHubDynamic = NewKubeClientDynamic("", kubeconfigHub, "")

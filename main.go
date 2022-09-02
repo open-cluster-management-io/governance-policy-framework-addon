@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/go-logr/zapr"
@@ -45,6 +46,7 @@ import (
 	"open-cluster-management.io/governance-policy-syncer/controllers/secretsync"
 	"open-cluster-management.io/governance-policy-syncer/controllers/specsync"
 	"open-cluster-management.io/governance-policy-syncer/controllers/statussync"
+	"open-cluster-management.io/governance-policy-syncer/controllers/templatesync"
 	"open-cluster-management.io/governance-policy-syncer/tool"
 	"open-cluster-management.io/governance-policy-syncer/version"
 )
@@ -161,6 +163,32 @@ func main() {
 		// Disable the metrics endpoint
 		MetricsBindAddress: "0",
 		Scheme:             scheme,
+		// Override the EventBroadcaster so that the spam filter will not ignore events for the policy but with
+		// different messages if a large amount of events for that policy are sent in a short time.
+		EventBroadcaster: record.NewBroadcasterWithCorrelatorOptions(
+			record.CorrelatorOptions{
+				// This essentially disables event aggregation of the same events but with different messages.
+				MaxIntervalInSeconds: 1,
+				// This is the default spam key function except it adds the reason and message as well.
+				// https://github.com/kubernetes/client-go/blob/v0.23.3/tools/record/events_cache.go#L70-L82
+				SpamKeyFunc: func(event *v1.Event) string {
+					return strings.Join(
+						[]string{
+							event.Source.Component,
+							event.Source.Host,
+							event.InvolvedObject.Kind,
+							event.InvolvedObject.Namespace,
+							event.InvolvedObject.Name,
+							string(event.InvolvedObject.UID),
+							event.InvolvedObject.APIVersion,
+							event.Reason,
+							event.Message,
+						},
+						"",
+					)
+				},
+			},
+		),
 	}
 
 	if tool.Options.LegacyLeaderElection {
@@ -294,6 +322,16 @@ func getManager(
 		Scheme:                mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "unable to create controller", "controller", "Policy")
+		os.Exit(1)
+	}
+
+	if err := (&templatesync.PolicyReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Config:   mgr.GetConfig(),
+		Recorder: mgr.GetEventRecorderFor(templatesync.ControllerName),
+	}).SetupWithManager(mgr); err != nil {
+		log.Error(err, "Unable to create the controller", "controller", templatesync.ControllerName)
 		os.Exit(1)
 	}
 

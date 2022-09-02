@@ -45,6 +45,18 @@ rules:
 - apiGroups:
   - policy.open-cluster-management.io
   resources:
+  - '*'
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy.open-cluster-management.io
+  resources:
   - policies
   verbs:
   - create

@@ -26,6 +26,16 @@ GOARCH = $(shell go env GOARCH)
 GOOS = $(shell go env GOOS)
 TESTARGS_DEFAULT := -v
 export TESTARGS ?= $(TESTARGS_DEFAULT)
+
+# Get the branch of the PR target or Push in Github Action
+ifeq ($(GITHUB_EVENT_NAME), pull_request) # pull request
+	BRANCH := $(GITHUB_BASE_REF)
+else ifeq ($(GITHUB_EVENT_NAME), push) # push
+	BRANCH := $(GITHUB_REF_NAME)
+else # Default to main
+	BRANCH := main
+endif
+
 # Handle KinD configuration
 KIND_NAME ?= test-managed
 KIND_NAMESPACE ?= open-cluster-management-agent-addon
@@ -259,8 +269,9 @@ kind-delete-cluster:
 .PHONY: install-crds
 install-crds:
 	@echo installing crds
-	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/governance-policy-propagator/main/deploy/crds/policy.open-cluster-management.io_policies.yaml --kubeconfig=$(HUB_CONFIG)
-	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/governance-policy-propagator/main/deploy/crds/policy.open-cluster-management.io_policies.yaml --kubeconfig=$(MANAGED_CONFIG)
+	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/governance-policy-propagator/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_policies.yaml --kubeconfig=$(HUB_CONFIG)
+	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/governance-policy-propagator/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_policies.yaml --kubeconfig=$(MANAGED_CONFIG)
+	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/config-policy-controller/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_configurationpolicies.yaml --kubeconfig=$(MANAGED_CONFIG)
 
 .PHONY: install-resources
 install-resources:
