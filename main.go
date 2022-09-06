@@ -387,9 +387,10 @@ func getHubManager(
 		},
 	)
 
-	// Set default manager options
+	// Set the manager options
 	options.HealthProbeBindAddress = healthAddr
 	options.LeaderElectionID = "policy-syncer2.open-cluster-management.io"
+	options.LeaderElectionConfig = managedCfg
 	options.NewCache = newCacheFunc
 
 	// Create a new manager to provide shared dependencies and start components
