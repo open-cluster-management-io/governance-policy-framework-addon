@@ -245,12 +245,22 @@ func main() {
 
 	log.Info("Starting the controller managers")
 
-	mgrCtx := ctrl.SetupSignalHandler()
+	mainCtx := ctrl.SetupSignalHandler()
+	mgrCtx, mgrCtxCancel := context.WithCancel(mainCtx)
+
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 
-	go startHealthProxy(mgrCtx, &wg, mgrHealthAddr, hubMgrHealthAddr)
+	go func() {
+		err := startHealthProxy(mgrCtx, &wg, mgrHealthAddr, hubMgrHealthAddr)
+		if err != nil {
+			log.Error(err, "failed to start the health endpoint proxy")
+
+			// On errors, the parent context (mainCtx) may not have closed, so cancel the child context.
+			mgrCtxCancel()
+		}
+	}()
 
 	var errorExit bool
 
@@ -259,6 +269,9 @@ func main() {
 	go func() {
 		if err := mgr.Start(mgrCtx); err != nil {
 			log.Error(err, "problem running manager")
+
+			// On errors, the parent context (mainCtx) may not have closed, so cancel the child context.
+			mgrCtxCancel()
 
 			errorExit = true
 		}
@@ -271,6 +284,9 @@ func main() {
 	go func() {
 		if err := hubMgr.Start(mgrCtx); err != nil {
 			log.Error(err, "problem running hub manager")
+
+			// On errors, the parent context (mainCtx) may not have closed, so cancel the child context.
+			mgrCtxCancel()
 
 			errorExit = true
 		}
@@ -444,8 +460,11 @@ func getHubManager(
 }
 
 // startHealthProxy responds to /healthz and /readyz HTTP requests and combines the status together of the input
-// addresses representing the managers.
-func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...string) {
+// addresses representing the managers. The HTTP server gracefully shutsdown when the input context is closed.
+// The wg.Done() is only called after the HTTP server fails to start or after graceful shutdown of the HTTP server.
+func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...string) error {
+	log := ctrl.Log.WithName("healthproxy")
+
 	for _, endpoint := range []string{"/healthz", "/readyz"} {
 		http.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 			for _, address := range addresses {
@@ -465,7 +484,7 @@ func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...stri
 					return
 				}
 
-				defer func() { resp.Body.Close() }()
+				defer resp.Body.Close()
 
 				if resp.StatusCode != http.StatusOK {
 					body := []byte{}
@@ -492,23 +511,30 @@ func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...stri
 
 	server := &http.Server{Addr: tool.Options.ProbeAddr}
 
-	// Once the context is done, shutdown the server
+	// Once the input context is done, shutdown the server
 	go func() {
 		<-ctx.Done()
 
+		log.Info("Stopping the health endpoint proxy")
+
+		// Don't pass the already closed context or else the clean up won't happen
 		// nolint: contextcheck
 		err := server.Shutdown(context.TODO())
 		if err != nil {
 			log.Error(err, "Failed to shutdown the health endpoints")
 		}
+
+		wg.Done()
 	}()
 
 	err := server.ListenAndServe()
 	if !errors.Is(err, http.ErrServerClosed) {
-		log.Error(err, "Failed to setup the health endpoints")
+		wg.Done()
+
+		return err
 	}
 
-	wg.Done()
+	return nil
 }
 
 // getFreeLocalAddr returns an address on the localhost interface with a random free port assigned.
