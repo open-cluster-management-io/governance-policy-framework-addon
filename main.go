@@ -43,12 +43,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"open-cluster-management.io/governance-policy-syncer/controllers/secretsync"
-	"open-cluster-management.io/governance-policy-syncer/controllers/specsync"
-	"open-cluster-management.io/governance-policy-syncer/controllers/statussync"
-	"open-cluster-management.io/governance-policy-syncer/controllers/templatesync"
-	"open-cluster-management.io/governance-policy-syncer/tool"
-	"open-cluster-management.io/governance-policy-syncer/version"
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/secretsync"
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/specsync"
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/statussync"
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/templatesync"
+	"open-cluster-management.io/governance-policy-framework-addon/tool"
+	"open-cluster-management.io/governance-policy-framework-addon/version"
 )
 
 var (
@@ -320,7 +320,7 @@ func getManager(
 
 	hubRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: statussync.ControllerName})
 
-	options.LeaderElectionID = "policy-syncer.open-cluster-management.io"
+	options.LeaderElectionID = "governance-policy-framework-addon.open-cluster-management.io"
 	options.HealthProbeBindAddress = healthAddr
 
 	mgr, err := ctrl.NewManager(managedCfg, options)
@@ -352,7 +352,9 @@ func getManager(
 	}
 
 	// use config check
-	configChecker, err := addonutils.NewConfigChecker("policy-syncer", tool.Options.HubConfigFilePathName)
+	configChecker, err := addonutils.NewConfigChecker(
+		"governance-policy-framework-addon", tool.Options.HubConfigFilePathName,
+	)
 	if err != nil {
 		log.Error(err, "unable to setup a configChecker")
 		os.Exit(1)
@@ -405,7 +407,7 @@ func getHubManager(
 
 	// Set the manager options
 	options.HealthProbeBindAddress = healthAddr
-	options.LeaderElectionID = "policy-syncer2.open-cluster-management.io"
+	options.LeaderElectionID = "governance-policy-framework-addon2.open-cluster-management.io"
 	options.LeaderElectionConfig = managedCfg
 	options.NewCache = newCacheFunc
 
@@ -439,7 +441,9 @@ func getHubManager(
 	}
 
 	// use config check
-	configChecker, err := addonutils.NewConfigChecker("policy-syncer2", tool.Options.HubConfigFilePathName)
+	configChecker, err := addonutils.NewConfigChecker(
+		"governance-policy-framework-addon2", tool.Options.HubConfigFilePathName,
+	)
 	if err != nil {
 		log.Error(err, "unable to setup a configChecker")
 		os.Exit(1)

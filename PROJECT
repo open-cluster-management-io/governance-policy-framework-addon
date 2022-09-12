@@ -3,6 +3,6 @@ layout:
   - go.kubebuilder.io/v3
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
-projectName: governance-policy-syncer
-repo: open-cluster-management.io/governance-policy-syncer
+projectName: governance-policy-framework-addon
+repo: open-cluster-management.io/governance-policy-framework-addon
 version: "3"

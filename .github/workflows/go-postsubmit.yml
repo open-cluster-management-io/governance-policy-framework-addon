@@ -10,10 +10,10 @@ on:
 env:
   # Common versions
   GO_REQUIRED_MIN_VERSION: ''
-  GOPATH: '/home/runner/work/governance-policy-syncer/governance-policy-syncer/go'
+  GOPATH: '/home/runner/work/governance-policy-framework-addon/governance-policy-framework-addon/go'
 defaults:
   run:
-    working-directory: go/src/open-cluster-management.io/governance-policy-syncer
+    working-directory: go/src/open-cluster-management.io/governance-policy-framework-addon
 
 jobs:
   verify:
@@ -24,14 +24,14 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
-          path: go/src/open-cluster-management.io/governance-policy-syncer
+          path: go/src/open-cluster-management.io/governance-policy-framework-addon
       - name: install Go
         uses: actions/setup-go@v3
         with:
-          go-version-file: go/src/open-cluster-management.io/governance-policy-syncer/go.mod
+          go-version-file: go/src/open-cluster-management.io/governance-policy-framework-addon/go.mod
       - name: images
         run: make build-images
       - name: push
         run: |
           echo ${{ secrets.DOCKER_PASSWORD }} | docker login quay.io --username ${{ secrets.DOCKER_USER }} --password-stdin
-          docker push quay.io/open-cluster-management/governance-policy-syncer:latest
+          docker push quay.io/open-cluster-management/governance-policy-framework-addon:latest

@@ -13,7 +13,7 @@ on:
 defaults:
   run:
     shell: bash
-    working-directory: governance-policy-syncer
+    working-directory: governance-policy-framework-addon
 
 jobs:
   kind-tests:
@@ -30,16 +30,16 @@ jobs:
           - 'latest'
     name: KinD tests
     steps:
-    - name: Checkout Governance Policy Syncer
+    - name: Checkout Governance Policy Framework Addon
       uses: actions/checkout@v2
       with:
-        path: governance-policy-syncer
+        path: governance-policy-framework-addon
         fetch-depth: 0 # Fetch all history for all tags and branches
 
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version-file: governance-policy-syncer/go.mod
+        go-version-file: governance-policy-framework-addon/go.mod
 
     - name: Verify modules
       run: |

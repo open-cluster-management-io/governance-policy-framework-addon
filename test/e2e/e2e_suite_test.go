@@ -27,7 +27,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"open-cluster-management.io/governance-policy-syncer/test/utils"
+	"open-cluster-management.io/governance-policy-framework-addon/test/utils"
 )
 
 var (
@@ -53,7 +53,7 @@ var (
 
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Policy Syncer e2e Suite")
+	RunSpecs(t, "Governance Policy Framework Addon e2e Suite")
 }
 
 var log = ctrl.Log.WithName("test")

@@ -206,7 +206,7 @@ KUSTOMIZE = $(LOCAL_BIN)/kustomize
 
 .PHONY: manifests
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=governance-policy-syncer paths="./..." output:rbac:artifacts:config=deploy/rbac
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=governance-policy-framework-addon paths="./..." output:rbac:artifacts:config=deploy/rbac
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.

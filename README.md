@@ -1,6 +1,6 @@
 [comment]: # ( Copyright Contributors to the Open Cluster Management project )
 
-# Governance Policy Syncer [![KinD tests](https://github.com/open-cluster-management-io/governance-policy-syncer/actions/workflows/kind.yml/badge.svg?branch=main&event=push)](https://github.com/open-cluster-management-io/governance-policy-syncer/actions/workflows/kind.yml)[![License](https://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
+# Governance Policy Framework Addon [![KinD tests](https://github.com/open-cluster-management-io/governance-policy-framework-addon/actions/workflows/kind.yml/badge.svg?branch=main&event=push)](https://github.com/open-cluster-management-io/governance-policy-framework-addon/actions/workflows/kind.yml)[![License](https://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 
 ## Description
 
@@ -77,7 +77,7 @@ any of the Kustomize files, you may regenerate `deploy/operator.yaml` by running
 
 ## References
 
-- The `governance-policy-syncer` is part of the `open-cluster-management` community. For more information, visit: [open-cluster-management.io](https://open-cluster-management.io).
+- The `governance-policy-framework-addon` is part of the `open-cluster-management` community. For more information, visit: [open-cluster-management.io](https://open-cluster-management.io).
 
 <!---
 Date: 11/16/2021

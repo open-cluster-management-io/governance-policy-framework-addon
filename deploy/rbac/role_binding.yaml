@@ -1,12 +1,12 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: governance-policy-syncer
+  name: governance-policy-framework-addon
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: governance-policy-syncer
+  name: governance-policy-framework-addon
 subjects:
 - kind: ServiceAccount
-  name: governance-policy-syncer
+  name: governance-policy-framework-addon
   namespace: open-cluster-management-agent-addon

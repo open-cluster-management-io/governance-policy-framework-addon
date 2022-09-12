@@ -1,26 +1,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: governance-policy-syncer
+  name: governance-policy-framework-addon
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: governance-policy-syncer
+      name: governance-policy-framework-addon
   template:
     metadata:
       labels:
-        name: governance-policy-syncer
+        name: governance-policy-framework-addon
         app: governance-policy-framework
     spec:
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: governance-policy-syncer
+      serviceAccountName: governance-policy-framework-addon
       containers:
-        - name: governance-policy-syncer
-          image: quay.io/open-cluster-management/governance-policy-syncer:latest
+        - name: governance-policy-framework-addon
+          image: quay.io/open-cluster-management/governance-policy-framework-addon:latest
           command:
-            - governance-policy-syncer
+            - governance-policy-framework-addon
           args:
             - "--hub-cluster-configfile=/var/run/klusterlet/kubeconfig"
             - --cluster-namespace=managed
@@ -37,7 +37,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: governance-policy-syncer
+              value: governance-policy-framework-addon
           securityContext:
             allowPrivilegeEscalation: false
           livenessProbe:

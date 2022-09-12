@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 
-	"open-cluster-management.io/governance-policy-syncer/controllers/secretsync"
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/secretsync"
 )
 
 const (
