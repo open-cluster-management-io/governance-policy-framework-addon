@@ -4,7 +4,6 @@
 package e2e
 
 import (
-	"context"
 	"errors"
 	"os/exec"
 
@@ -55,10 +54,7 @@ var _ = Describe("Test template sync", func() {
 		plc := utils.GetWithTimeout(
 			clientHubDynamic, gvrPolicy, case9PolicyName, clusterNamespaceOnHub, true, defaultTimeoutSeconds,
 		)
-		plc.Object["spec"].(map[string]interface{})["remediationAction"] = "enforce"
-		plc, err := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub).Update(
-			context.TODO(), plc, metav1.UpdateOptions{},
-		)
+		plc, err := patchRemediationAction(clientHubDynamic, plc, "enforce")
 		Expect(err).To(BeNil())
 		Expect(plc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("enforce"))
 		By("Checking template policy remediationAction")
