@@ -317,7 +317,11 @@ var _ = Describe("Test error handling", func() {
 		Expect(err).Should(BeNil())
 
 		By("Checking for the error event")
-		Eventually(checkForEvent("case10-empty-templates", ""), defaultTimeoutSeconds, 1).Should(BeFalse())
+		Eventually(
+			checkForEvent("case10-empty-templates", "Failed to create policy template"),
+			defaultTimeoutSeconds,
+			1,
+		).Should(BeFalse())
 	})
 })
 
