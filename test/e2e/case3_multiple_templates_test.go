@@ -47,6 +47,12 @@ var _ = Describe("Test status sync with multiple templates", func() {
 		Expect(hubPlc).NotTo(BeNil())
 	})
 	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			_, err := utils.KubectlWithOutput("-n", clusterNamespace, "get", "events")
+
+			Expect(err).To(BeNil())
+		}
+
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("delete", "-f", case3PolicyYaml, "-n", clusterNamespaceOnHub)
 		Expect(err).To(BeNil())
