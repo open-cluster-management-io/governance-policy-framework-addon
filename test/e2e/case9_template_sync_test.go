@@ -58,14 +58,12 @@ var _ = Describe("Test template sync", func() {
 		Expect(err).To(BeNil())
 		Expect(plc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("enforce"))
 		By("Checking template policy remediationAction")
-		yamlStr := "../resources/case9_template_sync/case9-config-policy-enforce.yaml"
-		yamlTrustedPlc := utils.ParseYaml(yamlStr)
 		Eventually(func() interface{} {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 				case9ConfigPolicyName, clusterNamespace, true, defaultTimeoutSeconds)
 
-			return trustedPlc.Object["spec"]
-		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
+			return trustedPlc.Object["spec"].(map[string]interface{})["remediationAction"]
+		}, defaultTimeoutSeconds, 1).Should(Equal("enforce"))
 	})
 	It("should still override remediationAction in spec when there is no remediationAction", func() {
 		By("Updating policy with no remediationAction")
@@ -73,14 +71,12 @@ var _ = Describe("Test template sync", func() {
 			"../resources/case9_template_sync/case9-test-policy-no-remediation.yaml", "-n", clusterNamespaceOnHub)
 		Expect(err).Should(BeNil())
 		By("Checking template policy remediationAction")
-		yamlTrustedPlc := utils.ParseYaml(
-			"../resources/case9_template_sync/case9-config-policy-enforce.yaml")
 		Eventually(func() interface{} {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 				case9ConfigPolicyName, clusterNamespace, true, defaultTimeoutSeconds)
 
-			return trustedPlc.Object["spec"]
-		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
+			return trustedPlc.Object["spec"].(map[string]interface{})["remediationAction"]
+		}, defaultTimeoutSeconds, 1).Should(Equal("enforce"))
 	})
 	It("should contains labels from parent policy", func() {
 		By("Checking labels of template policy")
