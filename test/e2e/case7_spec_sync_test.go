@@ -4,8 +4,6 @@
 package e2e
 
 import (
-	"context"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,11 +57,7 @@ var _ = Describe("Test spec sync", func() {
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
 		Expect(hubPlc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("inform"))
-		hubPlc.Object["spec"].(map[string]interface{})["remediationAction"] = "enforce"
-		hubPlc, err := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub).Update(
-			context.TODO(),
-			hubPlc,
-			metav1.UpdateOptions{})
+		hubPlc, err := patchRemediationAction(clientHubDynamic, hubPlc, "enforce")
 		Expect(err).To(BeNil())
 		Eventually(func() interface{} {
 			managedPlc := utils.GetWithTimeout(

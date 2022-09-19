@@ -47,11 +47,7 @@ var _ = Describe("Test mutation recovery", func() {
 				managedPlc := utils.GetWithTimeout(
 					clientManagedDynamic, gvrPolicy, case1PolicyName, clusterNamespace, true, defaultTimeoutSeconds,
 				)
-				Expect(managedPlc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("inform"))
-				managedPlc.Object["spec"].(map[string]interface{})["remediationAction"] = "enforce"
-				_, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(clusterNamespace).Update(
-					context.TODO(), managedPlc, metav1.UpdateOptions{},
-				)
+				_, err := patchRemediationAction(clientManagedDynamic, managedPlc, "enforce")
 
 				return err
 			},

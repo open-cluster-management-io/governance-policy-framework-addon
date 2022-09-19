@@ -17,7 +17,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -228,4 +230,16 @@ func kubectlManaged(args ...string) (string, error) {
 	args = append(args, "--kubeconfig=../../kubeconfig_managed")
 
 	return propagatorutils.KubectlWithOutput(args...)
+}
+
+func patchRemediationAction(
+	client dynamic.Interface, plc *unstructured.Unstructured, remediationAction string,
+) (
+	*unstructured.Unstructured, error,
+) {
+	patch := []byte(`[{"op": "replace", "path": "/spec/remediationAction", "value": "` + remediationAction + `"}]`)
+
+	return client.Resource(gvrPolicy).Namespace(plc.GetNamespace()).Patch(
+		context.TODO(), plc.GetName(), types.JSONPatchType, patch, metav1.PatchOptions{},
+	)
 }
