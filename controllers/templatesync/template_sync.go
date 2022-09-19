@@ -303,6 +303,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			_, err = res.Update(ctx, eObject, metav1.UpdateOptions{})
 			if err != nil {
+				// If the policy template retrieved from the cache has since changed, there will be a conflict error
+				// and the reconcile should be retried since this is recoverable.
+				if errors.IsConflict(err) {
+					return reconcile.Result{}, err
+				}
+
 				resultError = err
 				errMsg := fmt.Sprintf("Failed to update policy template %s: %s", tName, err)
 
