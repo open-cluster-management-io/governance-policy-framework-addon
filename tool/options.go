@@ -15,6 +15,7 @@ type SyncerOptions struct {
 	ClusterNamespaceOnHub     string
 	HubConfigFilePathName     string
 	ManagedConfigFilePathName string
+	DisableSpecSync           bool
 	EnableLease               bool
 	EnableLeaderElection      bool
 	LegacyLeaderElection      bool
@@ -64,6 +65,13 @@ func ProcessFlags() {
 		"enable-lease",
 		false,
 		"If enabled, the controller will start the lease controller to report its status",
+	)
+
+	flag.BoolVar(
+		&Options.DisableSpecSync,
+		"disable-spec-sync",
+		false,
+		"If enabled, the spec-sync controller will not be started. This is used when running on the Hub.",
 	)
 
 	flag.BoolVar(
