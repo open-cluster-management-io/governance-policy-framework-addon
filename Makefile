@@ -238,7 +238,7 @@ kind-bootstrap-cluster-dev: kind-create-cluster install-crds install-resources
 .PHONY: kind-deploy-controller
 kind-deploy-controller:
 	@echo installing $(IMG)
-	kubectl create ns $(KIND_NAMESPACE) --kubeconfig=$(MANAGED_CONFIG)
+	-kubectl create ns $(KIND_NAMESPACE) --kubeconfig=$(MANAGED_CONFIG)
 	kubectl create secret -n $(KIND_NAMESPACE) generic hub-kubeconfig --from-file=kubeconfig=$(HUB_CONFIG_INTERNAL) --kubeconfig=$(MANAGED_CONFIG)
 	kubectl apply -f deploy/operator.yaml -n $(KIND_NAMESPACE) --kubeconfig=$(MANAGED_CONFIG)
 
@@ -276,9 +276,9 @@ install-crds:
 .PHONY: install-resources
 install-resources:
 	@echo creating namespace on hub
-	kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(HUB_CONFIG)
+	-kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(HUB_CONFIG)
 	@echo creating namespace on managed
-	kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(MANAGED_CONFIG)
+	-kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(MANAGED_CONFIG)
 
 .PHONY: e2e-dependencies
 e2e-dependencies:
