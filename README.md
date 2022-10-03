@@ -37,7 +37,7 @@ The template sync controller runs on managed clusters and updates objects define
 
 This controller watches for changes on `Policies` in the cluster namespace on the managed cluster to trigger a reconcile. On each reconcile, it creates/updates/deletes objects defined in the `spec.policy-templates` of those `Policies`.
 
-## Geting started
+## Getting started
 
 Go to the
 [Contributing guide](https://github.com/open-cluster-management-io/community/blob/main/sig-policy/contribution-guidelines.md)
