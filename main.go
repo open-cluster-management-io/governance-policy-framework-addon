@@ -233,15 +233,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	healthAddresses := []string{mgrHealthAddr}
+
 	mgr := getManager(mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg)
 
-	hubMgrHealthAddr, err := getFreeLocalAddr()
-	if err != nil {
-		log.Error(err, "Failed to get a free port for the health endpoint")
-		os.Exit(1)
-	}
+	var hubMgr manager.Manager
 
-	hubMgr := getHubManager(mgrOptionsBase, hubMgrHealthAddr, hubCfg, managedCfg)
+	if !tool.Options.DisableSpecSync {
+		hubMgrHealthAddr, err := getFreeLocalAddr()
+		if err != nil {
+			log.Error(err, "Failed to get a free port for the health endpoint")
+			os.Exit(1)
+		}
+
+		healthAddresses = append(healthAddresses, hubMgrHealthAddr)
+
+		hubMgr = getHubManager(mgrOptionsBase, hubMgrHealthAddr, hubCfg, managedCfg)
+	}
 
 	log.Info("Starting the controller managers")
 
@@ -253,7 +261,7 @@ func main() {
 	wg.Add(1)
 
 	go func() {
-		err := startHealthProxy(mgrCtx, &wg, mgrHealthAddr, hubMgrHealthAddr)
+		err := startHealthProxy(mgrCtx, &wg, healthAddresses...)
 		if err != nil {
 			log.Error(err, "failed to start the health endpoint proxy")
 
@@ -279,20 +287,22 @@ func main() {
 		wg.Done()
 	}()
 
-	wg.Add(1)
+	if !tool.Options.DisableSpecSync {
+		wg.Add(1)
 
-	go func() {
-		if err := hubMgr.Start(mgrCtx); err != nil {
-			log.Error(err, "problem running hub manager")
+		go func() {
+			if err := hubMgr.Start(mgrCtx); err != nil {
+				log.Error(err, "problem running hub manager")
 
-			// On errors, the parent context (mainCtx) may not have closed, so cancel the child context.
-			mgrCtxCancel()
+				// On errors, the parent context (mainCtx) may not have closed, so cancel the child context.
+				mgrCtxCancel()
 
-			errorExit = true
-		}
+				errorExit = true
+			}
 
-		wg.Done()
-	}()
+			wg.Done()
+		}()
+	}
 
 	wg.Wait()
 
