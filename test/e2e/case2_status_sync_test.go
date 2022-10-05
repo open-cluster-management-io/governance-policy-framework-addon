@@ -96,18 +96,10 @@ var _ = Describe("Test status sync", func() {
 			"Warning",
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"NonCompliant; there is violation")
-		By("Checking if policy status is noncompliant")
-		Eventually(func() interface{} {
-			managedPlc := utils.GetWithTimeout(
-				clientManagedDynamic,
-				gvrPolicy,
-				case2PolicyName,
-				clusterNamespace,
-				true,
-				defaultTimeoutSeconds)
 
-			return getCompliant(managedPlc)
-		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		By("Checking if policy status is noncompliant")
+		Eventually(checkCompliance(case2PolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+
 		By("Checking if policy history is correct")
 		managedPlc = utils.GetWithTimeout(
 			clientManagedDynamic,
@@ -150,18 +142,10 @@ var _ = Describe("Test status sync", func() {
 			"Normal",
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"Compliant; No violation detected")
-		By("Checking if policy status is compliant")
-		Eventually(func() interface{} {
-			managedPlc := utils.GetWithTimeout(
-				clientManagedDynamic,
-				gvrPolicy,
-				case2PolicyName,
-				clusterNamespace,
-				true,
-				defaultTimeoutSeconds)
 
-			return getCompliant(managedPlc)
-		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		By("Checking if policy status is compliant")
+		Eventually(checkCompliance(case2PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+
 		By("Checking if policy history is correct")
 		managedPlc = utils.GetWithTimeout(
 			clientManagedDynamic,
