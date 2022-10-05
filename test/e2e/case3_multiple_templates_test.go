@@ -494,17 +494,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			"policy: managed/case3-test-policy-configurationpolicy2",
 			"Compliant; there is no violation")
 		By("Checking if policy overall status is compliant")
-		Eventually(func() interface{} {
-			managedPlc = utils.GetWithTimeout(
-				clientManagedDynamic,
-				gvrPolicy,
-				case3PolicyName,
-				clusterNamespace,
-				true,
-				defaultTimeoutSeconds)
-
-			return getCompliant(managedPlc)
-		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(case3PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("Patching policy template to remove template: case3-test-policy-configurationpolicy2")
 		_, err := kubectlHub(
 			"apply",

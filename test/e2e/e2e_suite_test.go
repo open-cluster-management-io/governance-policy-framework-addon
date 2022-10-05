@@ -243,3 +243,26 @@ func patchRemediationAction(
 		context.TODO(), plc.GetName(), types.JSONPatchType, patch, metav1.PatchOptions{},
 	)
 }
+
+func checkCompliance(name string) func() string {
+	return func() string {
+		getter := clientManagedDynamic.Resource(gvrPolicy).Namespace(clusterNamespace)
+
+		policy, err := getter.Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return "policy not found"
+		}
+
+		status, statusOk := policy.Object["status"].(map[string]interface{})
+		if !statusOk {
+			return "policy has no status"
+		}
+
+		compliant, compliantOk := status["compliant"].(string)
+		if !compliantOk {
+			return "policy status has no complianceState"
+		}
+
+		return compliant
+	}
+}
