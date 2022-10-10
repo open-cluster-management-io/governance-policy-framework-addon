@@ -332,6 +332,7 @@ func getManager(
 
 	options.LeaderElectionID = "governance-policy-framework-addon.open-cluster-management.io"
 	options.HealthProbeBindAddress = healthAddr
+	options.Namespace = tool.Options.ClusterNamespace
 
 	mgr, err := ctrl.NewManager(managedCfg, options)
 	if err != nil {
@@ -419,6 +420,7 @@ func getHubManager(
 	options.HealthProbeBindAddress = healthAddr
 	options.LeaderElectionID = "governance-policy-framework-addon2.open-cluster-management.io"
 	options.LeaderElectionConfig = managedCfg
+	options.Namespace = tool.Options.ClusterNamespaceOnHub
 	options.NewCache = newCacheFunc
 
 	// Create a new manager to provide shared dependencies and start components
