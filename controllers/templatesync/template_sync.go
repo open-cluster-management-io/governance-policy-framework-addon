@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -26,8 +27,10 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const (
@@ -40,12 +43,13 @@ var log = ctrl.Log.WithName(ControllerName)
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=*,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+// Setup sets up the controller
+func (r *PolicyReconciler) Setup(mgr ctrl.Manager, depEvents *source.Channel) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(ControllerName).
 		For(&policiesv1.Policy{}).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Watches(depEvents, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -57,9 +61,10 @@ type PolicyReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client.Client
-	Scheme   *runtime.Scheme
-	Config   *rest.Config
-	Recorder record.EventRecorder
+	DynamicWatcher depclient.DynamicWatcher
+	Scheme         *runtime.Scheme
+	Config         *rest.Config
+	Recorder       record.EventRecorder
 }
 
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
@@ -121,6 +126,19 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, nil
 	}
 
+	allDeps := make(map[depclient.ObjectIdentifier]bool)
+
+	for _, dep := range instance.Spec.Dependencies {
+		depID := depclient.ObjectIdentifier{
+			Group:     dep.GroupVersionKind().Group,
+			Version:   dep.GroupVersionKind().Version,
+			Kind:      dep.GroupVersionKind().Kind,
+			Namespace: dep.Namespace,
+			Name:      dep.Name,
+		}
+		allDeps[depID] = true
+	}
+
 	// Do not exit early from the loop - store an error to return later and `continue`. Be careful
 	// not to overwrite the error in a way that it becomes nil, which would prevent a requeue.
 	// As a quirk of the error handling, only the last occurring error is "returned" by Reconcile.
@@ -129,6 +147,17 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	// PolicyTemplates is not empty
 	// loop through policy templates
 	for tIndex, policyT := range instance.Spec.PolicyTemplates {
+		for _, dep := range policyT.ExtraDependencies {
+			depID := depclient.ObjectIdentifier{
+				Group:     dep.GroupVersionKind().Group,
+				Version:   dep.GroupVersionKind().Version,
+				Kind:      dep.GroupVersionKind().Kind,
+				Namespace: dep.Namespace,
+				Name:      dep.Name,
+			}
+			allDeps[depID] = true
+		}
+
 		object, gvk, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
 			resultError = err
@@ -336,6 +365,23 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			tLogger.Info("Existing object matches the policy template")
 		}
+	}
+
+	depsToWatch := make([]depclient.ObjectIdentifier, 0, len(allDeps))
+	for depID := range allDeps {
+		depsToWatch = append(depsToWatch, depID)
+	}
+
+	err = r.DynamicWatcher.AddOrUpdateWatcher(depclient.ObjectIdentifier{
+		Group:     instance.GroupVersionKind().Group,
+		Version:   instance.GroupVersionKind().Version,
+		Kind:      instance.GroupVersionKind().Kind,
+		Namespace: instance.Namespace,
+		Name:      instance.Name,
+	}, depsToWatch...)
+	if err != nil {
+		resultError = err
+		reqLogger.Error(resultError, "Error updating dependency watcher")
 	}
 
 	reqLogger.Info("Completed the reconciliation")

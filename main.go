@@ -19,6 +19,7 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/spf13/pflag"
 	"github.com/stolostron/go-log-utils/zaputil"
+	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 
 	// to ensure that exec-entrypoint and run can make use of them.
 	v1 "k8s.io/api/core/v1"
@@ -235,7 +236,10 @@ func main() {
 
 	healthAddresses := []string{mgrHealthAddr}
 
-	mgr := getManager(mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg)
+	mainCtx := ctrl.SetupSignalHandler()
+	mgrCtx, mgrCtxCancel := context.WithCancel(mainCtx)
+
+	mgr := getManager(mgrCtx, mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg)
 
 	var hubMgr manager.Manager
 
@@ -252,9 +256,6 @@ func main() {
 	}
 
 	log.Info("Starting the controller managers")
-
-	mainCtx := ctrl.SetupSignalHandler()
-	mgrCtx, mgrCtxCancel := context.WithCancel(mainCtx)
 
 	var wg sync.WaitGroup
 
@@ -313,7 +314,7 @@ func main() {
 
 // getManager return a controller Manager object that watches on the managed cluster and has the controllers registered.
 func getManager(
-	options manager.Options, healthAddr string, hubCfg *rest.Config, managedCfg *rest.Config,
+	mgrCtx context.Context, options manager.Options, healthAddr string, hubCfg *rest.Config, managedCfg *rest.Config,
 ) manager.Manager {
 	hubClient, err := client.New(hubCfg, client.Options{Scheme: scheme})
 	if err != nil {
@@ -352,12 +353,33 @@ func getManager(
 		os.Exit(1)
 	}
 
-	if err := (&templatesync.PolicyReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Config:   mgr.GetConfig(),
-		Recorder: mgr.GetEventRecorderFor(templatesync.ControllerName),
-	}).SetupWithManager(mgr); err != nil {
+	depReconciler, depEvents := depclient.NewControllerRuntimeSource()
+
+	watcher, err := depclient.New(managedCfg, depReconciler, nil)
+	if err != nil {
+		log.Error(err, "Unable to create dependency watcher")
+		os.Exit(1)
+	}
+
+	templateReconciler := &templatesync.PolicyReconciler{
+		Client:         mgr.GetClient(),
+		DynamicWatcher: watcher,
+		Scheme:         mgr.GetScheme(),
+		Config:         mgr.GetConfig(),
+		Recorder:       mgr.GetEventRecorderFor(templatesync.ControllerName),
+	}
+
+	go func() {
+		err := watcher.Start(mgrCtx)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	// Wait until the dynamic watcher has started.
+	<-watcher.Started()
+
+	if err := templateReconciler.Setup(mgr, depEvents); err != nil {
 		log.Error(err, "Unable to create the controller", "controller", templatesync.ControllerName)
 		os.Exit(1)
 	}
