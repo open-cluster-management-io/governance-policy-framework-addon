@@ -22,6 +22,7 @@ import (
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 
 	// to ensure that exec-entrypoint and run can make use of them.
+	kyvernov1 "github.com/kyverno/kyverno/api/kyverno/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
@@ -43,7 +44,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	wgpolicyk8s "sigs.k8s.io/wg-policy-prototypes/policy-report/pkg/api/wgpolicyk8s.io/v1alpha2"
 
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/clusterpolicyreport"
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/kyvernoclusterpolicy"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/secretsync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/specsync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/statussync"
@@ -71,6 +75,10 @@ func printVersion() {
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1.AddToScheme(eventsScheme))
+	// TODO: Make this optional
+	utilruntime.Must(wgpolicyk8s.AddToScheme(scheme))
+	// TODO: This adds a lot of dependencies. Is there a better alternative?
+	utilruntime.Must(kyvernov1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 	utilruntime.Must(policiesv1.AddToScheme(scheme))
 	utilruntime.Must(policiesv1.AddToScheme(eventsScheme))
@@ -381,6 +389,36 @@ func getManager(
 
 	if err := templateReconciler.Setup(mgr, depEvents); err != nil {
 		log.Error(err, "Unable to create the controller", "controller", templatesync.ControllerName)
+		os.Exit(1)
+	}
+
+	// TODO: Make this controller optional based on if Kyverno is installed
+	clientset := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+	instanceName, _ := os.Hostname() // on an error, instanceName will be empty, which is ok
+
+	if err := (&clusterpolicyreport.ClusterPolicyReportReconciler{
+		Client:           mgr.GetClient(),
+		ClientSet:        clientset,
+		ClusterNamespace: tool.Options.ClusterNamespace,
+		InstanceName:     instanceName,
+		Scheme:           mgr.GetScheme(),
+		Recorder:         mgr.GetEventRecorderFor(templatesync.ControllerName),
+		ControllerName:   clusterpolicyreport.ControllerName,
+	}).SetupWithManager(mgr); err != nil {
+		log.Error(err, "Unable to create the controller", "controller", clusterpolicyreport.ControllerName)
+		os.Exit(1)
+	}
+
+	if err := (&kyvernoclusterpolicy.ClusterPolicyReconciler{
+		Client:           mgr.GetClient(),
+		ClientSet:        clientset,
+		ClusterNamespace: tool.Options.ClusterNamespace,
+		InstanceName:     instanceName,
+		Scheme:           mgr.GetScheme(),
+		Recorder:         mgr.GetEventRecorderFor(templatesync.ControllerName),
+		ControllerName:   clusterpolicyreport.ControllerName,
+	}).SetupWithManager(mgr); err != nil {
+		log.Error(err, "Unable to create the controller", "controller", kyvernoclusterpolicy.ControllerName)
 		os.Exit(1)
 	}
 

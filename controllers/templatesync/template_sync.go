@@ -67,6 +67,8 @@ type PolicyReconciler struct {
 	Recorder       record.EventRecorder
 }
 
+// TODO: Handle deleting ClusterPolicy when Policy is updated?
+
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
 // and what is in the Policy.Spec
 // Note:
@@ -221,8 +223,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			}
 		}
 
-		// fetch resource
-		res := dClient.Resource(rsrc).Namespace(instance.GetNamespace())
 		tObjectUnstructured := &unstructured.Unstructured{}
 		err = json.Unmarshal(policyT.ObjectDefinition.Raw, tObjectUnstructured)
 
@@ -234,6 +234,15 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			tLogger.Error(resultError, "Failed to unmarshal the policy template")
 
 			continue
+		}
+
+		// fetch resource
+		var res dynamic.ResourceInterface = dClient.Resource(rsrc)
+		namespace := ""
+
+		if isTemplateNamespaced(rsrc) {
+			namespace = instance.GetNamespace()
+			res = res.(dynamic.NamespaceableResourceInterface).Namespace(namespace)
 		}
 
 		eObject, err := res.Get(ctx, tName, metav1.GetOptions{})
@@ -264,7 +273,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				tObjectUnstructured.SetLabels(labels)
 				tObjectUnstructured.SetOwnerReferences([]metav1.OwnerReference{plcOwnerReferences})
 
-				overrideRemediationAction(instance, tObjectUnstructured)
+				if isTemplateNative(rsrc) {
+					overrideRemediationAction(instance, tObjectUnstructured)
+				}
 
 				_, err = res.Create(ctx, tObjectUnstructured, metav1.CreateOptions{})
 				if err != nil {
@@ -280,7 +291,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				successMsg := fmt.Sprintf("Policy template %s created successfully", tName)
 				tLogger.Info("Policy template created successfully", "PolicyTemplateName", tName)
 
-				err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res)
+				err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res, rsrc)
 				if err != nil {
 					resultError = err
 					tLogger.Error(resultError, "Error after creating template (will requeue)")
@@ -318,7 +329,10 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
-		overrideRemediationAction(instance, tObjectUnstructured)
+		if isTemplateNative(rsrc) {
+			overrideRemediationAction(instance, tObjectUnstructured)
+		}
+
 		// got object, need to compare both spec and annotation and update
 		eObjectUnstructured := eObject.UnstructuredContent()
 		if (!equality.Semantic.DeepEqual(eObjectUnstructured["spec"], tObjectUnstructured.Object["spec"])) ||
@@ -349,7 +363,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			successMsg := fmt.Sprintf("Policy template %s was updated successfully", tName)
 
-			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res)
+			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res, rsrc)
 			if err != nil {
 				resultError = err
 				tLogger.Error(resultError, "Error after updating template (will requeue)")
@@ -357,7 +371,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			tLogger.Info("Existing object has been updated")
 		} else {
-			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, "", res)
+			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, "", res, rsrc)
 			if err != nil {
 				resultError = err
 				tLogger.Error(resultError, "Error after confirming template matches (will requeue)")
@@ -438,9 +452,14 @@ func (r *PolicyReconciler) handleSyncSuccess(
 	tName string,
 	msg string,
 	resInt dynamic.ResourceInterface,
+	gvr schema.GroupVersionResource,
 ) error {
 	if msg != "" {
 		r.Recorder.Event(pol, "Normal", "PolicyTemplateSync", msg)
+	}
+
+	if !isTemplateNative(gvr) {
+		return nil
 	}
 
 	// Only do additional steps if a template-error is the most recent status
@@ -475,4 +494,12 @@ func getLatestStatusMessage(pol *policiesv1.Policy, tIndex int) string {
 	}
 
 	return tmplDetails.History[0].Message
+}
+
+func isTemplateNamespaced(gvr schema.GroupVersionResource) bool {
+	return !(gvr.Group == "kyverno.io" && gvr.Resource == "clusterpolicies")
+}
+
+func isTemplateNative(gvr schema.GroupVersionResource) bool {
+	return gvr.Group == "policy.open-cluster-management.io"
 }
