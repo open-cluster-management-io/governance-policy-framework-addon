@@ -367,18 +367,25 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 	}
 
-	depsToWatch := make([]depclient.ObjectIdentifier, 0, len(allDeps))
-	for depID := range allDeps {
-		depsToWatch = append(depsToWatch, depID)
-	}
-
-	err = r.DynamicWatcher.AddOrUpdateWatcher(depclient.ObjectIdentifier{
+	policyObjectID := depclient.ObjectIdentifier{
 		Group:     instance.GroupVersionKind().Group,
 		Version:   instance.GroupVersionKind().Version,
 		Kind:      instance.GroupVersionKind().Kind,
 		Namespace: instance.Namespace,
 		Name:      instance.Name,
-	}, depsToWatch...)
+	}
+
+	if len(allDeps) != 0 {
+		depsToWatch := make([]depclient.ObjectIdentifier, 0, len(allDeps))
+		for depID := range allDeps {
+			depsToWatch = append(depsToWatch, depID)
+		}
+
+		err = r.DynamicWatcher.AddOrUpdateWatcher(policyObjectID, depsToWatch...)
+	} else {
+		err = r.DynamicWatcher.RemoveWatcher(policyObjectID)
+	}
+
 	if err != nil {
 		resultError = err
 		reqLogger.Error(resultError, "Error updating dependency watcher")
