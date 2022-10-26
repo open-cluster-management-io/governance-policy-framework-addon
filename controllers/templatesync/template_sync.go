@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-logr/logr"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -61,10 +62,11 @@ type PolicyReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client.Client
-	DynamicWatcher depclient.DynamicWatcher
-	Scheme         *runtime.Scheme
-	Config         *rest.Config
-	Recorder       record.EventRecorder
+	DynamicWatcher   depclient.DynamicWatcher
+	Scheme           *runtime.Scheme
+	Config           *rest.Config
+	Recorder         record.EventRecorder
+	ClusterNamespace string
 }
 
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
@@ -126,7 +128,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, nil
 	}
 
-	allDeps := make(map[depclient.ObjectIdentifier]bool)
+	allDeps := make(map[depclient.ObjectIdentifier]string)
+	topLevelDeps := make(map[depclient.ObjectIdentifier]string)
 
 	for _, dep := range instance.Spec.Dependencies {
 		depID := depclient.ObjectIdentifier{
@@ -136,7 +139,18 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			Namespace: dep.Namespace,
 			Name:      dep.Name,
 		}
-		allDeps[depID] = true
+
+		existingDep, ok := topLevelDeps[depID]
+		if ok && existingDep != dep.Compliance {
+			err := fmt.Errorf("dependency on %s has conflicting compliance states", dep.Name)
+
+			reqLogger.Error(err, "Failed to decode the policy dependencies", "policy", instance.GetName())
+
+			continue
+		}
+
+		allDeps[depID] = dep.Compliance
+		topLevelDeps[depID] = dep.Compliance
 	}
 
 	// Do not exit early from the loop - store an error to return later and `continue`. Be careful
@@ -147,6 +161,14 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	// PolicyTemplates is not empty
 	// loop through policy templates
 	for tIndex, policyT := range instance.Spec.PolicyTemplates {
+		depConflictErr := false
+
+		// use copy of dependencies scoped only to this template
+		templateDeps := make(map[depclient.ObjectIdentifier]string)
+		for k, v := range topLevelDeps {
+			templateDeps[k] = v
+		}
+
 		for _, dep := range policyT.ExtraDependencies {
 			depID := depclient.ObjectIdentifier{
 				Group:     dep.GroupVersionKind().Group,
@@ -155,7 +177,28 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				Namespace: dep.Namespace,
 				Name:      dep.Name,
 			}
-			allDeps[depID] = true
+
+			existingDep, ok := templateDeps[depID]
+			if ok && existingDep != dep.Compliance {
+				// dependency conflict, fire error
+				resultError = fmt.Errorf("dependency on %s has conflicting compliance states", dep.Name)
+				errMsg := fmt.Sprintf("Failed to decode policy template with err: %s", err)
+
+				r.emitTemplateError(instance, tIndex, fmt.Sprintf("[template %v]", tIndex), errMsg)
+				reqLogger.Error(resultError, "Failed to decode the policy template", "templateIndex", tIndex)
+
+				depConflictErr = true
+
+				break
+			}
+
+			allDeps[depID] = dep.Compliance
+			templateDeps[depID] = dep.Compliance
+		}
+
+		// skip template if dependencies ask for conflicting compliances
+		if depConflictErr {
+			continue
 		}
 
 		object, gvk, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
@@ -221,6 +264,18 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			}
 		}
 
+		dependencyFailures, depMappingErr := r.processDependencies(ctx, dClient, rMapper, templateDeps, tLogger)
+
+		// skip template if there is a dependency mapping error
+		if depMappingErr != nil {
+			resultError = err
+			errMsg := fmt.Sprintf("Mapping not found, please check if you have CRD deployed: %s", err)
+
+			r.emitTemplateError(instance, tIndex, tName, errMsg)
+
+			continue
+		}
+
 		// fetch resource
 		res := dClient.Resource(rsrc).Namespace(instance.GetNamespace())
 		tObjectUnstructured := &unstructured.Unstructured{}
@@ -238,6 +293,21 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		eObject, err := res.Get(ctx, tName, metav1.GetOptions{})
 		if err != nil {
+			if len(dependencyFailures) > 0 {
+				// template must be pending, do not create it
+				pendingErr := generatePendingErr(dependencyFailures)
+				resultError = pendingErr
+				errMsg := fmt.Sprintf("Dependencies were not satisfied: %s", pendingErr)
+
+				r.emitTemplatePending(instance, tIndex, tName, errMsg)
+				tLogger.Info("Dependencies were not satisfied for the policy template",
+					"namespace", instance.GetNamespace(),
+					"kind", gvk.Kind,
+				)
+
+				continue
+			}
+
 			if errors.IsNotFound(err) {
 				// not found should create it
 				plcOwnerReferences := *metav1.NewControllerRef(instance, schema.GroupVersionKind{
@@ -300,6 +370,29 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				continue
 			}
+		}
+
+		if len(dependencyFailures) > 0 {
+			// template must be pending, need to delete it and error
+			pendingErr := generatePendingErr(dependencyFailures)
+			resultError = pendingErr
+			errMsg := fmt.Sprintf("Dependencies were not satisfied: %s", pendingErr)
+
+			r.emitTemplatePending(instance, tIndex, tName, errMsg)
+			tLogger.Info("Dependencies were not satisfied in the policy template",
+				"namespace", instance.GetNamespace(),
+				"kind", gvk.Kind,
+			)
+
+			err = res.Delete(ctx, tName, metav1.DeleteOptions{})
+			if err != nil {
+				tLogger.Error(err, "Failed to delete a template that entered pending state",
+					"namespace", instance.GetNamespace(),
+					"name", tName,
+				)
+			}
+
+			continue
 		}
 
 		refName := eObject.GetOwnerReferences()[0].Name
@@ -396,6 +489,82 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	return reconcile.Result{}, resultError
 }
 
+// processDependencies iterates through all dependencies of a template and returns an array of any that are not met
+func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dynamic.Interface, rMapper meta.RESTMapper,
+	templateDeps map[depclient.ObjectIdentifier]string, tLogger logr.Logger,
+) ([]depclient.ObjectIdentifier, error) {
+	var dependencyFailures []depclient.ObjectIdentifier
+
+	for dep := range templateDeps {
+		depGvk := schema.GroupVersionKind{
+			Group:   dep.Group,
+			Version: dep.Version,
+			Kind:    dep.Kind,
+		}
+
+		var rsrc schema.GroupVersionResource
+
+		depMapping, err := rMapper.RESTMapping(depGvk.GroupKind(), depGvk.Version)
+
+		if depMapping != nil {
+			rsrc = depMapping.Resource
+		} else {
+			tLogger.Error(err, "Could not find an API mapping for the dependency",
+				"group", depGvk.Group,
+				"version", depGvk.Version,
+				"kind", depGvk.Kind,
+			)
+
+			return nil, err
+		}
+
+		// set up namespace for replicated policy dependencies
+		ns := dep.Namespace
+		if ns == "" {
+			ns = r.ClusterNamespace
+		}
+
+		// query object and compare compliance status to desired
+		res := dClient.Resource(rsrc).Namespace(ns)
+
+		depObj, err := res.Get(ctx, dep.Name, metav1.GetOptions{})
+		if err != nil {
+			tLogger.Info("Failed to get dependency object", "object", depGvk)
+
+			dependencyFailures = append(dependencyFailures, dep)
+		} else {
+			depCompliance, found, err := unstructured.NestedString(depObj.Object, "status", "compliant")
+			if err != nil || !found {
+				tLogger.Info("Failed to get compliance for dependency object", "object", depGvk)
+
+				dependencyFailures = append(dependencyFailures, dep)
+			} else if depCompliance != templateDeps[dep] {
+				tLogger.Info("Compliance mismatch for dependency object", "object", depGvk)
+
+				dependencyFailures = append(dependencyFailures, dep)
+			}
+		}
+	}
+
+	return dependencyFailures, nil
+}
+
+// generatePendingErr formats the list of failed dependencies into a readable error
+func generatePendingErr(dependencyFailures []depclient.ObjectIdentifier) error {
+	names := make([]string, len(dependencyFailures))
+	for i, dep := range dependencyFailures {
+		names[i] = dep.Name
+	}
+
+	nameStr := strings.Join(names, ", ")
+
+	return fmt.Errorf(
+		"%d dependencies are still pending (%s)",
+		len(dependencyFailures),
+		nameStr,
+	)
+}
+
 func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured *unstructured.Unstructured) {
 	// override RemediationAction only when it is set on parent
 	if instance.Spec.RemediationAction != "" {
@@ -420,6 +589,23 @@ func (r *PolicyReconciler) emitTemplateError(pol *policiesv1.Policy, tIndex int,
 	// emit the non-compliance event
 	policyComplianceReason := fmt.Sprintf(policyFmtStr, pol.GetNamespace(), tName)
 	r.Recorder.Event(pol, "Warning", policyComplianceReason, "NonCompliant; template-error; "+errMsg)
+
+	// emit an informational event
+	r.Recorder.Event(pol, "Warning", "PolicyTemplateSync", errMsg)
+}
+
+// emitTemplatePending performs actions that ensure correct reporting of dependency errors in the
+// policy framework. If the policy's status already reflects the current error, then no actions
+// are taken.
+func (r *PolicyReconciler) emitTemplatePending(pol *policiesv1.Policy, tIndex int, tName, errMsg string) {
+	// check if the error is already present in the policy status - if so, return early
+	if strings.Contains(getLatestStatusMessage(pol, tIndex), errMsg) {
+		return
+	}
+
+	// emit the non-compliance event
+	policyComplianceReason := fmt.Sprintf(policyFmtStr, pol.GetNamespace(), tName)
+	r.Recorder.Event(pol, "Warning", policyComplianceReason, "Pending; template-error; "+errMsg)
 
 	// emit an informational event
 	r.Recorder.Event(pol, "Warning", "PolicyTemplateSync", errMsg)
