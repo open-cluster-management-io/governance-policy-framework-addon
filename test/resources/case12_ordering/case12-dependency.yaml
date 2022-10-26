@@ -1,0 +1,26 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: namespace-foo-setup-policy
+  labels:
+    policy.open-cluster-management.io/cluster-name: managed
+    policy.open-cluster-management.io/cluster-namespace: managed
+    policy.open-cluster-management.io/root-policy: namespace-foo-setup-policy
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: namespace-foo-setup-configpolicy
+        spec:
+          remediationAction: inform
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: policies

@@ -1,0 +1,61 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: case12-test-policy-2-templates
+  labels:
+    policy.open-cluster-management.io/cluster-name: managed
+    policy.open-cluster-management.io/cluster-namespace: managed
+    policy.open-cluster-management.io/root-policy: case12-test-policy
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - extraDependencies:
+        - apiVersion: policy.open-cluster-management.io/v1
+          kind: Policy
+          name: namespace-foo-setup-policy
+          namespace: ""
+          compliance: Compliant
+      objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: case12-config-policy-2-templates-a
+        spec:
+          remediationAction: inform
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: nginx-pod-e2e
+                  namespace: default
+                spec:
+                  containers:
+                    - name: nginx
+    - extraDependencies:
+        - apiVersion: policy.open-cluster-management.io/v1
+          kind: Policy
+          name: namespace-foo-setup-policy-b
+          namespace: ""
+          compliance: Compliant
+      objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: case12-config-policy-2-templates-b
+        spec:
+          remediationAction: inform
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: nginx-pod-e2e
+                  namespace: default
+                spec:
+                  containers:
+                    - name: nginx
+

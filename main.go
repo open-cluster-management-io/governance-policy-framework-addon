@@ -362,11 +362,12 @@ func getManager(
 	}
 
 	templateReconciler := &templatesync.PolicyReconciler{
-		Client:         mgr.GetClient(),
-		DynamicWatcher: watcher,
-		Scheme:         mgr.GetScheme(),
-		Config:         mgr.GetConfig(),
-		Recorder:       mgr.GetEventRecorderFor(templatesync.ControllerName),
+		Client:           mgr.GetClient(),
+		DynamicWatcher:   watcher,
+		Scheme:           mgr.GetScheme(),
+		Config:           mgr.GetConfig(),
+		Recorder:         mgr.GetEventRecorderFor(templatesync.ControllerName),
+		ClusterNamespace: tool.Options.ClusterNamespace,
 	}
 
 	go func() {
