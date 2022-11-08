@@ -528,9 +528,7 @@ func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...stri
 				defer resp.Body.Close()
 
 				if resp.StatusCode != http.StatusOK {
-					body := []byte{}
-
-					_, err = resp.Body.Read(body)
+					body, err := io.ReadAll(resp.Body)
 					if err != nil {
 						http.Error(w, "not ok", resp.StatusCode)
 
