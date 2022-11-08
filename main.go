@@ -505,6 +505,8 @@ func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...stri
 	log := ctrl.Log.WithName("healthproxy")
 
 	for _, endpoint := range []string{"/healthz", "/readyz"} {
+		endpoint := endpoint
+
 		http.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
 			for _, address := range addresses {
 				req, err := http.NewRequestWithContext(
