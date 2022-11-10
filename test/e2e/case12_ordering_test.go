@@ -40,7 +40,7 @@ func generateEventOnPolicy(plcName string, cfgPlcNamespacedName string, eventTyp
 		msg)
 }
 
-var _ = Describe("Test status sync", Ordered, func() {
+var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 	AfterEach(func() {
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
