@@ -379,7 +379,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			errMsg := fmt.Sprintf("Dependencies were not satisfied: %s", pendingErr)
 
 			r.emitTemplatePending(instance, tIndex, tName, errMsg)
-			tLogger.Info("Dependencies were not satisfied in the policy template",
+			tLogger.Info("Dependencies were not satisfied for the policy template",
 				"namespace", instance.GetNamespace(),
 				"kind", gvk.Kind,
 			)
@@ -553,7 +553,7 @@ func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dyna
 func generatePendingErr(dependencyFailures []depclient.ObjectIdentifier) error {
 	names := make([]string, len(dependencyFailures))
 	for i, dep := range dependencyFailures {
-		names[i] = dep.Name
+		names[i] = fmt.Sprintf("%s %s", dep.Kind, dep.Name)
 	}
 
 	nameStr := strings.Join(names, ", ")
