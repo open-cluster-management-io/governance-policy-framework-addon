@@ -21,6 +21,7 @@ jobs:
     env:
       REGISTRY: localhost:5000
     strategy:
+      fail-fast: false
       matrix:
         # Run tests on oldest and newest supported OCP Kubernetes
         # - OCP 4.5 runs Kubernetes v1.18

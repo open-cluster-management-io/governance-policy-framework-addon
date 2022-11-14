@@ -518,9 +518,18 @@ func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dyna
 			return nil, err
 		}
 
-		// set up namespace for replicated policy dependencies
 		ns := dep.Namespace
+
+		// infer namespace if not provided
 		if ns == "" {
+			ns = r.ClusterNamespace
+		}
+
+		// override given namespace if one of our policy types
+		// (these will always be in the cluster namespace)
+		if dep.Group == policiesv1.GroupVersion.Group &&
+			dep.Version == policiesv1.GroupVersion.Version &&
+			strings.HasSuffix(dep.Kind, "Policy") {
 			ns = r.ClusterNamespace
 		}
 

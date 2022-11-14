@@ -13,7 +13,7 @@ spec:
     - apiVersion: policy.open-cluster-management.io/v1
       kind: Policy
       name: namespace-foo-setup-policy
-      namespace: ""
+      namespace: this-should-be-ignored
       compliance: Compliant
   policy-templates:
     - extraDependencies:
