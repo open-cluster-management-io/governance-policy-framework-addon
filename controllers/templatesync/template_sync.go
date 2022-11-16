@@ -264,17 +264,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			}
 		}
 
-		dependencyFailures, depMappingErr := r.processDependencies(ctx, dClient, rMapper, templateDeps, tLogger)
-
-		// skip template if there is a dependency mapping error
-		if depMappingErr != nil {
-			resultError = err
-			errMsg := fmt.Sprintf("Mapping not found, please check if you have CRD deployed: %s", err)
-
-			r.emitTemplateError(instance, tIndex, tName, errMsg)
-
-			continue
-		}
+		dependencyFailures := r.processDependencies(ctx, dClient, rMapper, templateDeps, tLogger)
 
 		// fetch resource
 		res := dClient.Resource(rsrc).Namespace(instance.GetNamespace())
@@ -492,7 +482,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 // processDependencies iterates through all dependencies of a template and returns an array of any that are not met
 func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dynamic.Interface, rMapper meta.RESTMapper,
 	templateDeps map[depclient.ObjectIdentifier]string, tLogger logr.Logger,
-) ([]depclient.ObjectIdentifier, error) {
+) []depclient.ObjectIdentifier {
 	var dependencyFailures []depclient.ObjectIdentifier
 
 	for dep := range templateDeps {
@@ -515,7 +505,9 @@ func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dyna
 				"kind", depGvk.Kind,
 			)
 
-			return nil, err
+			dependencyFailures = append(dependencyFailures, dep)
+
+			continue
 		}
 
 		// set up namespace for replicated policy dependencies
@@ -546,7 +538,7 @@ func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dyna
 		}
 	}
 
-	return dependencyFailures, nil
+	return dependencyFailures
 }
 
 // generatePendingErr formats the list of failed dependencies into a readable error
