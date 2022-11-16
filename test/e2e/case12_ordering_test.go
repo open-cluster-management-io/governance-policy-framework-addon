@@ -13,6 +13,8 @@ import (
 const (
 	case12PolicyName          string = "case12-test-policy"
 	case12PolicyYaml          string = "../resources/case12_ordering/case12-plc.yaml"
+	case12PolicyNameInvalid   string = "case12-test-policy-invalid"
+	case12PolicyYamlInvalid   string = "../resources/case12_ordering/case12-plc-invalid-dep.yaml"
 	case12ExtraDepsPolicyName string = "case12-test-policy-multi"
 	case12ExtraDepsPolicyYaml string = "../resources/case12_ordering/case12-plc-multiple-deps.yaml"
 	case12Plc2TemplatesName   string = "case12-test-policy-2-templates"
@@ -207,12 +209,31 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Checking if policy status is compliant")
 		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
+		By("Creating a policy with an invalid dep on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err = kubectlHub("apply", "-f", case12PolicyYamlInvalid, "-n", clusterNamespaceOnHub)
+		Expect(err).To(BeNil())
+		hubPlc = utils.GetWithTimeout(
+			clientHubDynamic,
+			gvrPolicy,
+			case12PolicyNameInvalid,
+			clusterNamespaceOnHub,
+			true,
+			defaultTimeoutSeconds)
+		Expect(hubPlc).NotTo(BeNil())
+
+		By("Checking if policy status is pending")
+		Eventually(checkCompliance(case12PolicyNameInvalid), defaultTimeoutSeconds, 1).Should(Equal("Pending"))
+
 		By("Deleting dependency on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err = kubectlHub("delete", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
 		Expect(err).To(BeNil())
 
 		By("Deleting the policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err = kubectlHub("delete", "-f", case12PolicyYaml, "-n", clusterNamespaceOnHub)
+		Expect(err).To(BeNil())
+
+		By("Deleting invalid policy in ns:" + clusterNamespaceOnHub)
+		_, err = kubectlHub("delete", "-f", case12PolicyYamlInvalid, "-n", clusterNamespaceOnHub)
 		Expect(err).To(BeNil())
 	})
 	It("Should remove template if dependency changes", func() {
