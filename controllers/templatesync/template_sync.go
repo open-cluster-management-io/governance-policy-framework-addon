@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -69,6 +71,24 @@ type PolicyReconciler struct {
 	ClusterNamespace string
 }
 
+var policyTempEvalSecondsCounter = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "policy_template_evaluation_seconds_total",
+		Help: "The total seconds taken while evaluating the policy templates. Use this alongside " +
+			"policy_templates_evaluation_total.",
+	},
+	[]string{"name"},
+)
+
+var policyTempEvalCounter = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "policy_templates_evaluation_total",
+		Help: "The total number of evaluations of the policy templates. Use this alongside " +
+			"policy_template_evaluation_seconds_total.",
+	},
+	[]string{"name"},
+)
+
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
 // and what is in the Policy.Spec
 // Note:
@@ -77,6 +97,8 @@ type PolicyReconciler struct {
 func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling the Policy")
+
+	startTime := time.Now().UTC()
 
 	// Fetch the Policy instance
 	instance := &policiesv1.Policy{}
@@ -473,6 +495,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		resultError = err
 		reqLogger.Error(resultError, "Error updating dependency watcher")
 	}
+
+	endTime := time.Now().UTC()
+	durationSeconds := float64(endTime.Sub(startTime)) / float64(time.Second)
+	// for each policy, total accumulated seconds / evaluating number = avg evaluating time
+	policyTempEvalSecondsCounter.WithLabelValues(instance.GetName()).Add(durationSeconds)
+	policyTempEvalCounter.WithLabelValues(instance.GetName()).Inc()
 
 	reqLogger.Info("Completed the reconciliation")
 
