@@ -21,12 +21,10 @@ jobs:
     env:
       REGISTRY: localhost:5000
     strategy:
+      fail-fast: false
       matrix:
-        # Run tests on oldest and newest supported OCP Kubernetes
-        # - OCP 4.5 runs Kubernetes v1.18
-        # KinD tags: https://hub.docker.com/r/kindest/node/tags
         kind:
-          - 'v1.18.15'
+          - 'minimum'
           - 'latest'
     name: KinD tests
     steps:
@@ -61,8 +59,10 @@ jobs:
         make test
 
     - name: Create K8s KinD Cluster - ${{ matrix.kind }}
+      # Overwrite "minimum" with an actual tag; OCP 4.8 runs Kubernetes v1.21
+      # KinD tags: https://hub.docker.com/r/kindest/node/tags
       env:
-        KIND_VERSION: ${{ matrix.kind }}
+        KIND_VERSION: ${{ matrix.kind == 'minimum' && 'v1.21.14' || matrix.kind }}
       run: |
         make kind-bootstrap-cluster-dev
 
