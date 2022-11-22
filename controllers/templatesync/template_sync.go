@@ -140,6 +140,13 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			Name:      dep.Name,
 		}
 
+		// Use cluster namespace for known policy types when the namespace is blank
+		if depID.Namespace == "" && depID.Group == policiesv1.GroupVersion.Group &&
+			depID.Version == policiesv1.GroupVersion.Version &&
+			strings.HasSuffix(depID.Kind, "Policy") {
+			depID.Namespace = request.Namespace
+		}
+
 		existingDep, ok := topLevelDeps[depID]
 		if ok && existingDep != dep.Compliance {
 			err := fmt.Errorf("dependency on %s has conflicting compliance states", dep.Name)
@@ -176,6 +183,13 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				Kind:      dep.GroupVersionKind().Kind,
 				Namespace: dep.Namespace,
 				Name:      dep.Name,
+			}
+
+			// Use cluster namespace for known policy types when the namespace is blank
+			if depID.Namespace == "" && depID.Group == policiesv1.GroupVersion.Group &&
+				depID.Version == policiesv1.GroupVersion.Version &&
+				strings.HasSuffix(depID.Kind, "Policy") {
+				depID.Namespace = request.Namespace
 			}
 
 			existingDep, ok := templateDeps[depID]
