@@ -80,5 +80,5 @@ any of the Kustomize files, you may regenerate `deploy/operator.yaml` by running
 - The `governance-policy-framework-addon` is part of the `open-cluster-management` community. For more information, visit: [open-cluster-management.io](https://open-cluster-management.io).
 
 <!---
-Date: 11/16/2021
+Date: 2022-11-28
 -->
