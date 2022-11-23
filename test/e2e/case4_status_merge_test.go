@@ -4,6 +4,8 @@
 package e2e
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,6 +102,8 @@ var _ = Describe("Test status sync with multiple templates", func() {
 
 			return getCompliant(managedPlc)
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		// Wait for slow events to show up, otherwise the delete might not get all of them.
+		time.Sleep(10 * time.Second)
 		By("Delete events in ns:" + clusterNamespace)
 		_, err := kubectlManaged(
 			"delete",
