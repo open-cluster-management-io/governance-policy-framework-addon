@@ -44,7 +44,10 @@ MANAGED_CLUSTER_NAME ?= managed
 HUB_CONFIG ?= $(PWD)/kubeconfig_hub
 HUB_CONFIG_INTERNAL ?= $(PWD)/kubeconfig_hub_internal
 MANAGED_CONFIG ?= $(PWD)/kubeconfig_managed
-ifneq ($(KIND_VERSION), latest)
+# Set the Kind version tag
+ifeq ($(KIND_VERSION), minimum)
+	KIND_ARGS = --image kindest/node:v1.19.16
+else ifneq ($(KIND_VERSION), latest)
 	KIND_ARGS = --image kindest/node:$(KIND_VERSION)
 else
 	KIND_ARGS =
