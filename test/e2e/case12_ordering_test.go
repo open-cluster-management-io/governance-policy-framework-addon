@@ -6,25 +6,7 @@ package e2e
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
-)
-
-const (
-	case12PolicyName              string = "case12-test-policy"
-	case12PolicyYaml              string = "../resources/case12_ordering/case12-plc.yaml"
-	case12PolicyIgnorePendingName string = "case12-test-policy-ignorepending"
-	case12PolicyIgnorePendingYaml string = "../resources/case12_ordering/case12-plc-ignorepending.yaml"
-	case12PolicyNameInvalid       string = "case12-test-policy-invalid"
-	case12PolicyYamlInvalid       string = "../resources/case12_ordering/case12-plc-invalid-dep.yaml"
-	case12ExtraDepsPolicyName     string = "case12-test-policy-multi"
-	case12ExtraDepsPolicyYaml     string = "../resources/case12_ordering/case12-plc-multiple-deps.yaml"
-	case12Plc2TemplatesName       string = "case12-test-policy-2-templates"
-	case12Plc2TemplatesYaml       string = "../resources/case12_ordering/case12-plc-2-template.yaml"
-	case12DepName                 string = "namespace-foo-setup-policy"
-	case12DepYaml                 string = "../resources/case12_ordering/case12-dependency.yaml"
-	case12DepBName                string = "namespace-foo-setup-policy-b"
-	case12DepBYaml                string = "../resources/case12_ordering/case12-dependency-b.yaml"
 )
 
 // Helper function to create events
@@ -45,35 +27,49 @@ func generateEventOnPolicy(plcName string, cfgPlcNamespacedName string, eventTyp
 }
 
 var _ = Describe("Test dependency logic in template sync", Ordered, func() {
-	AfterEach(func() {
-		opt := metav1.ListOptions{}
-		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
-		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
-	})
-	It("Should set to compliant when dep status is compliant", func() {
-		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
+	const (
+		case12PolicyName              string = "case12-test-policy"
+		case12PolicyYaml              string = "../resources/case12_ordering/case12-plc.yaml"
+		case12PolicyIgnorePendingName string = "case12-test-policy-ignorepending"
+		case12PolicyIgnorePendingYaml string = "../resources/case12_ordering/case12-plc-ignorepending.yaml"
+		case12PolicyNameInvalid       string = "case12-test-policy-invalid"
+		case12PolicyYamlInvalid       string = "../resources/case12_ordering/case12-plc-invalid-dep.yaml"
+		case12ExtraDepsPolicyName     string = "case12-test-policy-multi"
+		case12ExtraDepsPolicyYaml     string = "../resources/case12_ordering/case12-plc-multiple-deps.yaml"
+		case12Plc2TemplatesName       string = "case12-test-policy-2-templates"
+		case12Plc2TemplatesYaml       string = "../resources/case12_ordering/case12-plc-2-template.yaml"
+		case12DepName                 string = "namespace-foo-setup-policy"
+		case12DepYaml                 string = "../resources/case12_ordering/case12-dependency.yaml"
+		case12DepBName                string = "namespace-foo-setup-policy-b"
+		case12DepBYaml                string = "../resources/case12_ordering/case12-dependency-b.yaml"
+	)
+
+	hubPolicyApplyAndDeferCleanup := func(yamlFile, policyName string) {
+		_, err := kubectlHub("apply", "-f", yamlFile, "-n", clusterNamespaceOnHub)
 		Expect(err).To(BeNil())
+
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
 			gvrPolicy,
-			case12DepName,
+			policyName,
 			clusterNamespaceOnHub,
 			true,
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
 
+		DeferCleanup(func() {
+			By("Deleting policy " + policyName + " on hub cluster in ns: " + clusterNamespaceOnHub)
+			_, err = kubectlHub("delete", "-f", yamlFile, "-n", clusterNamespaceOnHub)
+			Expect(err).To(BeNil())
+		})
+	}
+
+	It("Should set to compliant when dep status is compliant", func() {
+		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
+		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
+
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("apply", "-f", case12PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc = utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12PolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12PolicyYaml, case12PolicyName)
 
 		By("Generating a compliant event on the dependency")
 		generateEventOnPolicy(
@@ -96,39 +92,13 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Checking if policy status is compliant")
 		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
-
-		By("Deleting dependency on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		By("Deleting the policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
 	})
 	It("Should set to Pending when dep status is NonCompliant", func() {
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12DepName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("apply", "-f", case12PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc = utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12PolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12PolicyYaml, case12PolicyName)
 
 		By("Generating a noncompliant event on the dependency")
 		generateEventOnPolicy(
@@ -143,39 +113,13 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Checking if policy status is pending")
 		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Pending"))
-
-		By("Deleting dependency on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		By("Deleting the policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
 	})
 	It("Should set to Compliant when dep status is NonCompliant and ignorePending is true", func() {
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12DepName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("apply", "-f", case12PolicyIgnorePendingYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc = utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12PolicyIgnorePendingName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12PolicyIgnorePendingYaml, case12PolicyIgnorePendingName)
 
 		By("Generating a noncompliant event on the dependency")
 		generateEventOnPolicy(
@@ -190,39 +134,14 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Checking if policy status is pending")
 		Eventually(checkCompliance(case12PolicyIgnorePendingName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
-
-		By("Deleting dependency on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		By("Deleting the policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12PolicyIgnorePendingYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
 	})
 	It("Should set to Compliant when dep status is resolved", func() {
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12DepName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("apply", "-f", case12PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc = utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12PolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12PolicyYaml, case12PolicyName)
+
 		By("Generating a non compliant event on the dep")
 		generateEventOnPolicy(
 			case12DepName,
@@ -260,56 +179,17 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Creating a policy with an invalid dep on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("apply", "-f", case12PolicyYamlInvalid, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc = utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12PolicyNameInvalid,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12PolicyYamlInvalid, case12PolicyNameInvalid)
 
 		By("Checking if policy status is pending")
 		Eventually(checkCompliance(case12PolicyNameInvalid), defaultTimeoutSeconds, 1).Should(Equal("Pending"))
-
-		By("Deleting dependency on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		By("Deleting the policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		By("Deleting invalid policy in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12PolicyYamlInvalid, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
 	})
 	It("Should remove template if dependency changes", func() {
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12DepName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("apply", "-f", case12PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc = utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12PolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12PolicyYaml, case12PolicyName)
 
 		By("Generating a compliant event on the dependency")
 		generateEventOnPolicy(
@@ -346,51 +226,16 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Checking if policy status is pending")
 		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Pending"))
-
-		By("Deleting dependency on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		By("Deleting the policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
 	})
 	It("Should process extra dependencies properly", func() {
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case12ExtraDepsPolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12ExtraDepsPolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12ExtraDepsPolicyYaml, case12ExtraDepsPolicyName)
 
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("apply", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc = utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12DepName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
 		By("Creating an extra dep on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("apply", "-f", case12DepBYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc = utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12DepBName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12DepBYaml, case12DepBName)
 
 		By("Generating a non compliant event on the dep b")
 		generateEventOnPolicy(
@@ -424,55 +269,16 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Checking if policy status is pending")
 		Eventually(checkCompliance(case12ExtraDepsPolicyName), defaultTimeoutSeconds, 1).Should(Equal("Pending"))
-
-		By("Deleting the policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12ExtraDepsPolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		By("Deleting dependency on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		By("Deleting dependency b on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12DepBYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
 	})
 	It("Should handle policies with multiple templates (with different dependencies) properly", func() {
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case12Plc2TemplatesYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12Plc2TemplatesName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12Plc2TemplatesYaml, case12Plc2TemplatesName)
 
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("apply", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc = utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12DepName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
 		By("Creating an extra dep on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("apply", "-f", case12DepBYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc = utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case12DepBName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubPolicyApplyAndDeferCleanup(case12DepBYaml, case12DepBName)
 
 		By("Generating a non compliant event on the dep a")
 		generateEventOnPolicy(
@@ -507,17 +313,5 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		// should be noncompliant - template A is pending and B is noncompliant
 		By("Checking if policy status is pending")
 		Eventually(checkCompliance(case12Plc2TemplatesName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
-
-		By("Deleting the policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12Plc2TemplatesYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		By("Deleting dependency on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		By("Deleting dependency b on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", case12DepBYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
 	})
 })
