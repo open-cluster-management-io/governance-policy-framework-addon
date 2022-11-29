@@ -205,8 +205,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	reqLogger.Info("Updating status for policy templates")
 
-	shouldSkipPending := map[*policiesv1.DetailsPerTemplate]bool{}
-
 	for _, policyT := range instance.Spec.PolicyTemplates {
 		object, _, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
@@ -344,9 +342,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// append existingDpt to status
 		newStatus.Details = append(newStatus.Details, existingDpt)
 
-		// build a map to determine whether to skip pending status from this template
-		shouldSkipPending[existingDpt] = policyT.IgnorePending
-
 		reqLogger.Info("Status update complete", "PolicyTemplate", tName)
 	}
 
@@ -360,7 +355,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			isCompliant = false
 
 			break
-		} else if dpt.ComplianceState == "Pending" && !shouldSkipPending[dpt] {
+		} else if dpt.ComplianceState == "Pending" {
 			instance.Status.ComplianceState = policiesv1.Pending
 			isCompliant = false
 		} else if dpt.ComplianceState == "" {

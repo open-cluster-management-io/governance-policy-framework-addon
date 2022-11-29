@@ -299,11 +299,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		if err != nil {
 			if len(dependencyFailures) > 0 {
 				// template must be pending, do not create it
-				pendingErr := generatePendingErr(dependencyFailures)
-				resultError = pendingErr
-				errMsg := fmt.Sprintf("Dependencies were not satisfied: %s", pendingErr)
-
-				r.emitTemplatePending(instance, tIndex, tName, errMsg)
+				r.emitTemplatePending(instance, tIndex, tName, generatePendingMsg(dependencyFailures))
 				tLogger.Info("Dependencies were not satisfied for the policy template",
 					"namespace", instance.GetNamespace(),
 					"kind", gvk.Kind,
@@ -378,11 +374,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		if len(dependencyFailures) > 0 {
 			// template must be pending, need to delete it and error
-			pendingErr := generatePendingErr(dependencyFailures)
-			resultError = pendingErr
-			errMsg := fmt.Sprintf("Dependencies were not satisfied: %s", pendingErr)
-
-			r.emitTemplatePending(instance, tIndex, tName, errMsg)
+			r.emitTemplatePending(instance, tIndex, tName, generatePendingMsg(dependencyFailures))
 			tLogger.Info("Dependencies were not satisfied for the policy template",
 				"namespace", instance.GetNamespace(),
 				"kind", gvk.Kind,
@@ -394,6 +386,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					"namespace", instance.GetNamespace(),
 					"name", tName,
 				)
+
+				resultError = err
 			}
 
 			continue
@@ -555,8 +549,9 @@ func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dyna
 	return dependencyFailures
 }
 
-// generatePendingErr formats the list of failed dependencies into a readable error
-func generatePendingErr(dependencyFailures []depclient.ObjectIdentifier) error {
+// generatePendingMsg formats the list of failed dependencies into a readable error.
+// Example: `Dependencies were not satisfied: 1 is still pending (FooPolicy foo)`
+func generatePendingMsg(dependencyFailures []depclient.ObjectIdentifier) string {
 	names := make([]string, len(dependencyFailures))
 	for i, dep := range dependencyFailures {
 		names[i] = fmt.Sprintf("%s %s", dep.Kind, dep.Name)
@@ -564,11 +559,12 @@ func generatePendingErr(dependencyFailures []depclient.ObjectIdentifier) error {
 
 	nameStr := strings.Join(names, ", ")
 
-	return fmt.Errorf(
-		"%d dependencies are still pending (%s)",
-		len(dependencyFailures),
-		nameStr,
-	)
+	fmtStr := "Dependencies were not satisfied: %d are still pending (%s)"
+	if len(dependencyFailures) == 1 {
+		fmtStr = "Dependencies were not satisfied: %d is still pending (%s)"
+	}
+
+	return fmt.Sprintf(fmtStr, len(dependencyFailures), nameStr)
 }
 
 func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured *unstructured.Unstructured) {
@@ -600,21 +596,29 @@ func (r *PolicyReconciler) emitTemplateError(pol *policiesv1.Policy, tIndex int,
 	r.Recorder.Event(pol, "Warning", "PolicyTemplateSync", errMsg)
 }
 
-// emitTemplatePending performs actions that ensure correct reporting of dependency errors in the
-// policy framework. If the policy's status already reflects the current error, then no actions
+// emitTemplatePending performs actions that ensure correct reporting of pending dependencies in the
+// policy framework. If the policy's status already reflects the current status, then no actions
 // are taken.
-func (r *PolicyReconciler) emitTemplatePending(pol *policiesv1.Policy, tIndex int, tName, errMsg string) {
+func (r *PolicyReconciler) emitTemplatePending(pol *policiesv1.Policy, tIndex int, tName, msg string) {
+	statusMsg := "Pending; " + msg
+	eventType := "Warning"
+
+	if pol.Spec.PolicyTemplates[tIndex].IgnorePending {
+		statusMsg = "Compliant; " + msg + " but ignorePending is true"
+		eventType = "Normal"
+	}
+
 	// check if the error is already present in the policy status - if so, return early
-	if strings.Contains(getLatestStatusMessage(pol, tIndex), errMsg) {
+	if strings.Contains(getLatestStatusMessage(pol, tIndex), statusMsg) {
 		return
 	}
 
 	// emit the non-compliance event
 	policyComplianceReason := fmt.Sprintf(policyFmtStr, pol.GetNamespace(), tName)
-	r.Recorder.Event(pol, "Warning", policyComplianceReason, "Pending; template-error; "+errMsg)
+	r.Recorder.Event(pol, eventType, policyComplianceReason, statusMsg)
 
 	// emit an informational event
-	r.Recorder.Event(pol, "Warning", "PolicyTemplateSync", errMsg)
+	r.Recorder.Event(pol, eventType, "PolicyTemplateSync", statusMsg)
 }
 
 // handleSyncSuccess performs common actions that should be run whenever a template is in sync,

@@ -11,18 +11,20 @@ import (
 )
 
 const (
-	case12PolicyName          string = "case12-test-policy"
-	case12PolicyYaml          string = "../resources/case12_ordering/case12-plc.yaml"
-	case12PolicyNameInvalid   string = "case12-test-policy-invalid"
-	case12PolicyYamlInvalid   string = "../resources/case12_ordering/case12-plc-invalid-dep.yaml"
-	case12ExtraDepsPolicyName string = "case12-test-policy-multi"
-	case12ExtraDepsPolicyYaml string = "../resources/case12_ordering/case12-plc-multiple-deps.yaml"
-	case12Plc2TemplatesName   string = "case12-test-policy-2-templates"
-	case12Plc2TemplatesYaml   string = "../resources/case12_ordering/case12-plc-2-template.yaml"
-	case12DepName             string = "namespace-foo-setup-policy"
-	case12DepYaml             string = "../resources/case12_ordering/case12-dependency.yaml"
-	case12DepBName            string = "namespace-foo-setup-policy-b"
-	case12DepBYaml            string = "../resources/case12_ordering/case12-dependency-b.yaml"
+	case12PolicyName              string = "case12-test-policy"
+	case12PolicyYaml              string = "../resources/case12_ordering/case12-plc.yaml"
+	case12PolicyIgnorePendingName string = "case12-test-policy-ignorepending"
+	case12PolicyIgnorePendingYaml string = "../resources/case12_ordering/case12-plc-ignorepending.yaml"
+	case12PolicyNameInvalid       string = "case12-test-policy-invalid"
+	case12PolicyYamlInvalid       string = "../resources/case12_ordering/case12-plc-invalid-dep.yaml"
+	case12ExtraDepsPolicyName     string = "case12-test-policy-multi"
+	case12ExtraDepsPolicyYaml     string = "../resources/case12_ordering/case12-plc-multiple-deps.yaml"
+	case12Plc2TemplatesName       string = "case12-test-policy-2-templates"
+	case12Plc2TemplatesYaml       string = "../resources/case12_ordering/case12-plc-2-template.yaml"
+	case12DepName                 string = "namespace-foo-setup-policy"
+	case12DepYaml                 string = "../resources/case12_ordering/case12-dependency.yaml"
+	case12DepBName                string = "namespace-foo-setup-policy-b"
+	case12DepBYaml                string = "../resources/case12_ordering/case12-dependency-b.yaml"
 )
 
 // Helper function to create events
@@ -127,7 +129,8 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
-		By("Generating a noncompliant event on the policy")
+
+		By("Generating a noncompliant event on the dependency")
 		generateEventOnPolicy(
 			case12DepName,
 			"managed/namespace-foo-setup-configpolicy",
@@ -147,6 +150,53 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Deleting the policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err = kubectlHub("delete", "-f", case12PolicyYaml, "-n", clusterNamespaceOnHub)
+		Expect(err).To(BeNil())
+	})
+	It("Should set to Compliant when dep status is NonCompliant and ignorePending is true", func() {
+		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err := kubectlHub("apply", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
+		Expect(err).To(BeNil())
+		hubPlc := utils.GetWithTimeout(
+			clientHubDynamic,
+			gvrPolicy,
+			case12DepName,
+			clusterNamespaceOnHub,
+			true,
+			defaultTimeoutSeconds)
+		Expect(hubPlc).NotTo(BeNil())
+
+		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err = kubectlHub("apply", "-f", case12PolicyIgnorePendingYaml, "-n", clusterNamespaceOnHub)
+		Expect(err).To(BeNil())
+		hubPlc = utils.GetWithTimeout(
+			clientHubDynamic,
+			gvrPolicy,
+			case12PolicyIgnorePendingName,
+			clusterNamespaceOnHub,
+			true,
+			defaultTimeoutSeconds)
+		Expect(hubPlc).NotTo(BeNil())
+
+		By("Generating a noncompliant event on the dependency")
+		generateEventOnPolicy(
+			case12DepName,
+			"managed/namespace-foo-setup-configpolicy",
+			"Warning",
+			"NonCompliant; there is violation",
+		)
+
+		By("Checking if dependency status is noncompliant")
+		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+
+		By("Checking if policy status is pending")
+		Eventually(checkCompliance(case12PolicyIgnorePendingName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+
+		By("Deleting dependency on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err = kubectlHub("delete", "-f", case12DepYaml, "-n", clusterNamespaceOnHub)
+		Expect(err).To(BeNil())
+
+		By("Deleting the policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		_, err = kubectlHub("delete", "-f", case12PolicyIgnorePendingYaml, "-n", clusterNamespaceOnHub)
 		Expect(err).To(BeNil())
 	})
 	It("Should set to Compliant when dep status is resolved", func() {
