@@ -46,6 +46,9 @@ reconcile. On each reconcile, it creates/updates/deletes objects defined in the 
 
 ## Getting started
 
+For documentation and installation guidance, see the
+[Open Cluster Management documentation](https://open-cluster-management.io/getting-started/integration/policy-framework/).
+
 Go to the
 [Contributing guide](https://github.com/open-cluster-management-io/community/blob/main/sig-policy/contribution-guidelines.md)
 to learn how to get involved.
