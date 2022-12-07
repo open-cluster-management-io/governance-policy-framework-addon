@@ -162,7 +162,7 @@ func main() {
 	mgrOptionsBase := manager.Options{
 		LeaderElection: tool.Options.EnableLeaderElection,
 		// Disable the metrics endpoint
-		MetricsBindAddress: "0",
+		MetricsBindAddress: tool.Options.MetricsAddr,
 		Scheme:             scheme,
 		// Override the EventBroadcaster so that the spam filter will not ignore events for the policy but with
 		// different messages if a large amount of events for that policy are sent in a short time.
@@ -445,6 +445,10 @@ func getHubManager(
 	options.LeaderElectionConfig = managedCfg
 	options.Namespace = tool.Options.ClusterNamespaceOnHub
 	options.NewCache = newCacheFunc
+
+	// Disable the metrics endpoint for this manager. Note that since they both use the global
+	// metrics registry, metrics for this manager are still exposed by the other manager.
+	options.MetricsBindAddress = "0"
 
 	// Create a new manager to provide shared dependencies and start components
 	mgr, err := ctrl.NewManager(hubCfg, options)
