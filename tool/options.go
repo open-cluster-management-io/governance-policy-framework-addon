@@ -20,6 +20,7 @@ type SyncerOptions struct {
 	EnableLeaderElection      bool
 	LegacyLeaderElection      bool
 	ProbeAddr                 string
+	MetricsAddr               string
 	// The namespace that the replicated policies should be synced to. This defaults to the same namespace as on the
 	// Hub.
 	ClusterNamespace string
@@ -94,5 +95,12 @@ func ProcessFlags() {
 		"health-probe-bind-address",
 		":8080",
 		"The address the first probe endpoint binds to.",
+	)
+
+	flag.StringVar(
+		&Options.MetricsAddr,
+		"metrics-bind-address",
+		"localhost:8383",
+		"The address the metrics endpoint binds to.",
 	)
 }
