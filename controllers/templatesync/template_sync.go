@@ -507,11 +507,7 @@ func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dyna
 		if depMapping != nil {
 			rsrc = depMapping.Resource
 		} else {
-			tLogger.Error(err, "Could not find an API mapping for the dependency",
-				"group", depGvk.Group,
-				"version", depGvk.Version,
-				"kind", depGvk.Kind,
-			)
+			tLogger.Error(err, "Could not find an API mapping for the dependency", "object", dep)
 
 			dependencyFailures = append(dependencyFailures, dep)
 
@@ -529,17 +525,17 @@ func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dyna
 
 		depObj, err := res.Get(ctx, dep.Name, metav1.GetOptions{})
 		if err != nil {
-			tLogger.Info("Failed to get dependency object", "object", depGvk)
+			tLogger.Info("Failed to get dependency object", "object", dep)
 
 			dependencyFailures = append(dependencyFailures, dep)
 		} else {
 			depCompliance, found, err := unstructured.NestedString(depObj.Object, "status", "compliant")
 			if err != nil || !found {
-				tLogger.Info("Failed to get compliance for dependency object", "object", depGvk)
+				tLogger.Info("Failed to get compliance for dependency object", "object", dep)
 
 				dependencyFailures = append(dependencyFailures, dep)
 			} else if depCompliance != templateDeps[dep] {
-				tLogger.Info("Compliance mismatch for dependency object", "object", depGvk)
+				tLogger.Info("Compliance mismatch for dependency object", "object", dep)
 
 				dependencyFailures = append(dependencyFailures, dep)
 			}
