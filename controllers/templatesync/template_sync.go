@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -89,11 +90,16 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			// Return and don't requeue
 			reqLogger.Info("Policy not found, may have been deleted, reconciliation completed")
 
+			_ = policyUserErrorsCounter.DeletePartialMatch(prometheus.Labels{"policy": request.Name})
+			_ = policySystemErrorsCounter.DeletePartialMatch(prometheus.Labels{"policy": request.Name})
+
 			return reconcile.Result{}, nil
 		}
 
 		// Error reading the object - requeue the request.
 		reqLogger.Error(err, "Failed to get the policy, will requeue the request")
+
+		policySystemErrorsCounter.WithLabelValues(request.Name, "", "get-error").Inc()
 
 		return reconcile.Result{}, err
 	}
@@ -110,6 +116,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		if err != nil {
 			reqLogger.Error(err, "Failed to create restmapper")
 
+			policySystemErrorsCounter.WithLabelValues(instance.Name, "", "get-error").Inc()
+
 			return reconcile.Result{}, err
 		}
 
@@ -119,6 +127,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		dClient, err = dynamic.NewForConfig(r.Config)
 		if err != nil {
 			reqLogger.Error(err, "Failed to create dynamic client")
+
+			policySystemErrorsCounter.WithLabelValues(instance.Name, "", "client-error").Inc()
 
 			return reconcile.Result{}, err
 		}
@@ -152,6 +162,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			err := fmt.Errorf("dependency on %s has conflicting compliance states", dep.Name)
 
 			reqLogger.Error(err, "Failed to decode the policy dependencies", "policy", instance.GetName())
+
+			policyUserErrorsCounter.WithLabelValues(instance.Name, "", "dependency-error").Inc()
 
 			continue
 		}
@@ -196,12 +208,14 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			if ok && existingDep != dep.Compliance {
 				// dependency conflict, fire error
 				resultError = fmt.Errorf("dependency on %s has conflicting compliance states", dep.Name)
-				errMsg := fmt.Sprintf("Failed to decode policy template with err: %s", err)
+				errMsg := fmt.Sprintf("Failed to decode policy template with err: %s", resultError)
 
 				r.emitTemplateError(instance, tIndex, fmt.Sprintf("[template %v]", tIndex), errMsg)
 				reqLogger.Error(resultError, "Failed to decode the policy template", "templateIndex", tIndex)
 
 				depConflictErr = true
+
+				policyUserErrorsCounter.WithLabelValues(instance.Name, "", "dependency-error").Inc()
 
 				break
 			}
@@ -223,6 +237,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			r.emitTemplateError(instance, tIndex, fmt.Sprintf("[template %v]", tIndex), errMsg)
 			reqLogger.Error(resultError, "Failed to decode the policy template", "templateIndex", tIndex)
 
+			policyUserErrorsCounter.WithLabelValues(instance.Name, "", "format-error").Inc()
+
 			continue
 		}
 
@@ -237,6 +253,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			r.emitTemplateError(instance, tIndex, fmt.Sprintf("[template %v]", tIndex), errMsg)
 			reqLogger.Error(resultError, "Failed to process the policy template", "templateIndex", tIndex)
+
+			policyUserErrorsCounter.WithLabelValues(instance.Name, "", "format-error").Inc()
 
 			continue
 		}
@@ -260,6 +278,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				"kind", gvk.Kind,
 			)
 
+			policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "crd-error").Inc()
+
 			continue
 		}
 
@@ -273,6 +293,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				r.emitTemplateError(instance, tIndex, tName, errMsg)
 				tLogger.Error(resultError, "Failed to process the policy template")
+
+				policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
 
 				continue
 			}
@@ -291,6 +313,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			r.emitTemplateError(instance, tIndex, tName, errMsg)
 			tLogger.Error(resultError, "Failed to unmarshal the policy template")
+
+			policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "unmarshal-error").Inc()
 
 			continue
 		}
@@ -344,6 +368,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					r.emitTemplateError(instance, tIndex, tName, errMsg)
 					tLogger.Error(resultError, "Failed to create policy template")
 
+					policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "create-error").Inc()
+
 					continue
 				}
 
@@ -354,6 +380,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				if err != nil {
 					resultError = err
 					tLogger.Error(resultError, "Error after creating template (will requeue)")
+
+					policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
 				}
 
 				continue
@@ -367,6 +395,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					"namespace", instance.GetNamespace(),
 					"kind", gvk.Kind,
 				)
+
+				policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "get-error").Inc()
 
 				continue
 			}
@@ -386,6 +416,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					"namespace", instance.GetNamespace(),
 					"name", tName,
 				)
+				policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "delete-error").Inc()
 
 				resultError = err
 			}
@@ -405,6 +436,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			r.emitTemplateError(instance, tIndex, tName, errMsg)
 			tLogger.Error(resultError, "Failed to create the policy template")
+
+			policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
 
 			continue
 		}
@@ -435,6 +468,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				r.emitTemplateError(instance, tIndex, tName, errMsg)
 				tLogger.Error(err, "Failed to update the policy template")
 
+				policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
+
 				continue
 			}
 
@@ -444,6 +479,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			if err != nil {
 				resultError = err
 				tLogger.Error(resultError, "Error after updating template (will requeue)")
+
+				policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
 			}
 
 			tLogger.Info("Existing object has been updated")
@@ -452,6 +489,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			if err != nil {
 				resultError = err
 				tLogger.Error(resultError, "Error after confirming template matches (will requeue)")
+
+				policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
 			}
 
 			tLogger.Info("Existing object matches the policy template")
@@ -480,6 +519,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	if err != nil {
 		resultError = err
 		reqLogger.Error(resultError, "Error updating dependency watcher")
+
+		policySystemErrorsCounter.WithLabelValues(instance.Name, "", "client-error").Inc()
 	}
 
 	reqLogger.Info("Completed the reconciliation")
