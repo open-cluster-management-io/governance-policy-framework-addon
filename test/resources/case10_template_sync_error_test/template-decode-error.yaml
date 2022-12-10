@@ -14,7 +14,7 @@ spec:
         apiVersion: policy.open-cluster-management.io/v1
         # kind: ConfigurationPolicy # missing kind
         metadata:
-          name: case10-remedation-action-not-exists-configpolicy
+          name: case10-remediation-action-not-exists-configpolicy
         spec:
           object-templates:
             - complianceType: musthave
