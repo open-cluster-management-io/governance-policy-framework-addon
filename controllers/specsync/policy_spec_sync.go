@@ -71,7 +71,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	err := r.HubClient.Get(ctx, request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// repliated policy on hub was deleted, remove policy on managed cluster
+			// replicated policy on hub was deleted, remove policy on managed cluster
 			reqLogger.Info("Policy was deleted, removing on managed cluster...")
 
 			err = r.ManagedClient.Delete(ctx, &policiesv1.Policy{

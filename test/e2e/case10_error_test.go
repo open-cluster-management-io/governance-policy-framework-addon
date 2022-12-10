@@ -39,7 +39,7 @@ var _ = Describe("Test error handling", func() {
 		Expect(err).Should(BeNil())
 		Eventually(func() interface{} {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
-				"case10-remedation-action-not-exists-configpolicy", clusterNamespace, true,
+				"case10-remediation-action-not-exists-configpolicy", clusterNamespace, true,
 				defaultTimeoutSeconds)
 
 			return trustedPlc.Object["spec"].(map[string]interface{})["remediationAction"]
@@ -56,12 +56,12 @@ var _ = Describe("Test error handling", func() {
 			clusterNamespaceOnHub,
 		)
 		Expect(err).Should(BeNil())
-		By("Checking the case10-remedation-action-not-exists-configpolicy CR")
+		By("Checking the case10-remediation-action-not-exists-configpolicy CR")
 		yamlTrustedPlc := utils.ParseYaml(
-			"../resources/case10_template_sync_error_test/remedation-action-not-exists-configpolicy.yaml")
+			"../resources/case10_template_sync_error_test/remediation-action-not-exists-configpolicy.yaml")
 		Eventually(func() interface{} {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
-				"case10-remedation-action-not-exists-configpolicy", clusterNamespace, true,
+				"case10-remediation-action-not-exists-configpolicy", clusterNamespace, true,
 				defaultTimeoutSeconds)
 
 			return trustedPlc.Object["spec"]

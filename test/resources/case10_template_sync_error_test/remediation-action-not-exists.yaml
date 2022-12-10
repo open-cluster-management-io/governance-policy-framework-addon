@@ -1,11 +1,11 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: case10-remedation-action-not-exists
+  name: case10-remediation-action-not-exists
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: case10-remedation-action-not-exists
+    policy.open-cluster-management.io/root-policy: case10-remediation-action-not-exists
 spec:
   disabled: false
   policy-templates:
@@ -13,7 +13,7 @@ spec:
         apiVersion: policy.open-cluster-management.io/v1
         kind: ConfigurationPolicy
         metadata:
-          name: case10-remedation-action-not-exists-configpolicy
+          name: case10-remediation-action-not-exists-configpolicy
         spec:
           remediationAction: inform
           object-templates:
