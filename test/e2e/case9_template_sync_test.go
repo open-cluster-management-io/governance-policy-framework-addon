@@ -49,6 +49,46 @@ var _ = Describe("Test template sync", func() {
 			return trustedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
 	})
+	It("should properly sync adding and removing policy-templates", func() {
+		By("Checking the configpolicy CR")
+		yamlTrustedPlc := utils.ParseYaml("../resources/case9_template_sync/case9-config-policy.yaml")
+		Eventually(func() interface{} {
+			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
+				case9ConfigPolicyName, clusterNamespace, true, defaultTimeoutSeconds)
+
+			return trustedPlc.Object["spec"]
+		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
+		yamlTrustedPlc = utils.ParseYaml("../resources/case9_template_sync/case9-config-policy2.yaml")
+		By("Patching to add a policy-template")
+		_, err := kubectlHub("apply", "-f",
+			"../resources/case9_template_sync/case9-test-policy2.yaml", "-n", clusterNamespaceOnHub)
+		Expect(err).To(BeNil())
+		Eventually(func() interface{} {
+			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
+				case9ConfigPolicyName+"2", clusterNamespace, true, defaultTimeoutSeconds)
+
+			return trustedPlc.Object["spec"]
+		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
+		By("Patching to remove the added policy-template")
+		_, err = kubectlHub("apply", "-f",
+			"../resources/case9_template_sync/case9-test-policy.yaml", "-n", clusterNamespaceOnHub)
+		Expect(err).To(BeNil())
+		utils.GetWithTimeout(
+			clientManagedDynamic,
+			gvrConfigurationPolicy,
+			case9ConfigPolicyName+"2",
+			clusterNamespace,
+			false,
+			defaultTimeoutSeconds,
+		)
+		yamlTrustedPlc = utils.ParseYaml("../resources/case9_template_sync/case9-config-policy.yaml")
+		Eventually(func() interface{} {
+			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
+				case9ConfigPolicyName, clusterNamespace, true, defaultTimeoutSeconds)
+
+			return trustedPlc.Object["spec"]
+		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
+	})
 	It("should override remediationAction in spec", func() {
 		By("Patching policy remediationAction=enforce")
 		plc := utils.GetWithTimeout(

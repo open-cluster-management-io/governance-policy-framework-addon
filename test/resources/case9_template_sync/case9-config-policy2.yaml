@@ -1,0 +1,17 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: case9-config-policy2
+spec:
+  remediationAction: inform
+  pruneObjectBehavior: "None"
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: configmap-e2e
+          namespace: default
+        data:
+          test: data
