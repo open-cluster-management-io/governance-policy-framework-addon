@@ -1,0 +1,17 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: case15-config-policy-stable
+spec:
+  remediationAction: inform
+  pruneObjectBehavior: "None"
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: demo-templates
+          namespace: test
+        data:
+          app-name: sampleApp

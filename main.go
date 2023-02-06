@@ -23,7 +23,10 @@ import (
 
 	// to ensure that exec-entrypoint and run can make use of them.
 	v1 "k8s.io/api/core/v1"
+	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -74,6 +77,8 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 	utilruntime.Must(policiesv1.AddToScheme(scheme))
 	utilruntime.Must(policiesv1.AddToScheme(eventsScheme))
+	utilruntime.Must(extensionsv1.AddToScheme(scheme))
+	utilruntime.Must(extensionsv1beta1.AddToScheme(scheme))
 }
 
 func main() {
@@ -331,9 +336,23 @@ func getManager(
 
 	hubRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: statussync.ControllerName})
 
+	crdLabelSelector := labels.SelectorFromSet(map[string]string{templatesync.PolicyTypeLabel: "template"})
+
 	options.LeaderElectionID = "governance-policy-framework-addon.open-cluster-management.io"
 	options.HealthProbeBindAddress = healthAddr
 	options.Namespace = tool.Options.ClusterNamespace
+	options.NewCache = cache.BuilderWithOptions(
+		cache.Options{
+			SelectorsByObject: cache.SelectorsByObject{
+				&extensionsv1.CustomResourceDefinition{}: {
+					Label: crdLabelSelector,
+				},
+				&extensionsv1beta1.CustomResourceDefinition{}: {
+					Label: crdLabelSelector,
+				},
+			},
+		},
+	)
 
 	mgr, err := ctrl.NewManager(managedCfg, options)
 	if err != nil {

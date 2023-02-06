@@ -12,11 +12,14 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
+	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -36,14 +39,17 @@ import (
 )
 
 const (
-	ControllerName string = "policy-template-sync"
-	policyFmtStr   string = "policy: %s/%s"
+	ControllerName    string = "policy-template-sync"
+	policyFmtStr      string = "policy: %s/%s"
+	PolicyTypeLabel   string = "policy.open-cluster-management.io/policy-type"
+	parentPolicyLabel string = "policy.open-cluster-management.io/policy"
 )
 
 var log = ctrl.Log.WithName(ControllerName)
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=*,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list
 
 // Setup sets up the controller
 func (r *PolicyReconciler) Setup(mgr ctrl.Manager, depEvents *source.Channel) error {
@@ -177,6 +183,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	// As a quirk of the error handling, only the last occurring error is "returned" by Reconcile.
 	var resultError error
 
+	var templateNames []string
+
 	// PolicyTemplates is not empty
 	// loop through policy templates
 	for tIndex, policyT := range instance.Spec.PolicyTemplates {
@@ -258,6 +266,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			continue
 		}
+
+		templateNames = append(templateNames, tName)
 
 		tLogger := reqLogger.WithValues("template", tName)
 
@@ -354,6 +364,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					labels["cluster-namespace"] = instance.GetLabels()[common.ClusterNamespaceLabel]
 					labels[common.ClusterNamespaceLabel] = instance.GetLabels()[common.ClusterNamespaceLabel]
 				}
+
+				// set label to identify parent policy for this template
+				labels[parentPolicyLabel] = instance.GetName()
 
 				tObjectUnstructured.SetLabels(labels)
 				tObjectUnstructured.SetOwnerReferences([]metav1.OwnerReference{plcOwnerReferences})
@@ -542,9 +555,95 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		policySystemErrorsCounter.WithLabelValues(instance.Name, "", "client-error").Inc()
 	}
 
+	err = r.cleanUpExcessTemplates(ctx, dClient, *instance, templateNames)
+	if err != nil {
+		resultError = err
+		reqLogger.Error(resultError, "Error cleaning up templates")
+	}
+
 	reqLogger.Info("Completed the reconciliation")
 
 	return reconcile.Result{}, resultError
+}
+
+// cleanUpExcessTemplates compares existing policy templates on the cluster to those contained in the policy,
+// and deletes those that have been renamed or removed from the parent policy
+func (r *PolicyReconciler) cleanUpExcessTemplates(
+	ctx context.Context,
+	dClient dynamic.Interface,
+	instance policiesv1.Policy,
+	templateNames []string,
+) error {
+	crdLabelSelector := labels.SelectorFromSet(map[string]string{PolicyTypeLabel: "template"})
+	crdsv1 := extensionsv1.CustomResourceDefinitionList{}
+	tmplGVRs := []schema.GroupVersionResource{}
+
+	// build list of GVRs for templates to check the parent label on
+	err := r.List(ctx, &crdsv1, &client.ListOptions{LabelSelector: crdLabelSelector})
+	if err == nil {
+		for _, crd := range crdsv1.Items {
+			if len(crd.Spec.Versions) > 0 {
+				tmplGVRs = append(tmplGVRs, schema.GroupVersionResource{
+					Group:    crd.Spec.Group,
+					Resource: crd.Spec.Names.Plural,
+					Version:  crd.Spec.Versions[0].Name,
+				})
+			}
+		}
+	} else if meta.IsNoMatchError(err) {
+		crdsv1beta1 := extensionsv1beta1.CustomResourceDefinitionList{}
+		err := r.List(ctx, &crdsv1beta1, &client.ListOptions{LabelSelector: crdLabelSelector})
+		if err != nil {
+			return fmt.Errorf("error listing v1beta1 CRDs with %s label: %w", crdLabelSelector, err)
+		}
+		for _, crd := range crdsv1beta1.Items {
+			if len(crd.Spec.Versions) > 0 {
+				tmplGVRs = append(tmplGVRs, schema.GroupVersionResource{
+					Group:    crd.Spec.Group,
+					Resource: crd.Spec.Names.Plural,
+					Version:  crd.Spec.Versions[0].Name,
+				})
+			}
+		}
+	} else {
+		return fmt.Errorf("error listing v1 CRDs with %s label: %w", crdLabelSelector, err)
+	}
+
+	for _, gvr := range tmplGVRs {
+		// iterate through all templates with parent label set to see if they match
+		children, err := dClient.Resource(gvr).Namespace(r.ClusterNamespace).List(ctx, metav1.ListOptions{
+			LabelSelector: parentPolicyLabel + "=" + instance.GetName(),
+		})
+		if err != nil {
+			return fmt.Errorf("error listing %s objects: %w", gvr.String(), err)
+		}
+
+		for _, tmpl := range children.Items {
+			// delete all templates with label that aren't still in the policy
+			found := false
+
+			for _, parentTmplName := range templateNames {
+				if parentTmplName == tmpl.GetName() {
+					found = true
+
+					break
+				}
+			}
+
+			if !found {
+				err := dClient.Resource(schema.GroupVersionResource{
+					Group:    gvr.Group,
+					Version:  gvr.Version,
+					Resource: gvr.Resource,
+				}).Namespace(r.ClusterNamespace).Delete(ctx, tmpl.GetName(), metav1.DeleteOptions{})
+				if err != nil {
+					return fmt.Errorf("error deleting %s object %s: %w", gvr.String(), tmpl.GetName(), err)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // processDependencies iterates through all dependencies of a template and returns an array of any that are not met
