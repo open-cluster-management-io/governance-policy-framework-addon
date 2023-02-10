@@ -13,25 +13,16 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
-const (
-	case1PolicyName string = "case1-test-policy"
-	case1PolicyYaml string = "../resources/case1_mutation_recovery/case1-test-policy.yaml"
-)
-
 var _ = Describe("Test mutation recovery", func() {
+	const (
+		case1PolicyName string = "case1-test-policy"
+		case1PolicyYaml string = "../resources/case1_mutation_recovery/case1-test-policy.yaml"
+	)
+
 	BeforeEach(func() {
-		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case1PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case1PolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubApplyPolicy(case1PolicyName, case1PolicyYaml)
 	})
+
 	AfterEach(func() {
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("delete", "-f", case1PolicyYaml, "-n", clusterNamespaceOnHub)

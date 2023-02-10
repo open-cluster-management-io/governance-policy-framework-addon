@@ -266,3 +266,19 @@ func checkCompliance(name string) func() string {
 		return compliant
 	}
 }
+
+func hubApplyPolicy(name, path string) {
+	By("Applying policy " + path + " to the hub in ns: " + clusterNamespaceOnHub)
+
+	_, err := kubectlHub("apply", "-f", path, "-n", clusterNamespaceOnHub)
+	ExpectWithOffset(1, err).Should(BeNil())
+
+	hubPlc := propagatorutils.GetWithTimeout(
+		clientHubDynamic,
+		gvrPolicy,
+		name,
+		clusterNamespaceOnHub,
+		true,
+		defaultTimeoutSeconds)
+	ExpectWithOffset(1, hubPlc).NotTo(BeNil())
+}

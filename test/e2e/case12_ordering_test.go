@@ -45,21 +45,11 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 	)
 
 	hubPolicyApplyAndDeferCleanup := func(yamlFile, policyName string) {
-		_, err := kubectlHub("apply", "-f", yamlFile, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			policyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubApplyPolicy(policyName, yamlFile)
 
 		DeferCleanup(func() {
 			By("Deleting policy " + policyName + " on hub cluster in ns: " + clusterNamespaceOnHub)
-			_, err = kubectlHub("delete", "-f", yamlFile, "-n", clusterNamespaceOnHub)
+			_, err := kubectlHub("delete", "-f", yamlFile, "-n", clusterNamespaceOnHub)
 			Expect(err).To(BeNil())
 		})
 	}

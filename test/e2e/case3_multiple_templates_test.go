@@ -13,11 +13,6 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
-const (
-	case3PolicyName string = "case3-test-policy"
-	case3PolicyYaml string = "../resources/case3_multiple_templates/case3-test-policy.yaml"
-)
-
 func getCompliant(policy *unstructured.Unstructured) string {
 	status, statusOk := policy.Object["status"].(map[string]interface{})
 	if !statusOk {
@@ -33,18 +28,13 @@ func getCompliant(policy *unstructured.Unstructured) string {
 }
 
 var _ = Describe("Test status sync with multiple templates", func() {
+	const (
+		case3PolicyName string = "case3-test-policy"
+		case3PolicyYaml string = "../resources/case3_multiple_templates/case3-test-policy.yaml"
+	)
+
 	BeforeEach(func() {
-		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case3PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case3PolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubApplyPolicy(case3PolicyName, case3PolicyYaml)
 	})
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {

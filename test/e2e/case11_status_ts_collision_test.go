@@ -103,12 +103,9 @@ func case11cleanup() {
 
 var _ = Describe("Test event sorting by name when timestamps collide", Ordered, func() {
 	It("Creates the policy and one event, and shows compliant", func() {
-		_, err := utils.KubectlWithOutput(
-			"apply", "-f", case11PolicyYaml, "-n", clusterNamespaceOnHub, case11hubconfig,
-		)
-		Expect(err).Should(BeNil())
+		hubApplyPolicy(case11PolicyName, case11PolicyYaml)
 
-		_, err = utils.KubectlWithOutput(
+		_, err := utils.KubectlWithOutput(
 			"apply", "-f", case11PolicyYaml, "-n", clusterNamespace, case11managedconfig,
 		)
 		Expect(err).Should(BeNil())
@@ -165,12 +162,9 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 
 var _ = Describe("Test event sorting by eventtime when timestamps collide", Ordered, func() {
 	It("Creates the policy and one event, and shows compliant", func() {
-		_, err := utils.KubectlWithOutput(
-			"apply", "-f", case11PolicyYaml, "-n", clusterNamespaceOnHub, case11hubconfig,
-		)
-		Expect(err).Should(BeNil())
+		hubApplyPolicy(case11PolicyName, case11PolicyYaml)
 
-		_, err = utils.KubectlWithOutput(
+		_, err := utils.KubectlWithOutput(
 			"apply", "-f", case11PolicyYaml, "-n", clusterNamespace, case11managedconfig,
 		)
 		Expect(err).Should(BeNil())

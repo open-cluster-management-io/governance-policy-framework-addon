@@ -13,12 +13,12 @@ import (
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/secretsync"
 )
 
-const (
-	case8SecretYAML          = "../resources/case8_sync_secret/secret.yaml"
-	case8UnrelatedSecretYAML = "../resources/case8_sync_secret/unrelated_secret.yaml"
-)
+var _ = Describe("Test secret sync", func() {
+	const (
+		case8SecretYAML          = "../resources/case8_sync_secret/secret.yaml"
+		case8UnrelatedSecretYAML = "../resources/case8_sync_secret/unrelated_secret.yaml"
+	)
 
-var _ = Describe("Test spec sync", func() {
 	AfterEach(func() {
 		By("Deleting the test secrets on the Hub")
 		_, _ = kubectlHub("delete", "-f", case8SecretYAML, "-n", clusterNamespaceOnHub)

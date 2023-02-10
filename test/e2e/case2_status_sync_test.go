@@ -14,24 +14,14 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
-const (
-	case2PolicyName string = "case2-test-policy"
-	case2PolicyYaml string = "../resources/case2_status_sync/case2-test-policy.yaml"
-)
-
 var _ = Describe("Test status sync", func() {
+	const (
+		case2PolicyName string = "case2-test-policy"
+		case2PolicyYaml string = "../resources/case2_status_sync/case2-test-policy.yaml"
+	)
+
 	BeforeEach(func() {
-		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case2PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case2PolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubApplyPolicy(case2PolicyName, case2PolicyYaml)
 	})
 	AfterEach(func() {
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
