@@ -14,24 +14,15 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
-const (
-	case4PolicyName string = "case4-test-policy"
-	case4PolicyYaml string = "../resources/case4_status_merge/case4-test-policy.yaml"
-)
-
 var _ = Describe("Test status sync with multiple templates", func() {
+	const (
+		case4PolicyName string = "case4-test-policy"
+		case4PolicyYaml string = "../resources/case4_status_merge/case4-test-policy.yaml"
+	)
+
 	BeforeEach(func() {
-		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case4PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case4PolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubApplyPolicy(case4PolicyName, case4PolicyYaml)
+
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,

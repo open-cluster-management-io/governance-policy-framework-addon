@@ -12,39 +12,14 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
-const (
-	case6PolicyName string = "case6-test-policy"
-	case6PolicyYaml string = "../resources/case6_event_msg/case6-test-policy.yaml"
-)
-
 var _ = Describe("Test event message handling", func() {
+	const (
+		case6PolicyName string = "case6-test-policy"
+		case6PolicyYaml string = "../resources/case6_event_msg/case6-test-policy.yaml"
+	)
 	BeforeEach(func() {
-		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub(
-			"apply",
-			"-f",
-			case6PolicyYaml,
-			"-n",
-			clusterNamespaceOnHub,
-		)
-		Expect(err).Should(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case6PolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
-		By("Creating a policy on the hub in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub(
-			"apply",
-			"-f",
-			case6PolicyYaml,
-			"-n",
-			clusterNamespaceOnHub,
-		)
-		Expect(err).Should(BeNil())
+		hubApplyPolicy(case6PolicyName, case6PolicyYaml)
+
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,

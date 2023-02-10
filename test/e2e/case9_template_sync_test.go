@@ -14,20 +14,15 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
-const (
-	case9PolicyName       string = "case9-test-policy"
-	case9PolicyYaml       string = "../resources/case9_template_sync/case9-test-policy.yaml"
-	case9ConfigPolicyName string = "case9-config-policy"
-)
-
 var _ = Describe("Test template sync", func() {
+	const (
+		case9PolicyName       string = "case9-test-policy"
+		case9PolicyYaml       string = "../resources/case9_template_sync/case9-test-policy.yaml"
+		case9ConfigPolicyName string = "case9-config-policy"
+	)
+
 	BeforeEach(func() {
-		By("Creating a policy on the hub in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case9PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
-		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case9PolicyName, clusterNamespace, true,
-			defaultTimeoutSeconds)
-		Expect(plc).NotTo(BeNil())
+		hubApplyPolicy(case9PolicyName, case9PolicyYaml)
 	})
 	AfterEach(func() {
 		By("Deleting a policy on the hub in ns:" + clusterNamespaceOnHub)
@@ -67,9 +62,8 @@ var _ = Describe("Test template sync", func() {
 	})
 	It("should still override remediationAction in spec when there is no remediationAction", func() {
 		By("Updating policy with no remediationAction")
-		_, err := kubectlHub("apply", "-f",
-			"../resources/case9_template_sync/case9-test-policy-no-remediation.yaml", "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
+		hubApplyPolicy(case9PolicyName, "../resources/case9_template_sync/case9-test-policy-no-remediation.yaml")
+
 		By("Checking template policy remediationAction")
 		Eventually(func() interface{} {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,

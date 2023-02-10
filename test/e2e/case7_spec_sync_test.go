@@ -10,24 +10,14 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
-const (
-	case7PolicyName string = "case7-test-policy"
-	case7PolicyYaml string = "../resources/case7_spec_sync/case7-test-policy.yaml"
-)
-
 var _ = Describe("Test spec sync", func() {
+	const (
+		case7PolicyName string = "case7-test-policy"
+		case7PolicyYaml string = "../resources/case7_spec_sync/case7-test-policy.yaml"
+	)
+
 	BeforeEach(func() {
-		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("apply", "-f", case7PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
-		plc := utils.GetWithTimeout(
-			clientManagedDynamic,
-			gvrPolicy,
-			case7PolicyName,
-			clusterNamespace,
-			true,
-			defaultTimeoutSeconds)
-		Expect(plc).NotTo(BeNil())
+		hubApplyPolicy(case7PolicyName, case7PolicyYaml)
 	})
 	AfterEach(func() {
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
@@ -72,23 +62,8 @@ var _ = Describe("Test spec sync", func() {
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(hubPlc.Object["spec"]))
 	})
 	It("should update policy to a different policy template", func() {
-		By("Updating policy on hub with ../resources/case7_propagation/case7-test-policy2.yaml")
-		_, err := kubectlHub(
-			"apply",
-			"-f",
-			"../resources/case7_spec_sync/case7-test-policy2.yaml",
-			"-n",
-			clusterNamespaceOnHub,
-		)
-		Expect(err).Should(BeNil())
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			case7PolicyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		Expect(hubPlc).NotTo(BeNil())
+		hubApplyPolicy(case7PolicyName, "../resources/case7_spec_sync/case7-test-policy2.yaml")
+
 		yamlPlc := utils.ParseYaml("../resources/case7_spec_sync/case7-test-policy2.yaml")
 		Eventually(func() interface{} {
 			managedPlc := utils.GetWithTimeout(

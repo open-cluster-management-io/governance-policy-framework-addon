@@ -31,14 +31,8 @@ var _ = Describe("Test user error metrics", Ordered, func() {
 	AfterAll(cleanup)
 
 	It("Should increment user error metric on user error", func() {
-		By(
-			"Creating policy " + policyName + " on hub cluster " +
-				"in ns:" + clusterNamespaceOnHub,
-		)
-		_, err := kubectlHub(
-			"apply", "-f", policyFile, "-n", clusterNamespaceOnHub,
-		)
-		Expect(err).Should(BeNil())
+		hubApplyPolicy(policyName, policyFile)
+
 		By("Checking for the " + metricName + " metric on the template-sync controller")
 		values := []string{}
 		Eventually(func() []string {
