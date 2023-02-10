@@ -424,14 +424,33 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
-		refName := eObject.GetOwnerReferences()[0].Name
+		refName := ""
+
+		for _, ownerref := range eObject.GetOwnerReferences() {
+			refName = ownerref.Name
+
+			break // just get the first ownerReference, if there are any at all
+		}
+
 		// violation if object reference and policy don't match
 		if instance.GetName() != refName {
-			errMsg := fmt.Sprintf(
-				"Template name must be unique. Policy template with kind: %s name: %s already exists in policy %s",
-				tObjectUnstructured.Object["kind"],
-				tName,
-				refName)
+			var errMsg string
+
+			if refName == "" {
+				errMsg = fmt.Sprintf(
+					"Template name must be unique. Policy template with "+
+						"kind: %s name: %s already exists outside of a Policy",
+					tObjectUnstructured.Object["kind"],
+					tName)
+			} else {
+				errMsg = fmt.Sprintf(
+					"Template name must be unique. Policy template with "+
+						"kind: %s name: %s already exists in policy %s",
+					tObjectUnstructured.Object["kind"],
+					tName,
+					refName)
+			}
+
 			resultError = errors.NewBadRequest(errMsg)
 
 			r.emitTemplateError(instance, tIndex, tName, errMsg)

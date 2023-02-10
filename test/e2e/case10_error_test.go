@@ -217,6 +217,34 @@ var _ = Describe("Test error handling", func() {
 			1,
 		).Should(BeFalse())
 	})
+	It("should throw a noncompliance event if the template already exists outside of a policy", func() {
+		By("Creating the ConfigurationPolicy on the managed cluster directly")
+		_, err := kubectlManaged(
+			"apply",
+			"--filename=../resources/case10_template_sync_error_test/working-policy-configpol.yaml",
+			"--namespace="+clusterNamespace,
+		)
+		Expect(err).Should(BeNil())
+
+		managedPlc := utils.GetWithTimeout(
+			clientManagedDynamic,
+			gvrConfigurationPolicy,
+			"case10-config-policy",
+			clusterNamespace,
+			true,
+			defaultTimeoutSeconds)
+		ExpectWithOffset(1, managedPlc).NotTo(BeNil())
+
+		hubApplyPolicy("case10-test-policy",
+			"../resources/case10_template_sync_error_test/working-policy.yaml")
+
+		By("Checking for the error event")
+		Eventually(
+			checkForEvent("case10-test-policy", "already exists outside of a Policy"),
+			defaultTimeoutSeconds,
+			1,
+		).Should(BeTrue())
+	})
 })
 
 // Checks for an event on the managed cluster
