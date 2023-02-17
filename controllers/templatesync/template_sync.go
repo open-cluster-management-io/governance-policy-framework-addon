@@ -185,6 +185,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	var templateNames []string
 
+	// Array of templates managed by this policy to watch
+	var childTemplates []depclient.ObjectIdentifier
+
 	// PolicyTemplates is not empty
 	// loop through policy templates
 	for tIndex, policyT := range instance.Spec.PolicyTemplates {
@@ -266,6 +269,14 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			continue
 		}
+
+		childTemplates = append(childTemplates, depclient.ObjectIdentifier{
+			Group:     gvk.Group,
+			Version:   gvk.Version,
+			Kind:      gvk.Kind,
+			Namespace: instance.GetNamespace(),
+			Name:      tName,
+		})
 
 		templateNames = append(templateNames, tName)
 
@@ -445,6 +456,25 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			break // just get the first ownerReference, if there are any at all
 		}
 
+		parentPolicyLabel, ok := eObject.GetLabels()["policy.open-cluster-management.io/policy"]
+
+		if refName == "" && ok && parentPolicyLabel == instance.GetName() {
+			// if owner ref has been unset but the template is still managed by this policy instance,
+			// recover the owner reference
+			plcOwnerReferences := *metav1.NewControllerRef(instance, schema.GroupVersionKind{
+				Group:   policiesv1.SchemeGroupVersion.Group,
+				Version: policiesv1.SchemeGroupVersion.Version,
+				Kind:    policiesv1.Kind,
+			})
+
+			tObjectUnstructured.SetOwnerReferences([]metav1.OwnerReference{plcOwnerReferences})
+
+			refName = instance.GetName()
+		} else {
+			// otherwise, leave the owner reference as-is
+			tObjectUnstructured.SetOwnerReferences(eObject.GetOwnerReferences())
+		}
+
 		// violation if object reference and policy don't match
 		if instance.GetName() != refName {
 			var errMsg string
@@ -478,13 +508,16 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// got object, need to compare both spec and annotation and update
 		eObjectUnstructured := eObject.UnstructuredContent()
 		if (!equality.Semantic.DeepEqual(eObjectUnstructured["spec"], tObjectUnstructured.Object["spec"])) ||
-			(!equality.Semantic.DeepEqual(eObject.GetAnnotations(), tObjectUnstructured.GetAnnotations())) {
+			(!equality.Semantic.DeepEqual(eObject.GetAnnotations(), tObjectUnstructured.GetAnnotations())) ||
+			(!equality.Semantic.DeepEqual(eObject.GetOwnerReferences(), tObjectUnstructured.GetOwnerReferences())) {
 			// doesn't match
 			tLogger.Info("Existing object and template didn't match, will update")
 
 			eObjectUnstructured["spec"] = tObjectUnstructured.Object["spec"]
 
 			eObject.SetAnnotations(tObjectUnstructured.GetAnnotations())
+
+			eObject.SetOwnerReferences(tObjectUnstructured.GetOwnerReferences())
 
 			_, err = res.Update(ctx, eObject, metav1.UpdateOptions{})
 			if err != nil {
@@ -537,13 +570,15 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		Name:      instance.Name,
 	}
 
-	if len(allDeps) != 0 {
-		depsToWatch := make([]depclient.ObjectIdentifier, 0, len(allDeps))
+	if len(allDeps) != 0 || len(childTemplates) != 0 {
+		objectsToWatch := make([]depclient.ObjectIdentifier, 0, len(allDeps)+len(childTemplates))
 		for depID := range allDeps {
-			depsToWatch = append(depsToWatch, depID)
+			objectsToWatch = append(objectsToWatch, depID)
 		}
 
-		err = r.DynamicWatcher.AddOrUpdateWatcher(policyObjectID, depsToWatch...)
+		objectsToWatch = append(objectsToWatch, childTemplates...)
+
+		err = r.DynamicWatcher.AddOrUpdateWatcher(policyObjectID, objectsToWatch...)
 	} else {
 		err = r.DynamicWatcher.RemoveWatcher(policyObjectID)
 	}
