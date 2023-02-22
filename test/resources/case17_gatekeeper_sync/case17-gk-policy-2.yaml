@@ -1,0 +1,23 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: case17-gk-policy-2
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: constraints.gatekeeper.sh/v1beta1
+        kind: Case17K8sRequiredLabels
+        metadata:
+          name: case17-gk-constraint-2
+        spec:
+          enforcementAction: dryrun
+          match:
+            kinds:
+              - apiGroups: [""]
+                kinds: ["Namespace"]
+          parameters:
+            message: "All namespaces must have a `super-duper` label"
+            labels:
+            - key: "super-duper"

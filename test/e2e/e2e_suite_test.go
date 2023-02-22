@@ -42,6 +42,7 @@ var (
 	gvrSecret              schema.GroupVersionResource
 	gvrEvent               schema.GroupVersionResource
 	gvrConfigurationPolicy schema.GroupVersionResource
+	gvrConstraintTemplate  schema.GroupVersionResource
 	kubeconfigHub          string
 	kubeconfigManaged      string
 	defaultTimeoutSeconds  int
@@ -51,6 +52,10 @@ var (
 	defaultImageRegistry string
 
 	managedRecorder record.EventRecorder
+)
+
+const (
+	gvConstraintGroup = "constraints.gatekeeper.sh"
 )
 
 func TestE2e(t *testing.T) {
@@ -84,7 +89,6 @@ var _ = BeforeSuite(func() {
 		Resource: "secrets",
 	}
 	gvrEvent = schema.GroupVersionResource{
-		Group:    "",
 		Version:  "v1",
 		Resource: "events",
 	}
@@ -92,6 +96,11 @@ var _ = BeforeSuite(func() {
 		Group:    "policy.open-cluster-management.io",
 		Version:  "v1",
 		Resource: "configurationpolicies",
+	}
+	gvrConstraintTemplate = schema.GroupVersionResource{
+		Group:    "templates.gatekeeper.sh",
+		Version:  "v1",
+		Resource: "constrainttemplates",
 	}
 	clientHub = NewKubeClient("", kubeconfigHub, "")
 	clientHubDynamic = NewKubeClientDynamic("", kubeconfigHub, "")
@@ -281,4 +290,26 @@ func hubApplyPolicy(name, path string) {
 		true,
 		defaultTimeoutSeconds)
 	ExpectWithOffset(1, hubPlc).NotTo(BeNil())
+}
+
+func DeployGatekeeper() {
+	By("Deploying Gatekeeper " + utils.GkVersion + " to the managed cluster")
+	_, err := kubectlManaged("apply", "-f", utils.GkDeployment)
+	Expect(err).Should(BeNil())
+
+	EventuallyWithOffset(1, func(g Gomega) {
+		deployments, err := clientManaged.AppsV1().Deployments("gatekeeper-system").
+			List(context.TODO(), metav1.ListOptions{})
+		g.Expect(err).Should(BeNil())
+
+		var available bool
+		for _, deployment := range deployments.Items {
+			for _, condition := range deployment.Status.Conditions {
+				if condition.Reason == "MinimumReplicasAvailable" {
+					available = condition.Status == "True"
+				}
+			}
+			g.Expect(available).To(BeTrue())
+		}
+	}, defaultTimeoutSeconds, 1).Should(Succeed())
 }

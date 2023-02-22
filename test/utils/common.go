@@ -14,6 +14,12 @@ import (
 	"k8s.io/client-go/tools/record"
 )
 
+var (
+	GkVersion    = "v3.11.0"
+	GkDeployment = "https://raw.githubusercontent.com/open-policy-agent/gatekeeper/" +
+		GkVersion + "/deploy/gatekeeper.yaml"
+)
+
 // CreateRecorder return recorder
 func CreateRecorder(kubeClient kubernetes.Interface, componentName string) (record.EventRecorder, error) {
 	eventsScheme := runtime.NewScheme()

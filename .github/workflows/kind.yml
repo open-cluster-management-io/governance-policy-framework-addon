@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       REGISTRY: localhost:5000
+      KIND_VERSION: ${{ matrix.kind }}
     strategy:
       fail-fast: false
       matrix:
@@ -62,8 +63,6 @@ jobs:
         make test
 
     - name: Create K8s KinD Cluster - ${{ matrix.kind }}
-      env:
-        KIND_VERSION: ${{ matrix.kind }}
       run: |
         make kind-bootstrap-cluster-dev
 
@@ -81,7 +80,7 @@ jobs:
         make e2e-test-coverage
 
     - name: Test Coverage Verification
-      if: ${{ github.event_name == 'pull_request' }}
+      if: ${{ github.event_name == 'pull_request' && matrix.kind == 'latest' }}
       run: |
         make test-coverage
         make coverage-verify
