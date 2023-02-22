@@ -1,0 +1,14 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: Case17K8sRequiredLabels
+metadata:
+  name: case17-gk-constraint-2
+spec:
+  enforcementAction: warn
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Namespace"]
+  parameters:
+    message: "All namespaces must have a `super-duper` label"
+    labels:
+    - key: "super-duper"

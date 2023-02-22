@@ -18,6 +18,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 )
 
 const ControllerName string = "policy-spec-sync"
@@ -110,8 +112,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			managedPlc = instance.DeepCopy()
 			managedPlc.Namespace = r.TargetNamespace
 
-			if managedPlc.Labels["policy.open-cluster-management.io/cluster-namespace"] != "" {
-				managedPlc.Labels["policy.open-cluster-management.io/cluster-namespace"] = r.TargetNamespace
+			if managedPlc.Labels[common.ClusterNamespaceLabel] != "" {
+				managedPlc.Labels[common.ClusterNamespaceLabel] = r.TargetNamespace
 			}
 
 			managedPlc.SetOwnerReferences(nil)
@@ -134,7 +136,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 	}
 	// found, then compare and update
-	if !common.CompareSpecAndAnnotation(instance, managedPlc) {
+	if !utils.EquivalentReplicatedPolicies(instance, managedPlc) {
 		// update needed
 		reqLogger.Info("Policy mismatch between hub and managed, updating it...")
 		managedPlc.SetAnnotations(instance.GetAnnotations())

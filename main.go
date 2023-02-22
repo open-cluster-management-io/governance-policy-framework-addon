@@ -17,11 +17,11 @@ import (
 	"sync"
 
 	"github.com/go-logr/zapr"
+	gktemplatesv1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
+	gktemplatesv1beta1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1beta1"
 	"github.com/spf13/pflag"
 	"github.com/stolostron/go-log-utils/zaputil"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
-
-	// to ensure that exec-entrypoint and run can make use of them.
 	v1 "k8s.io/api/core/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -51,6 +51,7 @@ import (
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/specsync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/statussync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/templatesync"
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 	"open-cluster-management.io/governance-policy-framework-addon/tool"
 	"open-cluster-management.io/governance-policy-framework-addon/version"
 )
@@ -79,6 +80,8 @@ func init() {
 	utilruntime.Must(policiesv1.AddToScheme(eventsScheme))
 	utilruntime.Must(extensionsv1.AddToScheme(scheme))
 	utilruntime.Must(extensionsv1beta1.AddToScheme(scheme))
+	utilruntime.Must(gktemplatesv1.AddToScheme(scheme))
+	utilruntime.Must(gktemplatesv1beta1.AddToScheme(scheme))
 }
 
 func main() {
@@ -336,7 +339,7 @@ func getManager(
 
 	hubRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: statussync.ControllerName})
 
-	crdLabelSelector := labels.SelectorFromSet(map[string]string{templatesync.PolicyTypeLabel: "template"})
+	crdLabelSelector := labels.SelectorFromSet(map[string]string{utils.PolicyTypeLabel: "template"})
 
 	options.LeaderElectionID = "governance-policy-framework-addon.open-cluster-management.io"
 	options.HealthProbeBindAddress = healthAddr

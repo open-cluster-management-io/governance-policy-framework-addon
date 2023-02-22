@@ -47,6 +47,7 @@ MANAGED_CONFIG ?= $(PWD)/kubeconfig_managed
 # Set the Kind version tag
 ifeq ($(KIND_VERSION), minimum)
 	KIND_ARGS = --image kindest/node:v1.19.16
+	E2E_FILTER = --label-filter="!skip-minimum"
 else ifneq ($(KIND_VERSION), latest)
 	KIND_ARGS = --image kindest/node:$(KIND_VERSION)
 else
@@ -292,7 +293,7 @@ e2e-test: e2e-dependencies
 	$(GINKGO) -v --fail-fast --slow-spec-threshold=10s $(E2E_TEST_ARGS) test/e2e
 
 .PHONY: e2e-test-coverage
-e2e-test-coverage: E2E_TEST_ARGS = --json-report=report_e2e.json --output-dir=.
+e2e-test-coverage: E2E_TEST_ARGS = --json-report=report_e2e.json --output-dir=. $(E2E_FILTER)
 e2e-test-coverage: e2e-run-instrumented e2e-test e2e-stop-instrumented
 
 .PHONY: e2e-build-instrumented

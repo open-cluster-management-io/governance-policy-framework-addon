@@ -28,6 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 )
 
 const ControllerName string = "policy-status-sync"
@@ -110,8 +112,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			managedInstance := hubInstance.DeepCopy()
 			managedInstance.Namespace = request.Namespace
 
-			if managedInstance.Labels["policy.open-cluster-management.io/cluster-namespace"] != "" {
-				managedInstance.Labels["policy.open-cluster-management.io/cluster-namespace"] = request.Namespace
+			if managedInstance.Labels[common.ClusterNamespaceLabel] != "" {
+				managedInstance.Labels[common.ClusterNamespaceLabel] = request.Namespace
 			}
 
 			managedInstance.SetOwnerReferences(nil)
@@ -151,7 +153,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, err
 	}
 	// found, ensure managed plc matches hub plc
-	if !common.CompareSpecAndAnnotation(instance, hubPlc) {
+	if !utils.EquivalentReplicatedPolicies(instance, hubPlc) {
 		// plc mismatch, update to latest
 		instance.SetAnnotations(hubPlc.GetAnnotations())
 		instance.Spec = hubPlc.Spec
@@ -174,7 +176,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	// filter events to current policy instance and build map
 	eventForPolicyMap := make(map[string]*[]historyEvent)
 	// panic if regexp invalid
-	rgx := regexp.MustCompile(`(?i)^policy:\s*([A-Za-z0-9.-]+)\s*\/([A-Za-z0-9.-]+)`)
+	rgx := regexp.MustCompile(`(?i)^policy:\s*(?:([a-z0-9.-]+)\s*\/)?([a-z0-9.-]+)`)
 	for _, event := range eventList.Items {
 		// sample event.Reason -- reason: 'policy: calamari/policy-grc-rbactest-example'
 		reason := rgx.FindString(event.Reason)
