@@ -54,6 +54,7 @@ rules:
   - customresourcedefinitions
   verbs:
   - list
+  - watch
 - apiGroups:
   - ""
   resources:
