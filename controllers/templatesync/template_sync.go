@@ -87,6 +87,13 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	// Fetch the Policy instance
 	instance := &policiesv1.Policy{}
+	policyObjectID := depclient.ObjectIdentifier{
+		Group:     policiesv1.GroupVersion.Group,
+		Version:   policiesv1.GroupVersion.Version,
+		Kind:      "Policy",
+		Namespace: request.Namespace,
+		Name:      request.Name,
+	}
 
 	err := r.Get(ctx, request.NamespacedName, instance)
 	if err != nil {
@@ -98,6 +105,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			_ = policyUserErrorsCounter.DeletePartialMatch(prometheus.Labels{"policy": request.Name})
 			_ = policySystemErrorsCounter.DeletePartialMatch(prometheus.Labels{"policy": request.Name})
+
+			err := r.DynamicWatcher.RemoveWatcher(policyObjectID)
+			if err != nil {
+				reqLogger.Error(err, "Error updating dependency watcher. Ignoring the failure.")
+			}
 
 			return reconcile.Result{}, nil
 		}
@@ -560,14 +572,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			tLogger.Info("Existing object matches the policy template")
 		}
-	}
-
-	policyObjectID := depclient.ObjectIdentifier{
-		Group:     instance.GroupVersionKind().Group,
-		Version:   instance.GroupVersionKind().Version,
-		Kind:      instance.GroupVersionKind().Kind,
-		Namespace: instance.Namespace,
-		Name:      instance.Name,
 	}
 
 	if len(allDeps) != 0 || len(childTemplates) != 0 {
