@@ -666,19 +666,23 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				log.Error(err, "Failed to apply defaults to the ConstraintTemplate for comparison. Continuing.")
 			}
 		}
+		// verify parent policy label is set properly
+		tObjectUnstructured.SetLabels(r.setDefaultTemplateLabels(instance, tObjectUnstructured.GetLabels()))
 
 		overrideRemediationAction(instance, tObjectUnstructured)
+
 		// got object, need to compare both spec and annotation and update
 		eObjectUnstructured := eObject.UnstructuredContent()
-		if (!equality.Semantic.DeepEqual(eObjectUnstructured["spec"], tObjectUnstructured.Object["spec"])) ||
-			(!equality.Semantic.DeepEqual(eObject.GetAnnotations(), tObjectUnstructured.GetAnnotations())) ||
-			(!equality.Semantic.DeepEqual(eObject.GetOwnerReferences(), tObjectUnstructured.GetOwnerReferences())) {
+
+		if !equivalentTemplates(eObject, tObjectUnstructured) {
 			// doesn't match
 			tLogger.Info("Existing object and template didn't match, will update")
 
 			eObjectUnstructured["spec"] = tObjectUnstructured.Object["spec"]
 
 			eObject.SetAnnotations(tObjectUnstructured.GetAnnotations())
+
+			eObject.SetLabels(tObjectUnstructured.GetLabels())
 
 			eObject.SetOwnerReferences(tObjectUnstructured.GetOwnerReferences())
 
@@ -804,6 +808,50 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	reqLogger.Info("Completed the reconciliation")
 
 	return reconcile.Result{}, resultError
+}
+
+// equivalentTemplates determines whether the template existing on the cluster and the policy template are the same
+func equivalentTemplates(eObject *unstructured.Unstructured, tObject *unstructured.Unstructured) bool {
+	if !equality.Semantic.DeepEqual(eObject.UnstructuredContent()["spec"], tObject.Object["spec"]) {
+		return false
+	}
+
+	if !equality.Semantic.DeepEqual(eObject.GetAnnotations(), tObject.GetAnnotations()) {
+		return false
+	}
+
+	if !equality.Semantic.DeepEqual(eObject.GetLabels(), tObject.GetLabels()) {
+		return false
+	}
+
+	if !equality.Semantic.DeepEqual(eObject.GetOwnerReferences(), tObject.GetOwnerReferences()) {
+		return false
+	}
+
+	return true
+}
+
+// setDefaultTemplateLabels ensures the template contains all necessary labels for processing
+func (r *PolicyReconciler) setDefaultTemplateLabels(instance *policiesv1.Policy,
+	labels map[string]string,
+) map[string]string {
+	if labels == nil {
+		labels = map[string]string{}
+	}
+
+	desiredLabels := map[string]string{
+		parentPolicyLabel:            instance.GetName(),
+		"cluster-name":               instance.GetLabels()[common.ClusterNameLabel],
+		common.ClusterNameLabel:      instance.GetLabels()[common.ClusterNameLabel],
+		"cluster-namespace":          r.ClusterNamespace,
+		common.ClusterNamespaceLabel: instance.GetLabels()[common.ClusterNamespaceLabel],
+	}
+
+	for key, label := range desiredLabels {
+		labels[key] = label
+	}
+
+	return labels
 }
 
 // cleanUpExcessTemplates compares existing policy templates on the cluster to those contained in the policy,
