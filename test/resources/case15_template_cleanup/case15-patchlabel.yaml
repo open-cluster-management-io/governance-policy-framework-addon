@@ -1,0 +1,3 @@
+metadata:
+  labels:
+    policy.open-cluster-management.io/policy: policy-doesnotexist

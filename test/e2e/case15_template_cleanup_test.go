@@ -101,5 +101,26 @@ var _ = Describe("Test template sync", func() {
 		cfgplc = utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy, case15ConfigPolicyRenamed,
 			clusterNamespace, false, defaultTimeoutSeconds*2)
 		Expect(cfgplc).To(BeNil())
+
+		By("Verifying parent label can be set after template creation")
+		_, err = kubectlManaged("patch", "configurationpolicy", case15ConfigPolicyNameStable, "-n", clusterNamespace,
+			"--type", "merge", "--patch-file", "../resources/case15_template_cleanup/case15-patchlabel.yaml")
+		Expect(err).Should(BeNil())
+
+		Eventually(func() interface{} {
+			configPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
+				case15ConfigPolicyNameStable, clusterNamespace, true, defaultTimeoutSeconds)
+
+			md, ok := configPlc.Object["metadata"].(map[string]interface{})
+			if !ok {
+				return nil
+			}
+			labels, ok := md["labels"]
+			if !ok {
+				return nil
+			}
+
+			return labels.(map[string]interface{})["policy.open-cluster-management.io/policy"].(string)
+		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(case15PolicyName))
 	})
 })
