@@ -19,23 +19,28 @@ import (
 
 var _ = Describe("Test Gatekeeper ConstraintTemplate sync", Ordered, Label("skip-minimum"), func() {
 	const (
-		caseNumber               string = "case17"
-		policyName               string = caseNumber + "-gk-policy"
-		policyName2              string = caseNumber + "-gk-policy-2"
-		yamlBasePath             string = "../resources/" + caseNumber + "_gatekeeper_sync/"
-		policyYaml               string = yamlBasePath + policyName + ".yaml"
-		policyYaml2              string = yamlBasePath + policyName2 + ".yaml"
-		gkConstraintTemplateName string = caseNumber + "k8srequiredlabels"
-		gkConstraintTemplateYaml string = yamlBasePath + gkConstraintTemplateName + ".yaml"
-		gkConstraintName         string = caseNumber + "-gk-constraint"
-		gkConstraintYaml         string = yamlBasePath + gkConstraintName + ".yaml"
-		gkConstraintName2        string = caseNumber + "-gk-constraint-2"
-		gkConstraintYaml2        string = yamlBasePath + gkConstraintName2 + ".yaml"
+		caseNumber                string = "case17"
+		yamlBasePath              string = "../resources/" + caseNumber + "_gatekeeper_sync/"
+		policyName                string = caseNumber + "-gk-policy"
+		policyYaml                string = yamlBasePath + policyName + ".yaml"
+		policyYamlExtra           string = yamlBasePath + policyName + "-extra.yaml"
+		policyName2               string = policyName + "-2"
+		policyYaml2               string = yamlBasePath + policyName2 + ".yaml"
+		gkConstraintTemplateName  string = caseNumber + "constrainttemplate"
+		gkConstraintTemplateYaml  string = yamlBasePath + gkConstraintTemplateName + ".yaml"
+		gkConstraintTmplNameExtra string = gkConstraintTemplateName + "extra"
+		gkConstraintTmplYamlExtra string = yamlBasePath + gkConstraintTmplNameExtra + ".yaml"
+		gkConstraintName          string = caseNumber + "-gk-constraint"
+		gkConstraintYaml          string = yamlBasePath + gkConstraintName + ".yaml"
+		gkConstraintName2         string = gkConstraintName + "-2"
+		gkConstraintYaml2         string = yamlBasePath + gkConstraintName2 + ".yaml"
+		gkConstraintNameExtra     string = gkConstraintName + "-extra"
+		gkConstraintYamlExtra     string = yamlBasePath + gkConstraintNameExtra + ".yaml"
 	)
 	gvrConstraint := schema.GroupVersionResource{
 		Group:    gvConstraintGroup,
 		Version:  "v1beta1",
-		Resource: caseNumber + "k8srequiredlabels",
+		Resource: caseNumber + "constrainttemplate",
 	}
 	BeforeAll(func() {
 		DeployGatekeeper()
@@ -119,6 +124,42 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate sync", Ordered, Label("skip
 
 			return compliance
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+	})
+	It("should add a Constraint and ConstraintTemplate when added to policy-templates", func() {
+		By("Adding a Constraint and ConstraintTemplate to the policy-templates array")
+		_, err := kubectlHub("apply", "-f", policyYamlExtra, "-n", clusterNamespaceOnHub)
+		Expect(err).To(BeNil())
+		By("Checking for the synced Constraint " + gkConstraintNameExtra)
+		expectedConstraint := propagatorutils.ParseYaml(gkConstraintYamlExtra)
+		Eventually(func() interface{} {
+			trustedPlc := propagatorutils.GetWithTimeout(clientManagedDynamic, gvrConstraint,
+				gkConstraintNameExtra, "", true, defaultTimeoutSeconds)
+
+			return trustedPlc.Object["spec"]
+		}, defaultTimeoutSeconds, 1).Should(propagatorutils.SemanticEqual(expectedConstraint.Object["spec"]))
+		By("Checking for the synced ConstraintTemplate " + gkConstraintTmplNameExtra)
+		expectedConstraintTmpl := propagatorutils.ParseYaml(gkConstraintTmplYamlExtra)
+		Eventually(func() interface{} {
+			trustedPlc := propagatorutils.GetWithTimeout(clientManagedDynamic, gvrConstraintTemplate,
+				gkConstraintTmplNameExtra, "", true, defaultTimeoutSeconds)
+
+			return trustedPlc.Object["spec"]
+		}, defaultTimeoutSeconds, 1).Should(propagatorutils.SemanticEqual(expectedConstraintTmpl.Object["spec"]))
+	})
+	It("should remove a Constraint and ConstraintTemplate when removed from policy-templates", func() {
+		By("Removing a Constraint and ConstraintTemplate from the policy-templates array")
+		_, err := kubectlHub("apply", "-f", policyYaml, "-n", clusterNamespaceOnHub)
+		Expect(err).To(BeNil())
+		By("Checking for removed Constraint " + gkConstraintNameExtra)
+		Eventually(func() interface{} {
+			return propagatorutils.GetWithTimeout(clientManagedDynamic, gvrConstraint,
+				gkConstraintNameExtra, "", false, defaultTimeoutSeconds)
+		}, defaultTimeoutSeconds, 1).Should(BeNil())
+		By("Checking for removed ConstraintTemplate " + gkConstraintTmplNameExtra)
+		Eventually(func() interface{} {
+			return propagatorutils.GetWithTimeout(clientManagedDynamic, gvrConstraintTemplate,
+				gkConstraintTmplNameExtra, "", false, defaultTimeoutSeconds)
+		}, defaultTimeoutSeconds, 1).Should(BeNil())
 	})
 	It("should delete template policy on managed cluster", func() {
 		By("Deleting parent policies")

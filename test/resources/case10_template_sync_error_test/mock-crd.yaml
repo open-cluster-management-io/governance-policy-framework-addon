@@ -1,0 +1,30 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    policy.open-cluster-management.io/policy-type: template
+  name: mockpolicies.policy.open-cluster-management.io
+spec:
+  group: policy.open-cluster-management.io
+  names:
+    kind: MockPolicy
+    listKind: MockPolicyList
+    plural: mockpolicies
+    singular: mockpolicy
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            type: object

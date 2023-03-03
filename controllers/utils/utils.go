@@ -17,10 +17,17 @@ var (
 		Group: "templates.gatekeeper.sh",
 		Kind:  "ConstraintTemplate",
 	}
-	GConstraint = "constraints.gatekeeper.sh"
+	// Explicit allow list for policy groups and kinds--empty fields allow all, but
+	// specifying a Group is required (policy CRDs labeled with policy-type=template are allowed by
+	// default and do not need to be added to this list)
+	policyAllowList = []schema.GroupKind{
+		{Group: GvkConstraintTemplate.Group, Kind: GvkConstraintTemplate.Kind},
+		{Group: GConstraint},
+	}
 )
 
 const (
+	GConstraint               = "constraints.gatekeeper.sh"
 	PolicyFmtStr              = "policy: %s/%s"
 	PolicyClusterScopedFmtStr = "policy: %s"
 	ClusterwideFinalizer      = common.APIGroup + "/cleanup-cluster-scoped-policies"
@@ -80,4 +87,34 @@ func ApplyObjectDefaults(scheme runtime.Scheme, object *unstructured.Unstructure
 	object.Object = objectMap
 
 	return nil
+}
+
+// IsAllowedPolicy returns a boolean whether a given GroupKind is present on the explicit allow
+// list.
+func IsAllowedPolicy(targetGVK schema.GroupKind) bool {
+	for _, policyGVK := range policyAllowList {
+		if targetGVK.Group == policyGVK.Group &&
+			(policyGVK.Kind == "" || targetGVK.Kind == policyGVK.Kind) {
+			return true
+		}
+	}
+
+	return false
+}
+
+type ErrList []error
+
+// (ErrList).Aggregate joins an ErrList into a single error separated by semicolons
+func (e ErrList) Aggregate() error {
+	var err error
+
+	for i, errorItem := range e {
+		if i == 0 {
+			err = errorItem
+		} else {
+			err = fmt.Errorf("%s; %w", err.Error(), errorItem)
+		}
+	}
+
+	return err
 }
