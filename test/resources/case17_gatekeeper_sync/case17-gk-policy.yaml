@@ -10,7 +10,7 @@ spec:
         apiVersion: templates.gatekeeper.sh/v1
         kind: ConstraintTemplate
         metadata:
-          name: case17k8srequiredlabels
+          name: case17constrainttemplate
           annotations:
             metadata.gatekeeper.sh/title: "Required Labels"
             metadata.gatekeeper.sh/version: 1.0.0
@@ -21,7 +21,7 @@ spec:
           crd:
             spec:
               names:
-                kind: Case17K8sRequiredLabels
+                kind: Case17ConstraintTemplate
               validation:
                 legacySchema: false
                 openAPIV3Schema:
@@ -79,10 +79,9 @@ spec:
                   def_msg := sprintf("Label <%v: %v> does not satisfy allowed regex: %v", [key, value, expected.allowedRegex])
                   msg := get_message(input.parameters, def_msg)
                 }
-
     - objectDefinition:
         apiVersion: constraints.gatekeeper.sh/v1beta1
-        kind: Case17K8sRequiredLabels
+        kind: Case17ConstraintTemplate
         metadata:
           name: case17-gk-constraint
         spec:

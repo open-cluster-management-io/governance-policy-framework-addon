@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	gktemplatesv1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
+	gktemplatesv1beta1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1beta1"
 	"github.com/prometheus/client_golang/prometheus"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -207,6 +209,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, nil
 	}
 
+	// Handle dependencies that apply to the parent policy
 	allDeps := make(map[depclient.ObjectIdentifier]string)
 	topLevelDeps := make(map[depclient.ObjectIdentifier]string)
 
@@ -268,10 +271,14 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
+		// Special handling booleans, whether this template is:
+		// - ContraintTemplate handled by Gatekeeper
+		// - Cluster scoped
 		isGkConstraintTemplate := gvk.Group == utils.GvkConstraintTemplate.Group &&
 			gvk.Kind == utils.GvkConstraintTemplate.Kind
 		isClusterScoped := isGkConstraintTemplate || gvk.Group == utils.GConstraint
 
+		// Handle dependencies that apply to the current policy-template
 		depConflictErr := false
 
 		// use copy of dependencies scoped only to this template
@@ -372,7 +379,39 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
-		// reject if not configuration policy and has templates
+		// Check for whether the CRD associated with this policy template has a policy-type=template
+		// label, signaling that it should be synced
+		hasTemplateLabel, err := r.hasPolicyTemplateLabel(ctx, rsrc)
+		if err != nil {
+			reqLogger.Error(err, fmt.Sprintf("Failed to retrieve CRD %s", rsrc.GroupResource().String()))
+
+			policySystemErrorsCounter.WithLabelValues(request.Name, tName, "get-error").Inc()
+
+			// The CRD should exist since it was found in the mapping previously; Requeue this template
+			return reconcile.Result{}, err
+		}
+
+		// If no policy-type=template label AND the GroupKind is not on the explicit allow list, don't
+		// sync this template
+		if !hasTemplateLabel && !utils.IsAllowedPolicy(gvk.GroupKind()) {
+			errMsg := fmt.Sprintf("policy-template kind is not supported: %s", gvk.String())
+			err := fmt.Errorf(errMsg)
+
+			resultError = err
+
+			r.emitTemplateError(instance, tIndex, tName, isClusterScoped, errMsg)
+			tLogger.Error(err, "Unsupported policy-template kind found in object definition",
+				"group", gvk.Group,
+				"version", gvk.Version,
+				"kind", gvk.Kind,
+			)
+
+			policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "crd-error").Inc()
+
+			continue
+		}
+
+		// reject if not configuration policy and has template strings
 		if gvk.Kind != "ConfigurationPolicy" {
 			// if not configuration policies, do a simple check for templates {{hub and reject
 			// only checking for hub and not {{ as they could be valid cases where they are valid chars.
@@ -420,6 +459,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
+		// Collect list of dependent policies
 		childTemplates = append(childTemplates, depclient.ObjectIdentifier{
 			Group:     gvk.Group,
 			Version:   gvk.Version,
@@ -458,22 +498,16 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				// Handle adding metadata labels
 				labels := tObjectUnstructured.GetLabels()
-
 				if labels == nil {
-					labels = map[string]string{
-						"cluster-name":               instance.GetLabels()[common.ClusterNameLabel],
-						common.ClusterNameLabel:      instance.GetLabels()[common.ClusterNameLabel],
-						"cluster-namespace":          instance.GetLabels()[common.ClusterNamespaceLabel],
-						common.ClusterNamespaceLabel: instance.GetLabels()[common.ClusterNamespaceLabel],
-					}
-				} else {
-					labels["cluster-name"] = instance.GetLabels()[common.ClusterNameLabel]
-					labels[common.ClusterNameLabel] = instance.GetLabels()[common.ClusterNameLabel]
-					labels["cluster-namespace"] = instance.GetLabels()[common.ClusterNamespaceLabel]
-					labels[common.ClusterNamespaceLabel] = instance.GetLabels()[common.ClusterNamespaceLabel]
+					labels = map[string]string{}
 				}
 
-				// set label to identify parent policy for this template
+				labels["cluster-name"] = instance.GetLabels()[common.ClusterNameLabel]
+				labels[common.ClusterNameLabel] = instance.GetLabels()[common.ClusterNameLabel]
+				labels["cluster-namespace"] = instance.GetLabels()[common.ClusterNamespaceLabel]
+				labels[common.ClusterNamespaceLabel] = instance.GetLabels()[common.ClusterNamespaceLabel]
+
+				// Set label to identify parent policy for this template object
 				labels[utils.ParentPolicyLabel] = instance.GetName()
 
 				tObjectUnstructured.SetLabels(labels)
@@ -494,17 +528,18 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				}
 
 				successMsg := fmt.Sprintf("Policy template %s created successfully", tName)
-				tLogger.Info("Policy template created successfully", "PolicyTemplateName", tName)
+
+				tLogger.Info("Policy template created successfully")
 
 				// Handle clusterwide objects
 				if isClusterScoped {
 					addFinalizer = true
 
-					reqLogger.V(2).Info("Finalizer required for "+gvk.Kind, "PolicyTemplateName", tName)
+					tLogger.V(2).Info("Finalizer required for " + gvk.Kind)
 
-					// The ConstraintTemplate does not generate status, so we need to generate an event for it
+					// The ConstraintTemplate does not generate status, so we need to generate an event for it.
 					if isGkConstraintTemplate {
-						tLogger.Info("Emitting status event for "+gvk.Kind, "PolicyTemplateName", tName)
+						tLogger.Info("Emitting status event for " + gvk.Kind)
 						msg := fmt.Sprintf("%s %s was created successfully", gvk.Kind, tName)
 						r.emitTemplateSuccess(instance, tIndex, tName, isClusterScoped, msg)
 					}
@@ -570,11 +605,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			break // just get the first ownerReference, if there are any at all
 		}
 
-		parentPolicyLabel := eObject.GetLabels()[utils.ParentPolicyLabel]
+		parentPolicy := eObject.GetLabels()[utils.ParentPolicyLabel]
 
 		// If the owner reference has been unset but the template is still managed by this policy
 		// instance, recover the owner reference (skip this for cluster scoped objects)
-		if !isClusterScoped && refName == "" && parentPolicyLabel == instance.GetName() {
+		if !isClusterScoped && refName == "" && parentPolicy == instance.GetName() {
 			plcOwnerReferences := *metav1.NewControllerRef(instance, schema.GroupVersionKind{
 				Group:   policiesv1.SchemeGroupVersion.Group,
 				Version: policiesv1.SchemeGroupVersion.Version,
@@ -591,7 +626,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		// If there's no owner reference name, set it to the current parent policy label on the object
 		if refName == "" {
-			refName = parentPolicyLabel
+			refName = parentPolicy
 		}
 
 		// Violation when object reference (or parent policy label on the object if there's no owner
@@ -624,7 +659,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
-		// Fill in defaults set the by ConstraintTemplate CRD to ensure the spec comparison below is correct.
+		// Fill in defaults set by the ConstraintTemplate CRD to ensure the spec comparison below is correct.
 		if isGkConstraintTemplate {
 			err := utils.ApplyObjectDefaults(*r.Scheme, tObjectUnstructured)
 			if err != nil {
@@ -672,11 +707,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			if isClusterScoped {
 				addFinalizer = true
 
-				reqLogger.V(2).Info("Finalizer required for "+gvk.Kind, "PolicyTemplateName", tName)
+				reqLogger.V(2).Info("Finalizer required for " + gvk.Kind)
 
 				// The ConstraintTemplate does not generate status, so we need to generate an event for it
 				if isGkConstraintTemplate {
-					tLogger.Info("Emitting status event for "+gvk.Kind, "PolicyTemplateName", tName)
+					tLogger.Info("Emitting status event for " + gvk.Kind)
 					msg := fmt.Sprintf("%s %s was updated successfully", gvk.Kind, tName)
 					r.emitTemplateSuccess(instance, tIndex, tName, isClusterScoped, msg)
 				}
@@ -703,9 +738,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			tLogger.Info("Existing object matches the policy template")
 		}
 
-		// If we got to this point, the reconcile succeeded and a finalizer would be required for
-		// existing clusterwide objects
 		if isClusterScoped {
+			// If we got to this point, the reconcile succeeded and a finalizer would be required for
+			// existing clusterwide objects
 			addFinalizer = true
 		}
 	}
@@ -779,52 +814,147 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 	instance policiesv1.Policy,
 	templateNames []string,
 ) error {
-	crdLabelSelector := labels.SelectorFromSet(map[string]string{utils.PolicyTypeLabel: "template"})
-	crdsv1 := extensionsv1.CustomResourceDefinitionList{}
-	tmplGVRs := []schema.GroupVersionResource{}
+	var errorList utils.ErrList
 
-	// build list of GVRs for templates to check the parent label on
-	err := r.List(ctx, &crdsv1, &client.ListOptions{LabelSelector: crdLabelSelector})
+	reqLogger := log.WithValues("Request.Namespace", instance.Namespace, "Request.Name", instance.Name)
+
+	// GVR with scope specified
+	type gvrScoped struct {
+		gvr        schema.GroupVersionResource
+		namespaced bool
+	}
+
+	tmplGVRs := []gvrScoped{}
+
+	// Query for ConstraintTemplates and collect the GroupVersionResource for each Constraint
+	gkConstraintTemplateListv1 := gktemplatesv1.ConstraintTemplateList{}
+
+	err := r.List(ctx, &gkConstraintTemplateListv1, &client.ListOptions{})
+	if err == nil {
+		// Add the ConstraintTemplate to the GVR list
+		if len(gkConstraintTemplateListv1.Items) > 0 {
+			tmplGVRs = append(tmplGVRs, gvrScoped{
+				gvr: schema.GroupVersionResource{
+					Group:    utils.GvkConstraintTemplate.Group,
+					Resource: "constrainttemplates",
+					Version:  "v1",
+				},
+				namespaced: false,
+			})
+		}
+		// Iterate over the ConstraintTemplates to gather the Constraints on the cluster
+		for _, gkCT := range gkConstraintTemplateListv1.Items {
+			tmplGVRs = append(tmplGVRs, gvrScoped{
+				gvr: schema.GroupVersionResource{
+					Group:    utils.GConstraint,
+					Resource: strings.ToLower(gkCT.Spec.CRD.Spec.Names.Kind),
+					Version:  "v1beta1",
+				},
+				namespaced: false,
+			})
+		}
+	} else if meta.IsNoMatchError(err) {
+		// If there's no v1 ConstraintTemplate, try the v1beta1 version
+		gkConstraintTemplateListv1beta1 := gktemplatesv1beta1.ConstraintTemplateList{}
+		err := r.List(ctx, &gkConstraintTemplateListv1beta1, &client.ListOptions{})
+		if err == nil {
+			// Add the ConstraintTemplate to the GVR list
+			if len(gkConstraintTemplateListv1.Items) > 0 {
+				tmplGVRs = append(tmplGVRs, gvrScoped{
+					gvr: schema.GroupVersionResource{
+						Group:    utils.GvkConstraintTemplate.Group,
+						Resource: "constrainttemplates",
+						Version:  "v1beta1",
+					},
+					namespaced: false,
+				})
+			}
+			// Iterate over the ConstraintTemplates to gather the Constraints on the cluster
+			for _, gkCT := range gkConstraintTemplateListv1beta1.Items {
+				tmplGVRs = append(tmplGVRs, gvrScoped{
+					gvr: schema.GroupVersionResource{
+						Group:    utils.GConstraint,
+						Resource: strings.ToLower(gkCT.Spec.CRD.Spec.Names.Kind),
+						Version:  "v1beta1",
+					},
+					namespaced: false,
+				})
+			}
+			// Log and ignore other errors to allow cleanup to continue since Gatekeeper may not be installed
+		} else {
+			reqLogger.Info(fmt.Sprintf("Ignoring ConstraintTemplate cleanup error: %s", err.Error()))
+		}
+	} else {
+		reqLogger.Info(fmt.Sprintf("Ignoring ConstraintTemplate cleanup error: %s", err.Error()))
+	}
+
+	// Query for CRDs with policy-type label
+	crdQuery := client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(map[string]string{utils.PolicyTypeLabel: "template"}),
+	}
+
+	// Build list of GVRs for objects to check the parent label on, falling back to v1beta1
+	crdsv1 := extensionsv1.CustomResourceDefinitionList{}
+
+	err = r.List(ctx, &crdsv1, &crdQuery)
 	if err == nil {
 		for _, crd := range crdsv1.Items {
 			if len(crd.Spec.Versions) > 0 {
-				tmplGVRs = append(tmplGVRs, schema.GroupVersionResource{
-					Group:    crd.Spec.Group,
-					Resource: crd.Spec.Names.Plural,
-					Version:  crd.Spec.Versions[0].Name,
+				tmplGVRs = append(tmplGVRs, gvrScoped{
+					gvr: schema.GroupVersionResource{
+						Group:    crd.Spec.Group,
+						Resource: crd.Spec.Names.Plural,
+						Version:  crd.Spec.Versions[0].Name,
+					},
+					namespaced: crd.Spec.Scope == extensionsv1.NamespaceScoped,
 				})
 			}
 		}
 	} else if meta.IsNoMatchError(err) {
 		crdsv1beta1 := extensionsv1beta1.CustomResourceDefinitionList{}
-		err := r.List(ctx, &crdsv1beta1, &client.ListOptions{LabelSelector: crdLabelSelector})
+		err := r.List(ctx, &crdsv1beta1, &crdQuery)
 		if err != nil {
-			return fmt.Errorf("error listing v1beta1 CRDs with %s label: %w", crdLabelSelector, err)
+			return fmt.Errorf("error listing v1beta1 CRDs with query %+v: %w", crdQuery, err)
 		}
 		for _, crd := range crdsv1beta1.Items {
 			if len(crd.Spec.Versions) > 0 {
-				tmplGVRs = append(tmplGVRs, schema.GroupVersionResource{
-					Group:    crd.Spec.Group,
-					Resource: crd.Spec.Names.Plural,
-					Version:  crd.Spec.Versions[0].Name,
+				tmplGVRs = append(tmplGVRs, gvrScoped{
+					gvr: schema.GroupVersionResource{
+						Group:    crd.Spec.Group,
+						Resource: crd.Spec.Names.Plural,
+						Version:  crd.Spec.Versions[0].Name,
+					},
+					namespaced: crd.Spec.Scope == extensionsv1beta1.NamespaceScoped,
 				})
 			}
 		}
 	} else {
-		return fmt.Errorf("error listing v1 CRDs with %s label: %w", crdLabelSelector, err)
+		return fmt.Errorf("error listing v1 CRDs with query %+v: %w", crdQuery, err)
 	}
 
-	for _, gvr := range tmplGVRs {
-		// iterate through all templates with parent label set to see if they match
-		children, err := dClient.Resource(gvr).Namespace(r.ClusterNamespace).List(ctx, metav1.ListOptions{
+	for _, gvrScoped := range tmplGVRs {
+		// Instantiate a dynamic client for the GVR
+		resourceNs := ""
+		if gvrScoped.namespaced {
+			resourceNs = r.ClusterNamespace
+		}
+
+		resClient := dClient.Resource(gvrScoped.gvr).Namespace(resourceNs)
+
+		// Iterate through all objects with parent label set to see if they
+		// match the templates in the policy
+		children, err := resClient.List(ctx, metav1.ListOptions{
 			LabelSelector: utils.ParentPolicyLabel + "=" + instance.GetName(),
 		})
 		if err != nil {
-			return fmt.Errorf("error listing %s objects: %w", gvr.String(), err)
+			errorList = append(errorList,
+				fmt.Errorf("error listing %s objects: %w", gvrScoped.gvr.String(), err))
+
+			continue
 		}
 
 		for _, tmpl := range children.Items {
-			// delete all templates with label that aren't still in the policy
+			// delete all templates with policy label that aren't still in the policy
 			found := false
 
 			for _, parentTmplName := range templateNames {
@@ -836,19 +966,16 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 			}
 
 			if !found {
-				err := dClient.Resource(schema.GroupVersionResource{
-					Group:    gvr.Group,
-					Version:  gvr.Version,
-					Resource: gvr.Resource,
-				}).Namespace(r.ClusterNamespace).Delete(ctx, tmpl.GetName(), metav1.DeleteOptions{})
+				err := resClient.Delete(ctx, tmpl.GetName(), metav1.DeleteOptions{})
 				if err != nil {
-					return fmt.Errorf("error deleting %s object %s: %w", gvr.String(), tmpl.GetName(), err)
+					errorList = append(errorList,
+						fmt.Errorf("error deleting %s object %s: %w", gvrScoped.gvr.String(), tmpl.GetName(), err))
 				}
 			}
 		}
 	}
 
-	return nil
+	return errorList.Aggregate()
 }
 
 // processDependencies iterates through all dependencies of a template and returns an array of any that are not met
@@ -1080,6 +1207,31 @@ func getLatestStatusMessage(pol *policiesv1.Policy, tIndex int) string {
 	return tmplDetails.History[0].Message
 }
 
+// hasPolicyTemplateLabel queries the CRD for a given GroupVersionResource and returns whether it
+// has the policy-type=template label and an error if the CRD could not be retrieved.
+func (r *PolicyReconciler) hasPolicyTemplateLabel(
+	ctx context.Context, rsrc schema.GroupVersionResource,
+) (bool, error) {
+	crd := extensionsv1.CustomResourceDefinition{}
+	crdName := types.NamespacedName{
+		Name: rsrc.GroupResource().String(),
+	}
+
+	err := r.Get(ctx, crdName, &crd)
+	if err != nil {
+		// If it wasn't found, then it wasn't in the cache and doesn't have the label
+		if k8serrors.IsNotFound(err) {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	return crd.GetLabels()[utils.PolicyTypeLabel] == "template", nil
+}
+
+// hasClusterwideFinalizer returns a boolean for whether a policy has a clusterwide finalizer,
+// signaling that the controller needs to handle manual cleanup of clusterwide objects.
 func hasClusterwideFinalizer(pol *policiesv1.Policy) bool {
 	for _, finalizer := range pol.Finalizers {
 		if finalizer == utils.ClusterwideFinalizer {
@@ -1090,7 +1242,7 @@ func hasClusterwideFinalizer(pol *policiesv1.Policy) bool {
 	return false
 }
 
-// removeFinalizer iterates over the finalizers and removes the one specified from the policy.
+// removeFinalizer iterates over the finalizers and removes the finalizer specified from the policy.
 func removeFinalizer(pol *policiesv1.Policy, finalizer string) {
 	i := 0
 	finalizersLength := len(pol.Finalizers)
@@ -1110,7 +1262,7 @@ func removeFinalizer(pol *policiesv1.Policy, finalizer string) {
 func finalizerCleanup(
 	ctx context.Context, pol *policiesv1.Policy, rMapper meta.RESTMapper, dClient dynamic.Interface,
 ) error {
-	var errorList []error
+	var errorList utils.ErrList
 
 	for _, policyT := range pol.Spec.PolicyTemplates {
 		object, gvk, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
@@ -1153,10 +1305,5 @@ func finalizerCleanup(
 		}
 	}
 
-	var err error
-	for _, errorItem := range errorList {
-		err = fmt.Errorf("%s; %w", err.Error(), errorItem)
-	}
-
-	return err
+	return errorList.Aggregate()
 }

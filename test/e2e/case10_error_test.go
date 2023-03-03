@@ -16,6 +16,11 @@ import (
 )
 
 var _ = Describe("Test error handling", func() {
+	const (
+		caseNumber   = "case10"
+		yamlBasePath = "../resources/" + caseNumber + "_template_sync_error_test/"
+	)
+
 	AfterEach(func() {
 		_, err := kubectlHub("delete", "policies", "--all", "-A")
 		Expect(err).To(BeNil())
@@ -26,7 +31,7 @@ var _ = Describe("Test error handling", func() {
 	})
 	It("should not override remediationAction if doesn't exist on parent policy", func() {
 		hubApplyPolicy("case10-remediation-action-not-exists",
-			"../resources/case10_template_sync_error_test/remediation-action-not-exists.yaml")
+			yamlBasePath+"remediation-action-not-exists.yaml")
 
 		Eventually(func() interface{} {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
@@ -37,11 +42,11 @@ var _ = Describe("Test error handling", func() {
 		}, defaultTimeoutSeconds, 1).Should(Equal("inform"))
 
 		hubApplyPolicy("case10-remediation-action-not-exists",
-			"../resources/case10_template_sync_error_test/remediation-action-not-exists2.yaml")
+			yamlBasePath+"remediation-action-not-exists2.yaml")
 
 		By("Checking the case10-remediation-action-not-exists-configpolicy CR")
 		yamlTrustedPlc := utils.ParseYaml(
-			"../resources/case10_template_sync_error_test/remediation-action-not-exists-configpolicy.yaml")
+			yamlBasePath + "remediation-action-not-exists-configpolicy.yaml")
 		Eventually(func() interface{} {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 				"case10-remediation-action-not-exists-configpolicy", clusterNamespace, true,
@@ -52,7 +57,7 @@ var _ = Describe("Test error handling", func() {
 	})
 	It("should generate decode err event", func() {
 		hubApplyPolicy("case10-template-decode-error",
-			"../resources/case10_template_sync_error_test/template-decode-error.yaml")
+			yamlBasePath+"template-decode-error.yaml")
 
 		By("Checking for event with decode err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
@@ -63,7 +68,7 @@ var _ = Describe("Test error handling", func() {
 	})
 	It("should generate missing name err event", func() {
 		hubApplyPolicy("case10-template-name-error",
-			"../resources/case10_template_sync_error_test/template-name-error.yaml")
+			yamlBasePath+"template-name-error.yaml")
 
 		By("Checking for event with missing name err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
@@ -74,7 +79,7 @@ var _ = Describe("Test error handling", func() {
 	})
 	It("should generate mapping err event", func() {
 		hubApplyPolicy("case10-template-mapping-error",
-			"../resources/case10_template_sync_error_test/template-mapping-error.yaml")
+			yamlBasePath+"template-mapping-error.yaml")
 
 		By("Checking for event with decode err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
@@ -83,16 +88,27 @@ var _ = Describe("Test error handling", func() {
 			1,
 		).Should(BeTrue())
 	})
+	It("should generate unsupported object err event", func() {
+		hubApplyPolicy("case10-unsupported-object",
+			yamlBasePath+"unsupported-object-error.yaml")
+
+		By("Checking for event with unsupported CRD err on managed cluster in ns:" + clusterNamespace)
+		Eventually(
+			checkForEvent("case10-unsupported-object", "template-error; policy-template kind is not supported"),
+			defaultTimeoutSeconds,
+			1,
+		).Should(BeTrue())
+	})
 	It("should generate duplicate policy template err event", func() {
 		hubApplyPolicy("case10-test-policy",
-			"../resources/case10_template_sync_error_test/working-policy.yaml")
+			yamlBasePath+"working-policy.yaml")
 
 		// wait for original policy to be processed before creating duplicate policy
 		utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 			"case10-config-policy", clusterNamespace, true, defaultTimeoutSeconds)
 
 		hubApplyPolicy("case10-test-policy-duplicate",
-			"../resources/case10_template_sync_error_test/working-policy-duplicate.yaml")
+			yamlBasePath+"working-policy-duplicate.yaml")
 
 		By("Checking for event with duplicate err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
@@ -103,7 +119,7 @@ var _ = Describe("Test error handling", func() {
 	})
 	It("should create other objects, even when one is invalid", func() {
 		hubApplyPolicy("case10-middle-tmpl",
-			"../resources/case10_template_sync_error_test/middle-template-error.yaml")
+			yamlBasePath+"middle-template-error.yaml")
 
 		By("Checking for the other template objects")
 		utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
@@ -120,7 +136,7 @@ var _ = Describe("Test error handling", func() {
 	})
 	It("should remove the complianceState on a template only after an error is resolved", func() {
 		hubApplyPolicy("case10-test-policy",
-			"../resources/case10_template_sync_error_test/working-policy.yaml")
+			yamlBasePath+"working-policy.yaml")
 
 		utils.ListWithTimeout(clientManagedDynamic, gvrConfigurationPolicy, metav1.ListOptions{},
 			1, true, defaultTimeoutSeconds)
@@ -170,7 +186,7 @@ var _ = Describe("Test error handling", func() {
 
 		By("Re-applying the working policy")
 		hubApplyPolicy("case10-test-policy",
-			"../resources/case10_template_sync_error_test/working-policy.yaml")
+			yamlBasePath+"working-policy.yaml")
 
 		By("Checking that the complianceState is removed on the configuration policy")
 		Eventually(func() bool {
@@ -185,8 +201,17 @@ var _ = Describe("Test error handling", func() {
 		}, defaultTimeoutSeconds, 1).Should(BeFalse())
 	})
 	It("should throw a noncompliance event if a non-configurationpolicy uses a hub template", func() {
+		By("Deploying a test policy CRD")
+		_, err := kubectlManaged("apply", "-f", yamlBasePath+"mock-crd.yaml")
+		Expect(err).To(BeNil())
+		DeferCleanup(func() error {
+			_, err := kubectlManaged("delete", "-f", yamlBasePath+"mock-crd.yaml")
+
+			return err
+		})
+
 		hubApplyPolicy("case10-bad-hubtemplate",
-			"../resources/case10_template_sync_error_test/non-config-hubtemplate.yaml")
+			yamlBasePath+"non-config-hubtemplate.yaml")
 
 		By("Checking for the error event")
 		Eventually(
@@ -197,7 +222,7 @@ var _ = Describe("Test error handling", func() {
 	})
 	It("should throw a noncompliance event if the template object is invalid", func() {
 		hubApplyPolicy("case10-invalid-severity",
-			"../resources/case10_template_sync_error_test/invalid-severity-template.yaml")
+			yamlBasePath+"invalid-severity-template.yaml")
 
 		By("Checking for the error event")
 		Eventually(
@@ -208,7 +233,7 @@ var _ = Describe("Test error handling", func() {
 	})
 	It("should not throw a noncompliance event if the policy-templates array is empty", func() {
 		hubApplyPolicy("case10-empty-templates",
-			"../resources/case10_template_sync_error_test/empty-templates.yaml")
+			yamlBasePath+"empty-templates.yaml")
 
 		By("Checking for the error event")
 		Eventually(
@@ -236,7 +261,7 @@ var _ = Describe("Test error handling", func() {
 		ExpectWithOffset(1, managedPlc).NotTo(BeNil())
 
 		hubApplyPolicy("case10-test-policy",
-			"../resources/case10_template_sync_error_test/working-policy.yaml")
+			yamlBasePath+"working-policy.yaml")
 
 		By("Checking for the error event")
 		Eventually(

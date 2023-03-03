@@ -8,7 +8,7 @@ spec:
   policy-templates:
     - objectDefinition:
         apiVersion: constraints.gatekeeper.sh/v1beta1
-        kind: Case17K8sRequiredLabels
+        kind: Case17ConstraintTemplate
         metadata:
           name: case17-gk-constraint-2
         spec:

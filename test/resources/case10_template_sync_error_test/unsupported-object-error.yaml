@@ -1,19 +1,17 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: case10-bad-hubtemplate
+  name: case10-unsupported-object
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: case10-bad-hubtemplate
+    policy.open-cluster-management.io/root-policy: case10-unsupported-object
 spec:
   remediationAction: inform
   disabled: false
   policy-templates:
     - objectDefinition:
-        apiVersion: policy.open-cluster-management.io/v1
-        kind: MockPolicy
+        apiVersion: apiextensions.k8s.io/v1
+        kind: CustomResourceDefinition
         metadata:
-          name: case10-bad-hubtemplate-policy
-        spec:
-          foo: 'I come from {{hub the land down under hub}}'
+          name: case10-unsupported-object

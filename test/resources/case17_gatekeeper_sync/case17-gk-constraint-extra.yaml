@@ -1,7 +1,7 @@
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: Case17ConstraintTemplate
 metadata:
-  name: case17-gk-constraint
+  name: case17-gk-constraint-extra
 spec:
   enforcementAction: warn
   match:
@@ -9,6 +9,6 @@ spec:
       - apiGroups: [""]
         kinds: ["Namespace"]
   parameters:
-    message: "All namespaces must have a `gatekeeper` label"
+    message: "All namespaces must have an `awesome` label"
     labels:
-    - key: "gatekeeper"
+    - key: "awesome"
