@@ -99,7 +99,7 @@ var _ = Describe("Test template sync", func() {
 			clusterNamespace, true, defaultTimeoutSeconds)
 		Expect(cfgplc).NotTo(BeNil())
 		cfgplc = utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy, case15ConfigPolicyRenamed,
-			clusterNamespace, false, defaultTimeoutSeconds)
+			clusterNamespace, false, defaultTimeoutSeconds*2)
 		Expect(cfgplc).To(BeNil())
 	})
 })

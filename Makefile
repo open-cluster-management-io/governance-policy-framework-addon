@@ -290,19 +290,24 @@ e2e-dependencies:
 
 .PHONY: e2e-test
 e2e-test: e2e-dependencies
-	$(GINKGO) -v --fail-fast --slow-spec-threshold=10s $(E2E_TEST_ARGS) test/e2e
+	$(GINKGO) -v --fail-fast $(E2E_TEST_ARGS) test/e2e
 
 .PHONY: e2e-test-coverage
 e2e-test-coverage: E2E_TEST_ARGS = --json-report=report_e2e.json --output-dir=. $(E2E_FILTER)
 e2e-test-coverage: e2e-run-instrumented e2e-test e2e-stop-instrumented
+
+.PHONY: e2e-test-coverage-foreground
+e2e-test-coverage-foreground: LOG_REDIRECT = 
+e2e-test-coverage-foreground: e2e-test-coverage
 
 .PHONY: e2e-build-instrumented
 e2e-build-instrumented:
 	go test -covermode=atomic -coverpkg=$(shell cat go.mod | head -1 | cut -d ' ' -f 2)/... -c -tags e2e ./ -o build/_output/bin/$(IMG)-instrumented
 
 .PHONY: e2e-run-instrumented
+LOG_REDIRECT ?= &>build/_output/controller.log
 e2e-run-instrumented: e2e-build-instrumented
-	HUB_CONFIG=$(HUB_CONFIG) MANAGED_CONFIG=$(MANAGED_CONFIG) MANAGED_CLUSTER_NAME=$(MANAGED_CLUSTER_NAME) ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=$(COVERAGE_E2E_OUT) &>build/_output/controller.log &
+	HUB_CONFIG=$(HUB_CONFIG) MANAGED_CONFIG=$(MANAGED_CONFIG) MANAGED_CLUSTER_NAME=$(MANAGED_CLUSTER_NAME) ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=$(COVERAGE_E2E_OUT) $(LOG_REDIRECT) &
 
 .PHONY: e2e-stop-instrumented
 e2e-stop-instrumented:
