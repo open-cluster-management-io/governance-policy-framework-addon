@@ -81,7 +81,7 @@ var _ = Describe("Test event message handling", func() {
 			"(combined from similar events): NonCompliant; Violation detected")
 		By("Checking if violation message contains the prefix")
 		var plc *policiesv1.Policy
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -90,14 +90,14 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 			if len(plc.Status.Details) < 1 {
 				return 0
 			}
 
 			return len(plc.Status.Details[0].History)
 		}, defaultTimeoutSeconds, 1).Should(Equal(1))
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -106,7 +106,7 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 			if len(plc.Status.Details) < 1 {
 				return ""
 			}
@@ -133,7 +133,7 @@ var _ = Describe("Test event message handling", func() {
 			"(combined from similar events): Compliant; no violation detected")
 		By("Checking if violation message contains the prefix")
 		var plc *policiesv1.Policy
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -142,14 +142,14 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 			if len(plc.Status.Details) < 1 {
 				return 0
 			}
 
 			return len(plc.Status.Details[0].History)
 		}, defaultTimeoutSeconds, 1).Should(Equal(1))
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -158,7 +158,7 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 			if len(plc.Status.Details) < 1 {
 				return ""
 			}
@@ -185,7 +185,7 @@ var _ = Describe("Test event message handling", func() {
 			"NonCompliant")
 		By("Checking if violation message is in history")
 		var plc *policiesv1.Policy
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -194,14 +194,14 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 			if len(plc.Status.Details) < 1 {
 				return 0
 			}
 
 			return len(plc.Status.Details[0].History)
 		}, defaultTimeoutSeconds, 1).Should(Equal(1))
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -210,7 +210,7 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 			if len(plc.Status.Details) < 1 {
 				return ""
 			}
@@ -237,7 +237,7 @@ var _ = Describe("Test event message handling", func() {
 			"Compliant")
 		By("Checking if violation message is in history")
 		var plc *policiesv1.Policy
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -246,14 +246,14 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 			if len(plc.Status.Details) < 1 {
 				return 0
 			}
 
 			return len(plc.Status.Details[0].History)
 		}, defaultTimeoutSeconds, 1).Should(Equal(1))
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -262,7 +262,7 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 			if len(plc.Status.Details) < 1 {
 				return ""
 			}

@@ -98,7 +98,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			"Compliant; there is no violation")
 		By("Checking if template: case3-test-policy-configurationpolicy1 status is compliant")
 		var plc *policiesv1.Policy
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -107,11 +107,11 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 			if len(plc.Status.Details) < 1 {
 				return ""
 			}
-			Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case3-test-policy-configurationpolicy1"))
+			g.Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case3-test-policy-configurationpolicy1"))
 
 			return plc.Status.Details[0].ComplianceState
 		}, defaultTimeoutSeconds, 1).Should(Equal(policiesv1.Compliant))
@@ -157,7 +157,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			"Compliant; there is no violation")
 		By("Checking if template: case3-test-policy-configurationpolicy2 status is compliant")
 		var plc *policiesv1.Policy
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -166,11 +166,11 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 			if len(plc.Status.Details) < 2 {
 				return ""
 			}
-			Expect(plc.Status.Details[1].TemplateMeta.GetName()).To(Equal("case3-test-policy-configurationpolicy2"))
+			g.Expect(plc.Status.Details[1].TemplateMeta.GetName()).To(Equal("case3-test-policy-configurationpolicy2"))
 
 			return plc.Status.Details[1].ComplianceState
 		}, defaultTimeoutSeconds, 1).Should(Equal(policiesv1.Compliant))
@@ -436,7 +436,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 		Expect(managedPlc).NotTo(BeNil())
 		By("Checking if policy status of template1 has been removed")
 		var plc *policiesv1.Policy
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -445,7 +445,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 
 			return len(plc.Status.Details)
 		}, defaultTimeoutSeconds, 1).Should(Equal(1))
@@ -521,7 +521,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 		Expect(managedPlc).NotTo(BeNil())
 		By("Checking if policy status of template2 has been removed")
 		var plc *policiesv1.Policy
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -530,7 +530,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 
 			return len(plc.Status.Details)
 		}, defaultTimeoutSeconds, 1).Should(Equal(1))

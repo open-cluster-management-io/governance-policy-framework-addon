@@ -201,7 +201,7 @@ var _ = Describe("Test status sync", func() {
 			"Normal",
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"Compliant; No violation assert")
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -210,7 +210,14 @@ var _ = Describe("Test status sync", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
+
+			if len(plc.Status.Details) == 0 {
+				return "status.details[] is empty"
+			}
+			if len(plc.Status.Details[0].History) == 0 {
+				return "status.details[0].history[] is empty"
+			}
 
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant; No violation assert"))
@@ -228,7 +235,7 @@ var _ = Describe("Test status sync", func() {
 			"Warning",
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"NonCompliant; Violation assert")
-		Eventually(func() interface{} {
+		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -237,7 +244,7 @@ var _ = Describe("Test status sync", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			Expect(err).To(BeNil())
+			g.Expect(err).To(BeNil())
 
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant; Violation assert"))

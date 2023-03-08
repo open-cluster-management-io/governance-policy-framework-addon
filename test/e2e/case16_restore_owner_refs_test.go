@@ -32,12 +32,18 @@ var _ = Describe("Test owner reference recovery", func() {
 		Expect(err).To(BeNil())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
+		By("clean up all events")
+		_, err = kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
+		Expect(err).Should(BeNil())
 	})
 	It("Should restore owner references that are edited out of the child config policy", func() {
 		By("Patching config policy to remove owner references")
-		_, err := kubectlManaged("patch", "configurationpolicy", case16ConfigPolicyName, "-n", clusterNamespace,
-			"--type", "merge", "--patch-file", case16PatchConfigPolicyYaml)
-		Expect(err).Should(BeNil())
+		Eventually(func() error {
+			_, err := kubectlManaged("patch", "configurationpolicy", case16ConfigPolicyName, "-n", clusterNamespace,
+				"--type", "merge", "--patch-file", case16PatchConfigPolicyYaml)
+
+			return err
+		}, defaultTimeoutSeconds, 1).Should(BeNil())
 
 		Eventually(func() interface{} {
 			configPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,

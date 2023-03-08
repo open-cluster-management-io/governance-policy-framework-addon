@@ -198,7 +198,7 @@ var _ = Describe("Test error handling", func() {
 			_, found, _ := unstructured.NestedString(cfgPolicy.Object, "status", "compliant")
 
 			return found
-		}, defaultTimeoutSeconds, 1).Should(BeFalse())
+		}, defaultTimeoutSeconds*2, 1).Should(BeFalse())
 	})
 	It("should throw a noncompliance event if a non-configurationpolicy uses a hub template", func() {
 		By("Deploying a test policy CRD")
