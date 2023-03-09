@@ -52,6 +52,8 @@ spec:
         }
 
         violation[{"msg": msg, "details": {"missing_labels": missing}}] {
+          input.review.object.metadata.name != "kube-root-ca.crt"
+          input.review.object.metadata.name != "openshift-service-ca.crt"
           provided := {label | input.review.object.metadata.labels[label]}
           required := {label | label := input.parameters.labels[_].key}
           missing := required - provided
@@ -61,6 +63,8 @@ spec:
         }
 
         violation[{"msg": msg}] {
+          input.review.object.metadata.name != "kube-root-ca.crt"
+          input.review.object.metadata.name != "openshift-service-ca.crt"
           value := input.review.object.metadata.labels[key]
           expected := input.parameters.labels[_]
           expected.key == key

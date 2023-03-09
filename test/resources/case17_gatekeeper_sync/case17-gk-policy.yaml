@@ -61,6 +61,8 @@ spec:
                 }
 
                 violation[{"msg": msg, "details": {"missing_labels": missing}}] {
+                  input.review.object.metadata.name != "kube-root-ca.crt"
+                  input.review.object.metadata.name != "openshift-service-ca.crt"
                   provided := {label | input.review.object.metadata.labels[label]}
                   required := {label | label := input.parameters.labels[_].key}
                   missing := required - provided
@@ -70,6 +72,8 @@ spec:
                 }
 
                 violation[{"msg": msg}] {
+                  input.review.object.metadata.name != "kube-root-ca.crt"
+                  input.review.object.metadata.name != "openshift-service-ca.crt"
                   value := input.review.object.metadata.labels[key]
                   expected := input.parameters.labels[_]
                   expected.key == key
@@ -89,8 +93,11 @@ spec:
           match:
             kinds:
               - apiGroups: [""]
-                kinds: ["Namespace"]
+                kinds: ["ConfigMap"]
+            scope: Namespaced
+            namespaces:
+              - case17-gk-test
           parameters:
-            message: "All namespaces must have a `gatekeeper` label"
+            message: "All configmaps must have a 'my-gk-test' label"
             labels:
-            - key: "gatekeeper"
+            - key: "my-gk-test"
