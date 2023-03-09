@@ -241,6 +241,7 @@ func kubectlManaged(args ...string) (string, error) {
 	return propagatorutils.KubectlWithOutput(args...)
 }
 
+// nolint: unparam
 func patchRemediationAction(
 	client dynamic.Interface, plc *unstructured.Unstructured, remediationAction string,
 ) (
@@ -290,26 +291,4 @@ func hubApplyPolicy(name, path string) {
 		true,
 		defaultTimeoutSeconds)
 	ExpectWithOffset(1, hubPlc).NotTo(BeNil())
-}
-
-func DeployGatekeeper() {
-	By("Deploying Gatekeeper " + utils.GkVersion + " to the managed cluster")
-	_, err := kubectlManaged("apply", "-f", utils.GkDeployment)
-	Expect(err).Should(BeNil())
-
-	EventuallyWithOffset(1, func(g Gomega) {
-		deployments, err := clientManaged.AppsV1().Deployments("gatekeeper-system").
-			List(context.TODO(), metav1.ListOptions{})
-		g.Expect(err).Should(BeNil())
-
-		var available bool
-		for _, deployment := range deployments.Items {
-			for _, condition := range deployment.Status.Conditions {
-				if condition.Reason == "MinimumReplicasAvailable" {
-					available = condition.Status == "True"
-				}
-			}
-			g.Expect(available).To(BeTrue())
-		}
-	}, defaultTimeoutSeconds, 1).Should(Succeed())
 }

@@ -7,8 +7,11 @@ spec:
   match:
     kinds:
       - apiGroups: [""]
-        kinds: ["Namespace"]
+        kinds: ["ConfigMap"]
+    scope: Namespaced
+    namespaces:
+      - case17-gk-test
   parameters:
-    message: "All namespaces must have a `gatekeeper` label"
+    message: "All configmaps must have a 'my-gk-test' label"
     labels:
-    - key: "gatekeeper"
+    - key: "my-gk-test"

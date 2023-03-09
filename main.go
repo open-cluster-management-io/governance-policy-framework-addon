@@ -22,6 +22,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stolostron/go-log-utils/zaputil"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
+	admissionregistration "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/api/core/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -47,6 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/gatekeepersync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/secretsync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/specsync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/statussync"
@@ -353,6 +356,9 @@ func getManager(
 				&extensionsv1beta1.CustomResourceDefinition{}: {
 					Label: crdLabelSelector,
 				},
+				&admissionregistration.ValidatingWebhookConfiguration{}: {
+					Field: fields.SelectorFromSet(fields.Set{"metadata.name": gatekeepersync.GatekeeperWebhookName}),
+				},
 			},
 		},
 	)
@@ -361,6 +367,80 @@ func getManager(
 	if err != nil {
 		log.Error(err, "unable to start manager")
 		os.Exit(1)
+	}
+
+	// use config check
+	configChecker, err := addonutils.NewConfigChecker(
+		"governance-policy-framework-addon", tool.Options.HubConfigFilePathName,
+	)
+	if err != nil {
+		log.Error(err, "unable to setup a configChecker")
+		os.Exit(1)
+	}
+
+	healthCheck := configChecker.Check
+
+	var gatekeeperInstalled bool
+
+	dynamicClient := dynamic.NewForConfigOrDie(managedCfg)
+
+	healthCheck, gatekeeperInstalled, err = gatekeepersync.GatekeeperInstallationChecker(
+		mgrCtx, dynamicClient, healthCheck,
+	)
+	if err != nil {
+		log.Error(err, "unable to determine if Gatekeeper is installed")
+		os.Exit(1)
+	}
+
+	// Only run the controller if Gatekeeper is installed
+	if gatekeeperInstalled {
+		log.Info(
+			"Starting the controller since a Gatekeeper installation was detected",
+			"controller", gatekeepersync.ControllerName,
+		)
+
+		clientset := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+		instanceName, _ := os.Hostname() // on an error, instanceName will be empty, which is ok
+
+		constraintsReconciler, constraintEvents := depclient.NewControllerRuntimeSource()
+
+		constraintsWatcher, err := depclient.New(managedCfg, constraintsReconciler, nil)
+		if err != nil {
+			log.Error(err, "Unable to create constraints watcher")
+			os.Exit(1)
+		}
+
+		go func() {
+			err := constraintsWatcher.Start(mgrCtx)
+			if err != nil {
+				panic(err)
+			}
+		}()
+
+		// Wait until the constraints watcher has started.
+		<-constraintsWatcher.Started()
+
+		if err = (&gatekeepersync.GatekeeperConstraintReconciler{
+			Client: mgr.GetClient(),
+			ComplianceEventSender: utils.ComplianceEventSender{
+				ClusterNamespace: tool.Options.ClusterNamespace,
+				ClientSet:        clientset,
+				ControllerName:   gatekeepersync.ControllerName,
+				InstanceName:     instanceName,
+			},
+			DynamicClient:      dynamicClient,
+			ConstraintsWatcher: constraintsWatcher,
+			Scheme:             mgr.GetScheme(),
+		}).SetupWithManager(mgr, constraintEvents); err != nil {
+			log.Error(err, "unable to create controller", "controller", gatekeepersync.ControllerName)
+			os.Exit(1)
+		}
+	} else {
+		log.Info(
+			"Gatekeeper is not installed so the gatekeepersync controller will be disabled. If running in a " +
+				"cluster, the health endpoint will become unhealthy if Gatekeeper is installed to trigger a " +
+				"restart.",
+		)
 	}
 
 	if err = (&statussync.PolicyReconciler{
@@ -407,17 +487,8 @@ func getManager(
 		os.Exit(1)
 	}
 
-	// use config check
-	configChecker, err := addonutils.NewConfigChecker(
-		"governance-policy-framework-addon", tool.Options.HubConfigFilePathName,
-	)
-	if err != nil {
-		log.Error(err, "unable to setup a configChecker")
-		os.Exit(1)
-	}
-
 	//+kubebuilder:scaffold:builder
-	if err := mgr.AddHealthzCheck("healthz", configChecker.Check); err != nil {
+	if err := mgr.AddHealthzCheck("healthz", healthCheck); err != nil {
 		log.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}

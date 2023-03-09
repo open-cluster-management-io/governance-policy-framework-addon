@@ -283,6 +283,10 @@ install-resources:
 	-kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(HUB_CONFIG)
 	@echo creating namespace on managed
 	-kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(MANAGED_CONFIG)
+	@if [ "$(KIND_VERSION)" != "minimum" ]; then \
+		echo installing Gatekeeper on the managed cluster; \
+		kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/v3.11.0/deploy/gatekeeper.yaml  --kubeconfig=$(MANAGED_CONFIG); \
+	fi
 
 .PHONY: e2e-dependencies
 e2e-dependencies:
