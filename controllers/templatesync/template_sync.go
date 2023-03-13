@@ -497,20 +497,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				}
 
 				// Handle adding metadata labels
-				labels := tObjectUnstructured.GetLabels()
-				if labels == nil {
-					labels = map[string]string{}
-				}
-
-				labels["cluster-name"] = instance.GetLabels()[common.ClusterNameLabel]
-				labels[common.ClusterNameLabel] = instance.GetLabels()[common.ClusterNameLabel]
-				labels["cluster-namespace"] = instance.GetLabels()[common.ClusterNamespaceLabel]
-				labels[common.ClusterNamespaceLabel] = instance.GetLabels()[common.ClusterNamespaceLabel]
-
-				// Set label to identify parent policy for this template object
-				labels[utils.ParentPolicyLabel] = instance.GetName()
-
-				tObjectUnstructured.SetLabels(labels)
+				tObjectUnstructured.SetLabels(r.setDefaultTemplateLabels(instance, tObjectUnstructured.GetLabels()))
 
 				overrideRemediationAction(instance, tObjectUnstructured)
 
@@ -666,7 +653,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				log.Error(err, "Failed to apply defaults to the ConstraintTemplate for comparison. Continuing.")
 			}
 		}
-		// verify parent policy label is set properly
+		// set default labels for template processing on the template object
 		tObjectUnstructured.SetLabels(r.setDefaultTemplateLabels(instance, tObjectUnstructured.GetLabels()))
 
 		overrideRemediationAction(instance, tObjectUnstructured)
@@ -840,11 +827,11 @@ func (r *PolicyReconciler) setDefaultTemplateLabels(instance *policiesv1.Policy,
 	}
 
 	desiredLabels := map[string]string{
-		parentPolicyLabel:            instance.GetName(),
+		utils.ParentPolicyLabel:      instance.GetName(),
 		"cluster-name":               instance.GetLabels()[common.ClusterNameLabel],
 		common.ClusterNameLabel:      instance.GetLabels()[common.ClusterNameLabel],
 		"cluster-namespace":          r.ClusterNamespace,
-		common.ClusterNamespaceLabel: instance.GetLabels()[common.ClusterNamespaceLabel],
+		common.ClusterNamespaceLabel: r.ClusterNamespace,
 	}
 
 	for key, label := range desiredLabels {
