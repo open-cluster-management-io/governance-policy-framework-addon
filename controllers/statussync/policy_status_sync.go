@@ -391,23 +391,31 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		reqLogger.Info("status match on managed, nothing to update")
 	}
 
-	if os.Getenv("ON_MULTICLUSTERHUB") != "true" && !equality.Semantic.DeepEqual(hubPlc.Status, instance.Status) {
-		reqLogger.Info("status not in sync, update the hub")
-
-		hubPlc.Status = instance.Status
-		err = r.HubClient.Status().Update(ctx, hubPlc)
-
+	if os.Getenv("ON_MULTICLUSTERHUB") != "true" {
+		// Re-fetch the hub template in case it changed
+		err = r.HubClient.Get(ctx, types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}, hubPlc)
 		if err != nil {
-			reqLogger.Error(err, "Failed to get update policy status on hub")
-
-			return reconcile.Result{}, err
+			log.Error(err, "Failed to refresh the cached policy. Will use existing policy.")
 		}
 
-		r.HubRecorder.Event(hubPlc, "Normal", "PolicyStatusSync",
-			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
-				hubPlc.GetNamespace()))
-	} else {
-		reqLogger.Info("status match on hub, nothing to update")
+		if !equality.Semantic.DeepEqual(hubPlc.Status, instance.Status) {
+			reqLogger.Info("status not in sync, update the hub")
+
+			hubPlc.Status = instance.Status
+			err = r.HubClient.Status().Update(ctx, hubPlc)
+
+			if err != nil {
+				reqLogger.Error(err, "Failed to update policy status on hub")
+
+				return reconcile.Result{}, err
+			}
+
+			r.HubRecorder.Event(hubPlc, "Normal", "PolicyStatusSync",
+				fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
+					hubPlc.GetNamespace()))
+		} else {
+			reqLogger.Info("status match on hub, nothing to update")
+		}
 	}
 
 	reqLogger.Info("Reconciling complete")
