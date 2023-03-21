@@ -4,6 +4,8 @@ package gatekeepersync
 
 import (
 	"context"
+
+	// #nosec G505
 	"crypto/sha1"
 	"encoding/json"
 	"errors"
@@ -345,6 +347,7 @@ func (r *GatekeeperConstraintReconciler) sendComplianceEvent(
 	if len(refreshedPolicy.Status.Details) < templateIndex+1 ||
 		len(refreshedPolicy.Status.Details[templateIndex].History) == 0 ||
 		refreshedPolicy.Status.Details[templateIndex].History[0].Message != fmt.Sprintf("%s; %s", compliance, msg) {
+		//#nosec G401
 		msgSHA1 := sha1.Sum([]byte(msg))
 		if existingMsgSHA1, ok := r.lastSentMessages.Load(kn); ok && existingMsgSHA1.([20]byte) == msgSHA1 {
 			// The message was already sent.
