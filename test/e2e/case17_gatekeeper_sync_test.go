@@ -194,11 +194,11 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 
 	It("should set status for the ConstraintTemplate to Compliant", func() {
 		By("Checking if policy status is compliant for the ConstraintTemplate")
-		managedPlc := propagatorutils.GetWithTimeout(clientManagedDynamic, gvrPolicy, policyName, clusterNamespace,
-			true, defaultTimeoutSeconds)
-		Expect(managedPlc).NotTo(BeNil())
-
 		Eventually(func() string {
+			managedPlc := propagatorutils.GetWithTimeout(clientManagedDynamic, gvrPolicy, policyName, clusterNamespace,
+				true, defaultTimeoutSeconds)
+			Expect(managedPlc).NotTo(BeNil())
+
 			var compliance string
 			detailsSlice, found, err := unstructured.NestedSlice(managedPlc.Object, "status", "details")
 			if found {
