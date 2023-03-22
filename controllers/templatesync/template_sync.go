@@ -6,6 +6,7 @@ package templatesync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -25,10 +26,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/record"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
@@ -126,24 +127,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, err
 	}
 
-	var rMapper meta.RESTMapper
+	var discoveryClient discovery.DiscoveryInterface
 	var dClient dynamic.Interface
 
 	if len(instance.Spec.PolicyTemplates) > 0 {
-		// initialize restmapper
 		clientset := kubernetes.NewForConfigOrDie(r.Config)
-		dd := clientset.Discovery()
-
-		apigroups, err := restmapper.GetAPIGroupResources(dd)
-		if err != nil {
-			reqLogger.Error(err, "Failed to create restmapper")
-
-			policySystemErrorsCounter.WithLabelValues(instance.Name, "", "get-error").Inc()
-
-			return reconcile.Result{}, err
-		}
-
-		rMapper = restmapper.NewDiscoveryRESTMapper(apigroups)
+		discoveryClient = clientset.Discovery()
 
 		// initialize dynamic client
 		dClient, err = dynamic.NewForConfig(r.Config)
@@ -184,7 +173,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		reqLogger.Info("Policy marked for deletion--proceeding with finalizer cleanup")
 
-		err := finalizerCleanup(ctx, instance, rMapper, dClient)
+		err := finalizerCleanup(ctx, instance, discoveryClient, dClient)
 		if err != nil {
 			reqLogger.Error(err, "Failure during finalizer cleanup")
 
@@ -349,15 +338,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		tLogger := reqLogger.WithValues("template", tName)
 
-		var rsrc schema.GroupVersionResource
-
-		mapping, err := rMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-
-		if mapping != nil {
-			rsrc = mapping.Resource
-		} else {
+		rsrc, namespaced, err := utils.GVRFromGVK(discoveryClient, *gvk)
+		if errors.Is(err, utils.ErrNoVersionedResource) {
 			resultError = err
 			errMsg := "Mapping not found, "
+
 			if isGkConstraintTemplate {
 				errMsg += "check if Gatekeeper is installed"
 			} else if gvk.Group == utils.GConstraint {
@@ -365,6 +350,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			} else {
 				errMsg += "check if you have the CRD deployed"
 			}
+
 			errMsg += fmt.Sprintf(": %s", err)
 
 			r.emitTemplateError(instance, tIndex, tName, isClusterScoped, errMsg)
@@ -377,7 +363,17 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "crd-error").Inc()
 
 			continue
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to get the resource version metadata")
+
+			policySystemErrorsCounter.WithLabelValues(instance.Name, "", "get-error").Inc()
+
+			return reconcile.Result{}, err
 		}
+
+		// Now that there is a mapping, there is a definitive answer whether it's cluster scoped rather
+		// than the previous educated guess based on the provided group and kind.
+		isClusterScoped = !namespaced
 
 		// Check for whether the CRD associated with this policy template has a policy-type=template
 		// label, signaling that it should be synced
@@ -428,14 +424,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			}
 		}
 
-		dependencyFailures := r.processDependencies(ctx, dClient, rMapper, templateDeps, tLogger)
+		dependencyFailures := r.processDependencies(ctx, dClient, discoveryClient, templateDeps, tLogger)
 
 		// Instantiate a dynamic client -- if it's a clusterwide resource, then leave off the namespace
 		var res dynamic.ResourceInterface
 
-		// Now that there is a mapping, there is a definitive answer whether it's cluster scoped rather
-		// than the previous educated guess based on the provided group and kind.
-		isClusterScoped = mapping.Scope == meta.RESTScopeRoot
 		resourceNs := ""
 
 		if !isClusterScoped {
@@ -1014,8 +1007,12 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 }
 
 // processDependencies iterates through all dependencies of a template and returns an array of any that are not met
-func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dynamic.Interface, rMapper meta.RESTMapper,
-	templateDeps map[depclient.ObjectIdentifier]string, tLogger logr.Logger,
+func (r *PolicyReconciler) processDependencies(
+	ctx context.Context,
+	dClient dynamic.Interface,
+	discoveryClient discovery.DiscoveryInterface,
+	templateDeps map[depclient.ObjectIdentifier]string,
+	tLogger logr.Logger,
 ) []depclient.ObjectIdentifier {
 	var dependencyFailures []depclient.ObjectIdentifier
 
@@ -1026,13 +1023,8 @@ func (r *PolicyReconciler) processDependencies(ctx context.Context, dClient dyna
 			Kind:    dep.Kind,
 		}
 
-		var rsrc schema.GroupVersionResource
-
-		depMapping, err := rMapper.RESTMapping(depGvk.GroupKind(), depGvk.Version)
-
-		if depMapping != nil {
-			rsrc = depMapping.Resource
-		} else {
+		rsrc, _, err := utils.GVRFromGVK(discoveryClient, depGvk)
+		if err != nil {
 			tLogger.Error(err, "Could not find an API mapping for the dependency", "object", dep)
 
 			dependencyFailures = append(dependencyFailures, dep)
@@ -1295,7 +1287,10 @@ func removeFinalizer(pol *policiesv1.Policy, finalizer string) {
 // finalizerCleanup handles any steps required for cleaning up objects on the cluster prior to
 // removing the policy finalizer.
 func finalizerCleanup(
-	ctx context.Context, pol *policiesv1.Policy, rMapper meta.RESTMapper, dClient dynamic.Interface,
+	ctx context.Context,
+	pol *policiesv1.Policy,
+	discoveryClient discovery.DiscoveryInterface,
+	dClient dynamic.Interface,
 ) error {
 	var errorList utils.ErrList
 
@@ -1319,17 +1314,21 @@ func finalizerCleanup(
 
 		// If there was an error getting the mapping, it's likely because the CRD is gone--skip this
 		// template since Kubernetes garbage collection will take care of it
-		mapping, err := rMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if err != nil {
+		rsrc, namespaced, err := utils.GVRFromGVK(discoveryClient, *gvk)
+		if errors.Is(err, utils.ErrNoVersionedResource) {
+			continue
+		} else if err != nil {
+			policySystemErrorsCounter.WithLabelValues(pol.Name, tName, "get-error").Inc()
+			errorList = append(errorList, err)
+
 			continue
 		}
 
 		// Instantiate a dynamic client
-		rsrc := mapping.Resource
 		res := dClient.Resource(rsrc)
 
 		// Delete clusterwide objects
-		if mapping.Scope == meta.RESTScopeRoot {
+		if !namespaced {
 			// Delete object, ignoring not found errors
 			err := res.Delete(ctx, tName, metav1.DeleteOptions{})
 			if err != nil && !k8serrors.IsNotFound(err) {
