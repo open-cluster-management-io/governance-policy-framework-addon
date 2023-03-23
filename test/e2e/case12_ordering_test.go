@@ -4,13 +4,19 @@
 package e2e
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/uuid"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
 // Helper function to create events
-func generateEventOnPolicy(plcName string, cfgPlcNamespacedName string, eventType string, msg string) {
+func generateEventOnPolicy(plcName string, cfgPlcName string, msg string, complianceState string) {
 	managedPlc := utils.GetWithTimeout(
 		clientManagedDynamic,
 		gvrPolicy,
@@ -19,11 +25,32 @@ func generateEventOnPolicy(plcName string, cfgPlcNamespacedName string, eventTyp
 		true,
 		defaultTimeoutSeconds)
 	Expect(managedPlc).NotTo(BeNil())
-	managedRecorder.Event(
-		managedPlc,
-		eventType,
-		"policy: "+cfgPlcNamespacedName,
-		msg)
+
+	configPlc := unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": gvrConfigurationPolicy.GroupVersion().String(),
+			"kind":       "ConfigurationPolicy",
+			"metadata": map[string]interface{}{
+				"name":      cfgPlcName,
+				"namespace": clusterNamespace,
+				"uid":       uuid.NewUUID(),
+			},
+		},
+	}
+
+	err := managedEventSender.SendEvent(
+		context.TODO(),
+		&configPlc,
+		metav1.OwnerReference{
+			APIVersion: managedPlc.GetAPIVersion(),
+			Kind:       managedPlc.GetKind(),
+			Name:       managedPlc.GetName(),
+			UID:        managedPlc.GetUID(),
+		},
+		msg,
+		policiesv1.ComplianceState(complianceState),
+	)
+	Expect(err).To(BeNil())
 }
 
 var _ = Describe("Test dependency logic in template sync", Ordered, func() {
@@ -70,9 +97,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a compliant event on the dependency")
 		generateEventOnPolicy(
 			case12DepName,
-			"managed/namespace-foo-setup-configpolicy",
-			"Normal",
-			"Compliant; No violation detected",
+			"namespace-foo-setup-configpolicy",
+			"No violation detected",
+			"Compliant",
 		)
 
 		By("Checking if dependency status is compliant")
@@ -81,9 +108,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a compliant event on the policy")
 		generateEventOnPolicy(
 			case12PolicyName,
-			"managed/case12-config-policy",
-			"Normal",
-			"Compliant; No violation detected",
+			"case12-config-policy",
+			"No violation detected",
+			"Compliant",
 		)
 
 		By("Checking if policy status is compliant")
@@ -99,9 +126,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a noncompliant event on the dependency")
 		generateEventOnPolicy(
 			case12DepName,
-			"managed/namespace-foo-setup-configpolicy",
-			"Warning",
-			"NonCompliant; there is violation",
+			"namespace-foo-setup-configpolicy",
+			"there is violation",
+			"NonCompliant",
 		)
 
 		By("Checking if dependency status is noncompliant")
@@ -120,9 +147,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a noncompliant event on the dependency")
 		generateEventOnPolicy(
 			case12DepName,
-			"managed/namespace-foo-setup-configpolicy",
-			"Warning",
-			"NonCompliant; there is violation",
+			"namespace-foo-setup-configpolicy",
+			"there is violation",
+			"NonCompliant",
 		)
 
 		By("Checking if dependency status is noncompliant")
@@ -142,9 +169,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a non compliant event on the dep")
 		generateEventOnPolicy(
 			case12DepName,
-			"managed/namespace-foo-setup-configpolicy",
-			"Warning",
-			"NonCompliant; there is violation",
+			"namespace-foo-setup-configpolicy",
+			"there is violation",
+			"NonCompliant",
 		)
 
 		By("Checking if dependency status is noncompliant")
@@ -156,9 +183,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a compliant event on the dependency")
 		generateEventOnPolicy(
 			case12DepName,
-			"managed/namespace-foo-setup-configpolicy",
-			"Normal",
-			"Compliant; No violation detected",
+			"namespace-foo-setup-configpolicy",
+			"No violation detected",
+			"Compliant",
 		)
 
 		By("Checking if dependency status is compliant")
@@ -167,9 +194,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a compliant event on the policy")
 		generateEventOnPolicy(
 			case12PolicyName,
-			"managed/case12-config-policy",
-			"Normal",
-			"Compliant; No violation detected",
+			"case12-config-policy",
+			"No violation detected",
+			"Compliant",
 		)
 
 		By("Checking if policy status is compliant")
@@ -191,9 +218,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a compliant event on the dependency")
 		generateEventOnPolicy(
 			case12DepName,
-			"managed/namespace-foo-setup-configpolicy",
-			"Normal",
-			"Compliant; No violation detected",
+			"namespace-foo-setup-configpolicy",
+			"No violation detected",
+			"Compliant",
 		)
 
 		By("Checking if dependency status is compliant")
@@ -202,9 +229,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a compliant event on the policy")
 		generateEventOnPolicy(
 			case12PolicyName,
-			"managed/case12-config-policy",
-			"Normal",
-			"Compliant; No violation detected",
+			"case12-config-policy",
+			"No violation detected",
+			"Compliant",
 		)
 
 		By("Checking if policy status is compliant")
@@ -213,9 +240,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a non compliant event on the dep")
 		generateEventOnPolicy(
 			case12DepName,
-			"managed/namespace-foo-setup-configpolicy",
-			"Warning",
-			"NonCompliant; there is violation",
+			"namespace-foo-setup-configpolicy",
+			"there is violation",
+			"NonCompliant",
 		)
 
 		By("Checking if dependency status is noncompliant")
@@ -237,9 +264,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a non compliant event on the dep b")
 		generateEventOnPolicy(
 			case12DepBName,
-			"managed/namespace-foo-setup-configpolicy-b",
-			"Warning",
-			"NonCompliant; there is violation",
+			"namespace-foo-setup-configpolicy-b",
+			"there is violation",
+			"NonCompliant",
 		)
 
 		By("Checking if dependency status is noncompliant")
@@ -248,9 +275,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a compliant event on the dependency")
 		generateEventOnPolicy(
 			case12DepName,
-			"managed/namespace-foo-setup-configpolicy",
-			"Normal",
-			"Compliant; No violation detected",
+			"namespace-foo-setup-configpolicy",
+			"No violation detected",
+			"Compliant",
 		)
 
 		By("Checking if dependency status is compliant")
@@ -259,9 +286,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a compliant event on the policy")
 		generateEventOnPolicy(
 			case12ExtraDepsPolicyName,
-			"managed/case12-config-policy-multi",
-			"Normal",
-			"Compliant; No violation detected",
+			"case12-config-policy-multi",
+			"No violation detected",
+			"Compliant",
 		)
 
 		By("Checking if policy status is pending")
@@ -280,9 +307,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a non compliant event on the dep a")
 		generateEventOnPolicy(
 			case12DepName,
-			"managed/namespace-foo-setup-configpolicy",
-			"Warning",
-			"NonCompliant; there is violation",
+			"namespace-foo-setup-configpolicy",
+			"there is violation",
+			"NonCompliant",
 		)
 
 		By("Checking if dependency status is noncompliant")
@@ -291,9 +318,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a compliant event on the dependency b")
 		generateEventOnPolicy(
 			case12DepBName,
-			"managed/namespace-foo-setup-configpolicy-b",
-			"Normal",
-			"Compliant; No violation detected",
+			"namespace-foo-setup-configpolicy-b",
+			"No violation detected",
+			"Compliant",
 		)
 
 		By("Checking if dependency status is compliant")
@@ -302,9 +329,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Generating a noncompliant event on the non-pending template")
 		generateEventOnPolicy(
 			case12Plc2TemplatesName,
-			"managed/case12-config-policy-2-templates-b",
-			"Warning",
-			"NonCompliant; there is violation",
+			"case12-config-policy-2-templates-b",
+			"there is violation",
+			"NonCompliant",
 		)
 
 		// should be noncompliant - template A is pending and B is noncompliant

@@ -29,7 +29,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"open-cluster-management.io/governance-policy-framework-addon/test/utils"
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
+	testutils "open-cluster-management.io/governance-policy-framework-addon/test/utils"
 )
 
 var (
@@ -51,7 +52,8 @@ var (
 
 	defaultImageRegistry string
 
-	managedRecorder record.EventRecorder
+	managedRecorder    record.EventRecorder
+	managedEventSender utils.ComplianceEventSender
 )
 
 const (
@@ -141,7 +143,7 @@ var _ = BeforeSuite(func() {
 	}
 	By("Create EventRecorder")
 	var err error
-	managedRecorder, err = utils.CreateRecorder(clientManaged, "status-sync-controller-test")
+	managedRecorder, err = testutils.CreateRecorder(clientManaged, "status-sync-controller-test")
 	Expect(err).To(BeNil())
 
 	if os.Getenv("E2E_CLUSTER_NAMESPACE") != "" {
@@ -157,6 +159,16 @@ var _ = BeforeSuite(func() {
 		}
 	} else {
 		clusterNamespace = testNamespace
+	}
+
+	managedConfig, err := LoadConfig("", kubeconfigManaged, "")
+	Expect(err).To(BeNil())
+
+	managedEventSender = utils.ComplianceEventSender{
+		ClusterNamespace: clusterNamespace,
+		InstanceName:     "status-sync-controller-test",
+		ClientSet:        kubernetes.NewForConfigOrDie(managedConfig),
+		ControllerName:   "status-sync-controller-test",
 	}
 })
 
