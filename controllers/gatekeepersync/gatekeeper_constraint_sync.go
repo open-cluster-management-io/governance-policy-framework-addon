@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	policyv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -159,12 +160,11 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 			Namespace: templateUnstructured.GetNamespace(),
 			Name:      templateUnstructured.GetName(),
 		}
-		constraintsToWatch = append(constraintsToWatch, constraintObjID)
 
 		pkn := policyKindName{Policy: policy.Name, Kind: templateGVK.Kind, Name: templateUnstructured.GetName()}
 		constraintsSet[pkn] = true
 
-		contraintGVR := schema.GroupVersionResource{
+		constraintGVR := schema.GroupVersionResource{
 			Group: utils.GConstraint,
 			// https://github.com/open-policy-agent/frameworks/blob/v0.9.0/constraint/pkg/client/crds/crds.go#L34
 			Resource: strings.ToLower(templateGVK.Kind),
@@ -173,16 +173,48 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 			Version: "v1beta1",
 		}
 
-		constraint, err := r.DynamicClient.Resource(contraintGVR).Get(
+		constraint, err := r.DynamicClient.Resource(constraintGVR).Get(
 			ctx, templateUnstructured.GetName(), metav1.GetOptions{},
 		)
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
+				// Detect if the error is because Gatekeeper hasn't generated a CRD from the ConstraintTemplate yet.
+				// This prevents the dynamic watch library from constantly erroring due to the missing CRD. If the
+				// CRD is missing, this will watch for the CRD instead.
+				//
+				// This approach is taken instead of checking the error message in case the message changes.
+				constraintGVK := schema.GroupVersionKind{
+					Group:   constraintGVR.Group,
+					Version: constraintGVR.Version,
+					Kind:    templateGVK.Kind,
+				}
+				_, _, err := utils.GVRFromGVK(discovery.NewDiscoveryClient(r.ClientSet.RESTClient()), constraintGVK)
+
+				if errors.Is(err, utils.ErrNoVersionedResource) {
+					log.Info(
+						"The Gatekeeper ConstraintTemplate is not initialized on the cluster yet. "+
+							"Will retry the reconcile when the CRD is created.",
+						"constraint", constraintObjID.String(),
+					)
+
+					crdObjID := depclient.ObjectIdentifier{
+						Group:   "apiextensions.k8s.io",
+						Version: "v1",
+						Kind:    "CustomResourceDefinition",
+						Name:    fmt.Sprintf("%s.%s", constraintGVR.Resource, constraintGVR.Group),
+					}
+					constraintsToWatch = append(constraintsToWatch, crdObjID)
+
+					continue
+				}
+
 				log.Info(
 					"The Gatekeeper constraint does not exist on the cluster yet. "+
 						"Will retry the reconcile request once it's created.",
 					"constraint", constraintObjID.String(),
 				)
+
+				constraintsToWatch = append(constraintsToWatch, constraintObjID)
 
 				continue
 			}
@@ -193,6 +225,8 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 
 			return reconcile.Result{}, err
 		}
+
+		constraintsToWatch = append(constraintsToWatch, constraintObjID)
 
 		violations, _, err := unstructured.NestedSlice(constraint.Object, "status", "violations")
 		if err != nil {
