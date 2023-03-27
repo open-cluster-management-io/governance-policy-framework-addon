@@ -22,6 +22,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stolostron/go-log-utils/zaputil"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
+	"golang.org/x/mod/semver"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/api/core/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -369,6 +371,14 @@ func getManager(
 		os.Exit(1)
 	}
 
+	discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(managedCfg)
+
+	serverVersion, err := discoveryClient.ServerVersion()
+	if err != nil {
+		log.Error(err, "unable to detect the managed cluster's Kubernetes version")
+		os.Exit(1)
+	}
+
 	// use config check
 	configChecker, err := addonutils.NewConfigChecker(
 		"governance-policy-framework-addon", tool.Options.HubConfigFilePathName,
@@ -380,67 +390,71 @@ func getManager(
 
 	healthCheck := configChecker.Check
 
-	var gatekeeperInstalled bool
+	// Gatekeeper is not supported on such old versions of Kubernetes, so just always disable it in this case. In
+	// particular, CRD v1 is not available before Kubernetes v1.16.0.
+	if semver.Compare(serverVersion.GitVersion, "v1.16.0") >= 0 {
+		var gatekeeperInstalled bool
+		var err error
+		dynamicClient := dynamic.NewForConfigOrDie(managedCfg)
 
-	dynamicClient := dynamic.NewForConfigOrDie(managedCfg)
-
-	healthCheck, gatekeeperInstalled, err = gatekeepersync.GatekeeperInstallationChecker(
-		mgrCtx, dynamicClient, healthCheck,
-	)
-	if err != nil {
-		log.Error(err, "unable to determine if Gatekeeper is installed")
-		os.Exit(1)
-	}
-
-	// Only run the controller if Gatekeeper is installed
-	if gatekeeperInstalled {
-		log.Info(
-			"Starting the controller since a Gatekeeper installation was detected",
-			"controller", gatekeepersync.ControllerName,
+		healthCheck, gatekeeperInstalled, err = gatekeepersync.GatekeeperInstallationChecker(
+			mgrCtx, dynamicClient, healthCheck,
 		)
-
-		clientset := kubernetes.NewForConfigOrDie(mgr.GetConfig())
-		instanceName, _ := os.Hostname() // on an error, instanceName will be empty, which is ok
-
-		constraintsReconciler, constraintEvents := depclient.NewControllerRuntimeSource()
-
-		constraintsWatcher, err := depclient.New(managedCfg, constraintsReconciler, nil)
 		if err != nil {
-			log.Error(err, "Unable to create constraints watcher")
+			log.Error(err, "unable to determine if Gatekeeper is installed")
 			os.Exit(1)
 		}
 
-		go func() {
-			err := constraintsWatcher.Start(mgrCtx)
+		// Only run the controller if Gatekeeper is installed
+		if gatekeeperInstalled {
+			log.Info(
+				"Starting the controller since a Gatekeeper installation was detected",
+				"controller", gatekeepersync.ControllerName,
+			)
+
+			clientset := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+			instanceName, _ := os.Hostname() // on an error, instanceName will be empty, which is ok
+
+			constraintsReconciler, constraintEvents := depclient.NewControllerRuntimeSource()
+
+			constraintsWatcher, err := depclient.New(managedCfg, constraintsReconciler, nil)
 			if err != nil {
-				panic(err)
+				log.Error(err, "Unable to create constraints watcher")
+				os.Exit(1)
 			}
-		}()
 
-		// Wait until the constraints watcher has started.
-		<-constraintsWatcher.Started()
+			go func() {
+				err := constraintsWatcher.Start(mgrCtx)
+				if err != nil {
+					panic(err)
+				}
+			}()
 
-		if err = (&gatekeepersync.GatekeeperConstraintReconciler{
-			Client: mgr.GetClient(),
-			ComplianceEventSender: utils.ComplianceEventSender{
-				ClusterNamespace: tool.Options.ClusterNamespace,
-				ClientSet:        clientset,
-				ControllerName:   gatekeepersync.ControllerName,
-				InstanceName:     instanceName,
-			},
-			DynamicClient:      dynamicClient,
-			ConstraintsWatcher: constraintsWatcher,
-			Scheme:             mgr.GetScheme(),
-		}).SetupWithManager(mgr, constraintEvents); err != nil {
-			log.Error(err, "unable to create controller", "controller", gatekeepersync.ControllerName)
-			os.Exit(1)
+			// Wait until the constraints watcher has started.
+			<-constraintsWatcher.Started()
+
+			if err = (&gatekeepersync.GatekeeperConstraintReconciler{
+				Client: mgr.GetClient(),
+				ComplianceEventSender: utils.ComplianceEventSender{
+					ClusterNamespace: tool.Options.ClusterNamespace,
+					ClientSet:        clientset,
+					ControllerName:   gatekeepersync.ControllerName,
+					InstanceName:     instanceName,
+				},
+				DynamicClient:      dynamicClient,
+				ConstraintsWatcher: constraintsWatcher,
+				Scheme:             mgr.GetScheme(),
+			}).SetupWithManager(mgr, constraintEvents); err != nil {
+				log.Error(err, "unable to create controller", "controller", gatekeepersync.ControllerName)
+				os.Exit(1)
+			}
+		} else {
+			log.Info(
+				"Gatekeeper is not installed so the gatekeepersync controller will be disabled. If running in a " +
+					"cluster, the health endpoint will become unhealthy if Gatekeeper is installed to trigger a " +
+					"restart.",
+			)
 		}
-	} else {
-		log.Info(
-			"Gatekeeper is not installed so the gatekeepersync controller will be disabled. If running in a " +
-				"cluster, the health endpoint will become unhealthy if Gatekeeper is installed to trigger a " +
-				"restart.",
-		)
 	}
 
 	if err = (&statussync.PolicyReconciler{
