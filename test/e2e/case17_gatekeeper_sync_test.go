@@ -88,6 +88,12 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 	})
 
 	AfterAll(func() {
+		By("Deleting the namespace " + configMapNamespace)
+		err := clientManaged.CoreV1().Namespaces().Delete(context.TODO(), configMapNamespace, metav1.DeleteOptions{})
+		if !k8serrors.IsNotFound(err) {
+			Expect(err).To(BeNil())
+		}
+
 		for _, pName := range []string{policyName, policyName2} {
 			By("Deleting policy " + pName + " on the hub in ns:" + clusterNamespaceOnHub)
 			err := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub).Delete(
@@ -111,12 +117,6 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 
 		opt := metav1.ListOptions{}
 		propagatorutils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
-
-		By("Deleting the namespace " + configMapNamespace)
-		err := clientManaged.CoreV1().Namespaces().Delete(context.TODO(), configMapNamespace, metav1.DeleteOptions{})
-		if !k8serrors.IsNotFound(err) {
-			Expect(err).To(BeNil())
-		}
 
 		By("Fixing the Gatekeeper webhook if required")
 		Eventually(
@@ -146,6 +146,18 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 				g.Expect(err).To(BeNil())
 			},
 			defaultTimeoutSeconds,
+			1,
+		).Should(Succeed())
+
+		By("Waiting for the namespace " + configMapNamespace + " to be deleted")
+		Eventually(
+			func(g Gomega) {
+				_, err := clientManaged.CoreV1().Namespaces().Get(
+					context.TODO(), configMapNamespace, metav1.GetOptions{},
+				)
+				g.Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+			},
+			defaultTimeoutSeconds*2,
 			1,
 		).Should(Succeed())
 	})
