@@ -371,14 +371,6 @@ func getManager(
 		os.Exit(1)
 	}
 
-	discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(managedCfg)
-
-	serverVersion, err := discoveryClient.ServerVersion()
-	if err != nil {
-		log.Error(err, "unable to detect the managed cluster's Kubernetes version")
-		os.Exit(1)
-	}
-
 	// use config check
 	configChecker, err := addonutils.NewConfigChecker(
 		"governance-policy-framework-addon", tool.Options.HubConfigFilePathName,
@@ -388,74 +380,7 @@ func getManager(
 		os.Exit(1)
 	}
 
-	healthCheck := configChecker.Check
-
-	// Gatekeeper is not supported on such old versions of Kubernetes, so just always disable it in this case. In
-	// particular, CRD v1 is not available before Kubernetes v1.16.0.
-	if semver.Compare(serverVersion.GitVersion, "v1.16.0") >= 0 {
-		var gatekeeperInstalled bool
-		var err error
-		dynamicClient := dynamic.NewForConfigOrDie(managedCfg)
-
-		healthCheck, gatekeeperInstalled, err = gatekeepersync.GatekeeperInstallationChecker(
-			mgrCtx, dynamicClient, healthCheck,
-		)
-		if err != nil {
-			log.Error(err, "unable to determine if Gatekeeper is installed")
-			os.Exit(1)
-		}
-
-		// Only run the controller if Gatekeeper is installed
-		if gatekeeperInstalled {
-			log.Info(
-				"Starting the controller since a Gatekeeper installation was detected",
-				"controller", gatekeepersync.ControllerName,
-			)
-
-			clientset := kubernetes.NewForConfigOrDie(mgr.GetConfig())
-			instanceName, _ := os.Hostname() // on an error, instanceName will be empty, which is ok
-
-			constraintsReconciler, constraintEvents := depclient.NewControllerRuntimeSource()
-
-			constraintsWatcher, err := depclient.New(managedCfg, constraintsReconciler, nil)
-			if err != nil {
-				log.Error(err, "Unable to create constraints watcher")
-				os.Exit(1)
-			}
-
-			go func() {
-				err := constraintsWatcher.Start(mgrCtx)
-				if err != nil {
-					panic(err)
-				}
-			}()
-
-			// Wait until the constraints watcher has started.
-			<-constraintsWatcher.Started()
-
-			if err = (&gatekeepersync.GatekeeperConstraintReconciler{
-				Client: mgr.GetClient(),
-				ComplianceEventSender: utils.ComplianceEventSender{
-					ClusterNamespace: tool.Options.ClusterNamespace,
-					ClientSet:        clientset,
-					ControllerName:   gatekeepersync.ControllerName,
-					InstanceName:     instanceName,
-				},
-				DynamicClient:      dynamicClient,
-				ConstraintsWatcher: constraintsWatcher,
-				Scheme:             mgr.GetScheme(),
-			}).SetupWithManager(mgr, constraintEvents); err != nil {
-				log.Error(err, "unable to create controller", "controller", gatekeepersync.ControllerName)
-				os.Exit(1)
-			}
-		} else {
-			log.Info(
-				"Gatekeeper is not installed so the gatekeepersync controller will be disabled. If running in a " +
-					"cluster, the health endpoint will become unhealthy if Gatekeeper is installed to trigger a " +
-					"restart.",
-			)
-		}
-	}
+	healthCheck := addGkControllerToManager(mgrCtx, mgr, managedCfg, configChecker.Check)
 
 	if err = (&statussync.PolicyReconciler{
 		ClusterNamespaceOnHub: tool.Options.ClusterNamespaceOnHub,
@@ -607,6 +532,92 @@ func getHubManager(
 	}
 
 	return mgr
+}
+
+// addGkControllerToManager will configure the input manager with the gatekeeper-constraint-status-sync controller if
+// Gatekeeper is installed and the Kubernetes cluster is v1.16.0+. The returned health checker will wrap the input
+// health checkers but also return unhealthy if the Gatekeeper installation status chanages.
+func addGkControllerToManager(
+	mgrCtx context.Context, mgr manager.Manager, managedCfg *rest.Config, healthCheck healthz.Checker,
+) healthz.Checker {
+	discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(managedCfg)
+
+	serverVersion, err := discoveryClient.ServerVersion()
+	if err != nil {
+		log.Error(err, "unable to detect the managed cluster's Kubernetes version")
+		os.Exit(1)
+	}
+
+	// Gatekeeper is not supported on such old versions of Kubernetes, so just always disable it in this case. In
+	// particular, CRD v1 is not available before Kubernetes v1.16.0.
+	if semver.Compare(serverVersion.GitVersion, "v1.16.0") < 0 {
+		return healthCheck
+	}
+
+	dynamicClient := dynamic.NewForConfigOrDie(managedCfg)
+
+	gkHealthCheck, gatekeeperInstalled, err := gatekeepersync.GatekeeperInstallationChecker(
+		mgrCtx, dynamicClient, healthCheck,
+	)
+	if err != nil {
+		log.Error(err, "unable to determine if Gatekeeper is installed")
+		os.Exit(1)
+	}
+
+	// Only run the controller if Gatekeeper is installed
+	if !gatekeeperInstalled {
+		log.Info(
+			"Gatekeeper is not installed so the gatekeepersync controller will be disabled. If running in a " +
+				"cluster, the health endpoint will become unhealthy if Gatekeeper is installed to trigger a " +
+				"restart.",
+		)
+
+		return gkHealthCheck
+	}
+
+	log.Info(
+		"Starting the controller since a Gatekeeper installation was detected",
+		"controller", gatekeepersync.ControllerName,
+	)
+
+	clientset := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+	instanceName, _ := os.Hostname() // on an error, instanceName will be empty, which is ok
+
+	constraintsReconciler, constraintEvents := depclient.NewControllerRuntimeSource()
+
+	constraintsWatcher, err := depclient.New(managedCfg, constraintsReconciler, nil)
+	if err != nil {
+		log.Error(err, "Unable to create constraints watcher")
+		os.Exit(1)
+	}
+
+	go func() {
+		err := constraintsWatcher.Start(mgrCtx)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	// Wait until the constraints watcher has started.
+	<-constraintsWatcher.Started()
+
+	if err = (&gatekeepersync.GatekeeperConstraintReconciler{
+		Client: mgr.GetClient(),
+		ComplianceEventSender: utils.ComplianceEventSender{
+			ClusterNamespace: tool.Options.ClusterNamespace,
+			ClientSet:        clientset,
+			ControllerName:   gatekeepersync.ControllerName,
+			InstanceName:     instanceName,
+		},
+		DynamicClient:      dynamicClient,
+		ConstraintsWatcher: constraintsWatcher,
+		Scheme:             mgr.GetScheme(),
+	}).SetupWithManager(mgr, constraintEvents); err != nil {
+		log.Error(err, "unable to create controller", "controller", gatekeepersync.ControllerName)
+		os.Exit(1)
+	}
+
+	return gkHealthCheck
 }
 
 // startHealthProxy responds to /healthz and /readyz HTTP requests and combines the status together of the input
