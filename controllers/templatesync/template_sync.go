@@ -73,11 +73,12 @@ type PolicyReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client.Client
-	DynamicWatcher   depclient.DynamicWatcher
-	Scheme           *runtime.Scheme
-	Config           *rest.Config
-	Recorder         record.EventRecorder
-	ClusterNamespace string
+	DynamicWatcher      depclient.DynamicWatcher
+	Scheme              *runtime.Scheme
+	Config              *rest.Config
+	Recorder            record.EventRecorder
+	ClusterNamespace    string
+	createdGkConstraint *bool
 }
 
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
@@ -265,7 +266,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// - Cluster scoped
 		isGkConstraintTemplate := gvk.Group == utils.GvkConstraintTemplate.Group &&
 			gvk.Kind == utils.GvkConstraintTemplate.Kind
-		isClusterScoped := isGkConstraintTemplate || gvk.Group == utils.GConstraint
+		isGkObj := isGkConstraintTemplate || gvk.Group == utils.GConstraint
+		isClusterScoped := isGkObj
 
 		// Handle dependencies that apply to the current policy-template
 		depConflictErr := false
@@ -517,6 +519,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 					tLogger.V(2).Info("Finalizer required for " + gvk.Kind)
 
+					if isGkObj {
+						r.setCreatedGkConstraint(true)
+					}
 					// The ConstraintTemplate does not generate status, so we need to generate an event for it.
 					if isGkConstraintTemplate {
 						tLogger.Info("Emitting status event for " + gvk.Kind)
@@ -693,6 +698,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				reqLogger.V(2).Info("Finalizer required for " + gvk.Kind)
 
+				if isGkObj {
+					r.setCreatedGkConstraint(true)
+				}
 				// The ConstraintTemplate does not generate status, so we need to generate an event for it
 				if isGkConstraintTemplate {
 					tLogger.Info("Emitting status event for " + gvk.Kind)
@@ -726,6 +734,10 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			// If we got to this point, the reconcile succeeded and a finalizer would be required for
 			// existing clusterwide objects
 			addFinalizer = true
+
+			if isGkObj {
+				r.setCreatedGkConstraint(true)
+			}
 		}
 	}
 
@@ -854,37 +866,12 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 
 	tmplGVRs := []gvrScoped{}
 
-	// Query for ConstraintTemplates and collect the GroupVersionResource for each Constraint
-	gkConstraintTemplateListv1 := gktemplatesv1.ConstraintTemplateList{}
+	// Query for Constraints if one was already synced successfully or the boolean is not yet set
+	if r.createdGkConstraint == nil || *r.createdGkConstraint {
+		// Query for ConstraintTemplates and collect the GroupVersionResource for each Constraint
+		gkConstraintTemplateListv1 := gktemplatesv1.ConstraintTemplateList{}
 
-	err := r.List(ctx, &gkConstraintTemplateListv1, &client.ListOptions{})
-	if err == nil {
-		// Add the ConstraintTemplate to the GVR list
-		if len(gkConstraintTemplateListv1.Items) > 0 {
-			tmplGVRs = append(tmplGVRs, gvrScoped{
-				gvr: schema.GroupVersionResource{
-					Group:    utils.GvkConstraintTemplate.Group,
-					Resource: "constrainttemplates",
-					Version:  "v1",
-				},
-				namespaced: false,
-			})
-		}
-		// Iterate over the ConstraintTemplates to gather the Constraints on the cluster
-		for _, gkCT := range gkConstraintTemplateListv1.Items {
-			tmplGVRs = append(tmplGVRs, gvrScoped{
-				gvr: schema.GroupVersionResource{
-					Group:    utils.GConstraint,
-					Resource: strings.ToLower(gkCT.Spec.CRD.Spec.Names.Kind),
-					Version:  "v1beta1",
-				},
-				namespaced: false,
-			})
-		}
-	} else if meta.IsNoMatchError(err) {
-		// If there's no v1 ConstraintTemplate, try the v1beta1 version
-		gkConstraintTemplateListv1beta1 := gktemplatesv1beta1.ConstraintTemplateList{}
-		err := r.List(ctx, &gkConstraintTemplateListv1beta1, &client.ListOptions{})
+		err := r.List(ctx, &gkConstraintTemplateListv1, &client.ListOptions{})
 		if err == nil {
 			// Add the ConstraintTemplate to the GVR list
 			if len(gkConstraintTemplateListv1.Items) > 0 {
@@ -892,13 +879,16 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 					gvr: schema.GroupVersionResource{
 						Group:    utils.GvkConstraintTemplate.Group,
 						Resource: "constrainttemplates",
-						Version:  "v1beta1",
+						Version:  "v1",
 					},
 					namespaced: false,
 				})
+			} else {
+				// No ConstraintTemplates found -- reset boolean
+				r.setCreatedGkConstraint(false)
 			}
 			// Iterate over the ConstraintTemplates to gather the Constraints on the cluster
-			for _, gkCT := range gkConstraintTemplateListv1beta1.Items {
+			for _, gkCT := range gkConstraintTemplateListv1.Items {
 				tmplGVRs = append(tmplGVRs, gvrScoped{
 					gvr: schema.GroupVersionResource{
 						Group:    utils.GConstraint,
@@ -908,12 +898,46 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 					namespaced: false,
 				})
 			}
-			// Log and ignore other errors to allow cleanup to continue since Gatekeeper may not be installed
+		} else if meta.IsNoMatchError(err) {
+			// If there's no v1 ConstraintTemplate, try the v1beta1 version
+			gkConstraintTemplateListv1beta1 := gktemplatesv1beta1.ConstraintTemplateList{}
+			err := r.List(ctx, &gkConstraintTemplateListv1beta1, &client.ListOptions{})
+			if err == nil {
+				// Add the ConstraintTemplate to the GVR list
+				if len(gkConstraintTemplateListv1.Items) > 0 {
+					tmplGVRs = append(tmplGVRs, gvrScoped{
+						gvr: schema.GroupVersionResource{
+							Group:    utils.GvkConstraintTemplate.Group,
+							Resource: "constrainttemplates",
+							Version:  "v1beta1",
+						},
+						namespaced: false,
+					})
+				} else {
+					// No ConstraintTemplates found -- reset boolean
+					r.setCreatedGkConstraint(false)
+				}
+				// Iterate over the ConstraintTemplates to gather the Constraints on the cluster
+				for _, gkCT := range gkConstraintTemplateListv1beta1.Items {
+					tmplGVRs = append(tmplGVRs, gvrScoped{
+						gvr: schema.GroupVersionResource{
+							Group:    utils.GConstraint,
+							Resource: strings.ToLower(gkCT.Spec.CRD.Spec.Names.Kind),
+							Version:  "v1beta1",
+						},
+						namespaced: false,
+					})
+				}
+				// Log and ignore other errors to allow cleanup to continue since Gatekeeper may not be installed
+			} else if meta.IsNoMatchError(err) {
+				reqLogger.Info("The ConstraintTemplate CRD is not installed")
+				r.setCreatedGkConstraint(false)
+			} else {
+				reqLogger.Info(fmt.Sprintf("Ignoring ConstraintTemplate cleanup error: %s", err.Error()))
+			}
 		} else {
 			reqLogger.Info(fmt.Sprintf("Ignoring ConstraintTemplate cleanup error: %s", err.Error()))
 		}
-	} else {
-		reqLogger.Info(fmt.Sprintf("Ignoring ConstraintTemplate cleanup error: %s", err.Error()))
 	}
 
 	// Query for CRDs with policy-type label
@@ -924,7 +948,7 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 	// Build list of GVRs for objects to check the parent label on, falling back to v1beta1
 	crdsv1 := extensionsv1.CustomResourceDefinitionList{}
 
-	err = r.List(ctx, &crdsv1, &crdQuery)
+	err := r.List(ctx, &crdsv1, &crdQuery)
 	if err == nil {
 		for _, crd := range crdsv1.Items {
 			if len(crd.Spec.Versions) > 0 {
@@ -1340,4 +1364,8 @@ func finalizerCleanup(
 	}
 
 	return errorList.Aggregate()
+}
+
+func (r *PolicyReconciler) setCreatedGkConstraint(b bool) {
+	r.createdGkConstraint = &b
 }
