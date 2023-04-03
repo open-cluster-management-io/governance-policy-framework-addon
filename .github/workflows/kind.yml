@@ -74,6 +74,7 @@ jobs:
     - name: E2E Tests That Simulate Hosted Mode
       run: |
         export GOPATH=$(go env GOPATH)
+        export DISABLE_GK_SYNC="true"
         export E2E_CLUSTER_NAMESPACE="other-namespace"
         export E2E_CLUSTER_NAMESPACE_ON_HUB="other-namespace-on-hub"
         export COVERAGE_E2E_OUT=coverage_e2e_hosted_mode.out
