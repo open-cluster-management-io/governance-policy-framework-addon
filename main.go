@@ -93,6 +93,16 @@ func init() {
 }
 
 func main() {
+	// specially handle the uninstall command, otherwise try to start the controllers.
+	if len(os.Args) >= 2 && os.Args[1] == "trigger-uninstall" {
+		if err := uninstall.Trigger(os.Args[2:]); err != nil {
+			log.Error(err, "Failed to trigger uninstallation preparation")
+			os.Exit(1)
+		}
+
+		return
+	}
+
 	zflags := zaputil.FlagConfig{
 		LevelName:   "log-level",
 		EncoderName: "log-encoder",
