@@ -25,9 +25,13 @@ func TestRunMain(t *testing.T) {
 		clusterNsHub = clusterNs
 	}
 
+	disableGkStr := os.Getenv("DISABLE_GK_SYNC")
+	disableGk := disableGkStr == "true"
+
 	os.Args = append(
 		os.Args,
 		"--leader-elect=false",
+		fmt.Sprintf("--disable-gatekeeper-sync=%t", disableGk),
 		fmt.Sprintf("--cluster-namespace=%s", clusterNs),
 		fmt.Sprintf("--cluster-namespace-on-hub=%s", clusterNsHub),
 	)

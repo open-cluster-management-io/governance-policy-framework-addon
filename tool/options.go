@@ -16,6 +16,7 @@ type SyncerOptions struct {
 	HubConfigFilePathName     string
 	ManagedConfigFilePathName string
 	DisableSpecSync           bool
+	DisableGkSync             bool
 	EnableLease               bool
 	EnableLeaderElection      bool
 	LegacyLeaderElection      bool
@@ -73,6 +74,13 @@ func ProcessFlags() {
 		"disable-spec-sync",
 		false,
 		"If enabled, the spec-sync controller will not be started. This is used when running on the Hub.",
+	)
+
+	flag.BoolVar(
+		&Options.DisableGkSync,
+		"disable-gatekeeper-sync",
+		false,
+		"If enabled, Gatekeeper object syncing will be entirely disabled.",
 	)
 
 	flag.BoolVar(

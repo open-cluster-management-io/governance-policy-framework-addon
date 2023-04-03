@@ -111,7 +111,7 @@ func main() {
 	zflags.Bind(flag.CommandLine)
 	klog.InitFlags(flag.CommandLine)
 
-	// custom flags for the controler
+	// custom flags for the controller
 	tool.ProcessFlags()
 
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
@@ -265,7 +265,7 @@ func main() {
 	mainCtx := ctrl.SetupSignalHandler()
 	mgrCtx, mgrCtxCancel := context.WithCancel(mainCtx)
 
-	mgr := getManager(mgrCtx, mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg)
+	mgr := getManager(mgrCtx, mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg, tool.Options.DisableGkSync)
 
 	var hubMgr manager.Manager
 
@@ -369,7 +369,8 @@ func main() {
 
 // getManager return a controller Manager object that watches on the managed cluster and has the controllers registered.
 func getManager(
-	mgrCtx context.Context, options manager.Options, healthAddr string, hubCfg *rest.Config, managedCfg *rest.Config,
+	mgrCtx context.Context, options manager.Options, healthAddr string,
+	hubCfg *rest.Config, managedCfg *rest.Config, disableGk bool,
 ) manager.Manager {
 	hubClient, err := client.New(hubCfg, client.Options{Scheme: scheme})
 	if err != nil {
@@ -422,7 +423,14 @@ func getManager(
 		os.Exit(1)
 	}
 
-	healthCheck := addGkControllerToManager(mgrCtx, mgr, managedCfg, configChecker.Check)
+	healthCheck := configChecker.Check
+
+	// Add Gatekeeper controller if enabled
+	if !disableGk {
+		healthCheck = addGkControllerToManager(mgrCtx, mgr, managedCfg, configChecker.Check)
+	} else {
+		log.Info("Syncing for Gatekeeper kinds is set to disabled")
+	}
 
 	if err = (&statussync.PolicyReconciler{
 		ClusterNamespaceOnHub: tool.Options.ClusterNamespaceOnHub,
@@ -451,6 +459,7 @@ func getManager(
 		Config:           mgr.GetConfig(),
 		Recorder:         mgr.GetEventRecorderFor(templatesync.ControllerName),
 		ClusterNamespace: tool.Options.ClusterNamespace,
+		DisableGkSync:    tool.Options.DisableGkSync,
 	}
 
 	go func() {

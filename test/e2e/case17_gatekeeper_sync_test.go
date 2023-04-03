@@ -55,6 +55,10 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 	}
 
 	BeforeAll(func() {
+		if gkSyncDisabled {
+			Skip("Gatekeeper sync is disabled--skipping Gatekeeper tests")
+		}
+
 		By("Creating the namespace " + configMapNamespace)
 		ns := &corev1.Namespace{
 			TypeMeta: metav1.TypeMeta{
@@ -88,6 +92,9 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 	})
 
 	AfterAll(func() {
+		if gkSyncDisabled {
+			Skip("Gatekeeper sync is disabled--skipping Gatekeeper tests")
+		}
 		By("Deleting the namespace " + configMapNamespace)
 		err := clientManaged.CoreV1().Namespaces().Delete(context.TODO(), configMapNamespace, metav1.DeleteOptions{})
 		if !k8serrors.IsNotFound(err) {

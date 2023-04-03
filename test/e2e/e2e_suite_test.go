@@ -49,6 +49,7 @@ var (
 	defaultTimeoutSeconds  int
 	clusterNamespaceOnHub  string
 	clusterNamespace       string
+	gkSyncDisabled         bool
 
 	defaultImageRegistry string
 
@@ -118,6 +119,8 @@ var _ = BeforeSuite(func() {
 	} else {
 		clusterNamespaceOnHub = os.Getenv("E2E_CLUSTER_NAMESPACE_ON_HUB")
 	}
+
+	gkSyncDisabled = os.Getenv("DISABLE_GK_SYNC") == "true"
 
 	namespacesHub := clientHub.CoreV1().Namespaces()
 	if _, err := namespacesHub.Get(
