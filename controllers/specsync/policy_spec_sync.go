@@ -19,6 +19,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 )
 
@@ -65,6 +66,13 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	reqLogger := log.WithValues(
 		"Request.Namespace", request.Namespace, "Request.Name", request.Name, "TargetNamespace", r.TargetNamespace,
 	)
+
+	if uninstall.DeploymentIsUninstalling {
+		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
+
+		return reconcile.Result{}, nil
+	}
+
 	reqLogger.Info("Reconciling Policy...")
 
 	// Fetch the Policy instance

@@ -57,6 +57,8 @@ endif
 export COVERAGE_MIN ?= 69
 COVERAGE_E2E_OUT ?= coverage_e2e.out
 
+export OSDK_FORCE_RUN_MODE ?= local
+
 # Image URL to use all building/pushing image targets;
 # Use your own docker registry and image name for dev/test by overridding the IMG and REGISTRY environment variable.
 IMG ?= $(shell cat COMPONENT_NAME 2> /dev/null)

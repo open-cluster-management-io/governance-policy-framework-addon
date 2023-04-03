@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 )
 
@@ -194,6 +195,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 
 		reqLogger.Info("Finalizer cleanup complete")
+
+		return reconcile.Result{}, nil
+	}
+
+	if uninstall.DeploymentIsUninstalling {
+		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
 
 		return reconcile.Result{}, nil
 	}
@@ -1297,7 +1304,11 @@ func finalizerCleanup(
 	for _, policyT := range pol.Spec.PolicyTemplates {
 		object, gvk, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
-			errorList = append(errorList, fmt.Errorf("failed to decode policy template with error: %w", err))
+			// Ignore the error if the deployment is uninstalling, because in this situation the controller
+			// should only be concerned with the valid templates.
+			if !uninstall.DeploymentIsUninstalling {
+				errorList = append(errorList, fmt.Errorf("failed to decode policy template with error: %w", err))
+			}
 
 			policyUserErrorsCounter.WithLabelValues(pol.Name, "", "format-error").Inc()
 

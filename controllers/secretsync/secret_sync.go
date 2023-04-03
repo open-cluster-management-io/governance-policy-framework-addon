@@ -16,6 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall"
 )
 
 const (
@@ -55,6 +57,13 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	reqLogger := log.WithValues(
 		"Request.Namespace", request.Namespace, "Request.Name", request.Name, "TargetNamespace", r.TargetNamespace,
 	)
+
+	if uninstall.DeploymentIsUninstalling {
+		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
+
+		return reconcile.Result{}, nil
+	}
+
 	reqLogger.Info("Reconciling Secret")
 	// The cache configuration of SelectorsByObject should prevent this from happening, but add this as a precaution.
 	if request.Name != SecretName {
