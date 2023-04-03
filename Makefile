@@ -306,6 +306,20 @@ e2e-test-coverage: e2e-run-instrumented e2e-test e2e-stop-instrumented
 e2e-test-coverage-foreground: LOG_REDIRECT = 
 e2e-test-coverage-foreground: e2e-test-coverage
 
+.PHONY: e2e-test-uninistall
+e2e-test-uninistall:
+	$(GINKGO) -v --fail-fast --json-report=report_e2e_uninstall.json --output-dir=. --label-filter='uninstall' \
+	 --covermode=atomic --coverprofile=coverage_e2e_uninstall_trigger.out \
+	 --coverpkg=open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall test/e2e
+
+.PHONY: e2e-test-uninstall-coverage
+e2e-test-uninstall-coverage: COVERAGE_E2E_OUT = coverage_e2e_uninstall_controller.out
+e2e-test-uninstall-coverage: e2e-run-instrumented scale-down-deployment e2e-test-uninistall e2e-stop-instrumented
+
+.PHONY: scale-down-deployment
+scale-down-deployment:
+	kubectl scale deployment $(IMG) -n $(KIND_NAMESPACE) --replicas=0 --kubeconfig=$(MANAGED_CONFIG)
+
 .PHONY: e2e-build-instrumented
 e2e-build-instrumented:
 	go test -covermode=atomic -coverpkg=$(shell cat go.mod | head -1 | cut -d ' ' -f 2)/... -c -tags e2e ./ -o build/_output/bin/$(IMG)-instrumented
