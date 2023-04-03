@@ -24,6 +24,7 @@ import (
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	"golang.org/x/mod/semver"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -56,6 +57,7 @@ import (
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/specsync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/statussync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/templatesync"
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 	"open-cluster-management.io/governance-policy-framework-addon/tool"
 	"open-cluster-management.io/governance-policy-framework-addon/version"
@@ -87,6 +89,7 @@ func init() {
 	utilruntime.Must(extensionsv1beta1.AddToScheme(scheme))
 	utilruntime.Must(gktemplatesv1.AddToScheme(scheme))
 	utilruntime.Must(gktemplatesv1beta1.AddToScheme(scheme))
+	utilruntime.Must(appsv1.AddToScheme(scheme))
 }
 
 func main() {
@@ -300,6 +303,35 @@ func main() {
 
 		wg.Done()
 	}()
+
+	operatorNs, err := tool.GetOperatorNamespace()
+
+	if errors.Is(err, tool.ErrRunLocal) {
+		log.Info("Using default operatorNs for the uninstall-watcher during this local run")
+
+		operatorNs = "open-cluster-management-agent-addon"
+		err = nil
+	}
+
+	if err != nil {
+		log.Error(err, "Failed to get operator namespace")
+		os.Exit(1)
+	} else {
+		wg.Add(1)
+
+		go func() {
+			if err := uninstall.StartWatcher(mgrCtx, mgr, operatorNs); err != nil {
+				log.Error(err, "problem running uninstall-watcher")
+
+				// On errors, the parent context (mainCtx) may not have closed, so cancel the child context.
+				mgrCtxCancel()
+
+				errorExit = true
+			}
+
+			wg.Done()
+		}()
+	}
 
 	if !tool.Options.DisableSpecSync {
 		wg.Add(1)

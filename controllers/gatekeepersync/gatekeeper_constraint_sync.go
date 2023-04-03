@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 )
 
@@ -89,6 +90,13 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 	reconcile.Result, error,
 ) {
 	log := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+
+	if uninstall.DeploymentIsUninstalling {
+		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
+
+		return reconcile.Result{}, nil
+	}
+
 	log.Info("Reconciling a Policy with one or more Gatekeeper constraints")
 
 	policyObjID := depclient.ObjectIdentifier{
