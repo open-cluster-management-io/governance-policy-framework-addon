@@ -111,7 +111,7 @@ func main() {
 	zflags.Bind(flag.CommandLine)
 	klog.InitFlags(flag.CommandLine)
 
-	// custom flags for the controler
+	// custom flags for the controller
 	tool.ProcessFlags()
 
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
@@ -422,7 +422,14 @@ func getManager(
 		os.Exit(1)
 	}
 
-	healthCheck := addGkControllerToManager(mgrCtx, mgr, managedCfg, configChecker.Check)
+	healthCheck := configChecker.Check
+
+	// Add Gatekeeper controller if enabled
+	if !tool.Options.DisableGkSync {
+		healthCheck = addGkControllerToManager(mgrCtx, mgr, managedCfg, configChecker.Check)
+	} else {
+		log.Info("The Gatekeeper integration is set to disabled")
+	}
 
 	if err = (&statussync.PolicyReconciler{
 		ClusterNamespaceOnHub: tool.Options.ClusterNamespaceOnHub,
@@ -451,6 +458,7 @@ func getManager(
 		Config:           mgr.GetConfig(),
 		Recorder:         mgr.GetEventRecorderFor(templatesync.ControllerName),
 		ClusterNamespace: tool.Options.ClusterNamespace,
+		DisableGkSync:    tool.Options.DisableGkSync,
 	}
 
 	go func() {

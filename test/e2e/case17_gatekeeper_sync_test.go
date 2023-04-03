@@ -55,6 +55,10 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 	}
 
 	BeforeAll(func() {
+		if gkSyncDisabled {
+			Skip("Gatekeeper sync is disabled--skipping Gatekeeper tests")
+		}
+
 		By("Creating the namespace " + configMapNamespace)
 		ns := &corev1.Namespace{
 			TypeMeta: metav1.TypeMeta{

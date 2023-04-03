@@ -80,6 +80,7 @@ type PolicyReconciler struct {
 	Config              *rest.Config
 	Recorder            record.EventRecorder
 	ClusterNamespace    string
+	DisableGkSync       bool
 	createdGkConstraint *bool
 }
 
@@ -274,7 +275,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// - Cluster scoped
 		isGkConstraintTemplate := gvk.Group == utils.GvkConstraintTemplate.Group &&
 			gvk.Kind == utils.GvkConstraintTemplate.Kind
-		isGkObj := isGkConstraintTemplate || gvk.Group == utils.GConstraint
+		isGkConstraint := gvk.Group == utils.GConstraint
+		isGkObj := isGkConstraintTemplate || isGkConstraint
 		isClusterScoped := isGkObj
 
 		// Handle dependencies that apply to the current policy-template
@@ -353,9 +355,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			resultError = err
 			errMsg := "Mapping not found, "
 
-			if isGkConstraintTemplate {
+			if isGkObj && r.DisableGkSync {
+				errMsg = "A Gatekeeper policy-template was provided, but the Gatekeeper integration is disabled"
+			} else if isGkConstraintTemplate {
 				errMsg += "check if Gatekeeper is installed"
-			} else if gvk.Group == utils.GConstraint {
+			} else if isGkConstraint {
 				errMsg += "check if the required ConstraintTemplate has been deployed"
 			} else {
 				errMsg += "check if you have the CRD deployed"
@@ -399,8 +403,14 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		// If no policy-type=template label AND the GroupKind is not on the explicit allow list, don't
 		// sync this template
-		if !hasTemplateLabel && !utils.IsAllowedPolicy(gvk.GroupKind()) {
+		if !hasTemplateLabel && !utils.IsAllowedPolicy(gvk.GroupKind()) || (isGkObj && r.DisableGkSync) {
 			errMsg := fmt.Sprintf("policy-template kind is not supported: %s", gvk.String())
+
+			if r.DisableGkSync && isGkObj {
+				errMsg = fmt.Sprintf(
+					"not syncing kind %s because the Gatekeeper integration is disabled", gvk.String())
+			}
+
 			err := fmt.Errorf(errMsg)
 
 			resultError = err
