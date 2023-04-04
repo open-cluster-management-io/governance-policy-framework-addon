@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -505,6 +506,17 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				eObject, err = res.Create(ctx, tObjectUnstructured, metav1.CreateOptions{})
 				if err != nil {
+					multiTemplateRegExp := regexp.MustCompile(
+						`spec" must validate one and only one schema \(oneOf\)\. Found 2 valid alternatives$`,
+					)
+
+					if multiTemplateRegExp.MatchString(err.Error()) {
+						err = fmt.Errorf(
+							`ConfigurationPolicy.policy.open-cluster-management.io "%s" is invalid: `+
+								`spec may only contain one of object-templates and object-templates-raw`, tName,
+						)
+					}
+
 					resultError = err
 					errMsg := fmt.Sprintf("Failed to create policy template: %s", err)
 

@@ -270,6 +270,20 @@ var _ = Describe("Test error handling", func() {
 			1,
 		).Should(BeTrue())
 	})
+	It("should throw a noncompliance event if the both object-templates and object-templates-raw are set", func() {
+		hubApplyPolicy("case10-obj-template-conflict",
+			yamlBasePath+"multiple-obj-template-arrays.yaml")
+
+		By("Checking for the error event")
+		Eventually(
+			checkForEvent(
+				"case10-obj-template-conflict",
+				"spec may only contain one of object-templates and object-templates-raw",
+			),
+			defaultTimeoutSeconds,
+			1,
+		).Should(BeTrue())
+	})
 })
 
 // Checks for an event on the managed cluster
