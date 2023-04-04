@@ -1163,6 +1163,7 @@ k8s.io/apimachinery v0.17.0/go.mod h1:b9qmWdKlLuU9EBh+06BtLcSf/Mu89rWL33naRxs1uZ
 k8s.io/apimachinery v0.18.0-beta.2/go.mod h1:9SnR/e11v5IbyPCGbvJViimtJ0SwHG4nfZFjU77ftcA=
 k8s.io/apimachinery v0.23.0/go.mod h1:fFCTTBKvKcwTPFzjlcxp91uPFZr+JA0FubU4fLzzFYc=
 k8s.io/apimachinery v0.23.5/go.mod h1:BEuFMMBaIbcOqVIJqNZJXGFTP4W6AycEpb5+m/97hrM=
+k8s.io/apimachinery v0.23.9/go.mod h1:BEuFMMBaIbcOqVIJqNZJXGFTP4W6AycEpb5+m/97hrM=
 k8s.io/apimachinery v0.23.10 h1:ZZTDUh8kcKvpjptg/zOii7paedymrOIO9WOOOfZScVk=
 k8s.io/apimachinery v0.23.10/go.mod h1:BEuFMMBaIbcOqVIJqNZJXGFTP4W6AycEpb5+m/97hrM=
 k8s.io/apiserver v0.17.0/go.mod h1:ABM+9x/prjINN6iiffRVNCBR2Wk7uY4z+EtEGZD48cg=
@@ -1179,8 +1180,9 @@ k8s.io/code-generator v0.23.5/go.mod h1:S0Q1JVA+kSzTI1oUvbKAxZY/DYbA/ZUb4Uknog12
 k8s.io/component-base v0.17.0/go.mod h1:rKuRAokNMY2nn2A6LP/MiwpoaMRHpfRnrPaUJJj1Yoc=
 k8s.io/component-base v0.18.0-beta.2/go.mod h1:HVk5FpRnyzQ/MjBr9//e/yEBjTVa2qjGXCTuUzcD7ks=
 k8s.io/component-base v0.23.0/go.mod h1:DHH5uiFvLC1edCpvcTDV++NKULdYYU6pR9Tt3HIKMKI=
-k8s.io/component-base v0.23.5 h1:8qgP5R6jG1BBSXmRYW+dsmitIrpk8F/fPEvgDenMCCE=
 k8s.io/component-base v0.23.5/go.mod h1:c5Nq44KZyt1aLl0IpHX82fhsn84Sb0jjzwjpcA42bY0=
+k8s.io/component-base v0.23.9 h1:YcKppshHzZA7ZG+na+lRdUn/pj+3AMPsp9BaImh2hVo=
+k8s.io/component-base v0.23.9/go.mod h1:WUNtIRIMd9WBS2r5LCSNZoh6f/Uh+8O+aGuZUG5t428=
 k8s.io/gengo v0.0.0-20190128074634-0689ccc1d7d6/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
 k8s.io/gengo v0.0.0-20190822140433-26a664648505/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
 k8s.io/gengo v0.0.0-20200114144118-36b2048a9120/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
@@ -1218,6 +1220,8 @@ open-cluster-management.io/addon-framework v0.3.0 h1:tO1zW0yfYrH/bzsM34SH3c6GTa/
 open-cluster-management.io/addon-framework v0.3.0/go.mod h1:8QG1fHwPCEdyRrzY2Jji+qhMmJl+/HzTpuSDVmeG+7s=
 open-cluster-management.io/api v0.6.1-0.20220208144021-3297cac74dc5 h1:0Zn4+5qfXTHCjoa7pg8+fI/Gebr4bQDHWR+d1XPa47c=
 open-cluster-management.io/api v0.6.1-0.20220208144021-3297cac74dc5/go.mod h1:0IUTh8J+p4pv1THh1r9oO0luX9Z1FLDEAmvzW09qC0o=
+open-cluster-management.io/config-policy-controller v0.10.0 h1:GzpUYK0BF9A3jAaMlVqOYEeenqodmnsJDdsup+Eot5o=
+open-cluster-management.io/config-policy-controller v0.10.0/go.mod h1:kyUNvH5x0myzh7KJDNJ8LsetEYzPV4kQahO73F4Ndio=
 open-cluster-management.io/governance-policy-propagator v0.10.0 h1:OJx7hWJPl1aCh+DGs8QKnvRte75KglmWXZJsBRjXQ6c=
 open-cluster-management.io/governance-policy-propagator v0.10.0/go.mod h1:5FV0Wd7QztYtb96a6GLxcNxVZoLdeOhyQ/DCzRs2w7A=
 open-cluster-management.io/multicloud-operators-subscription v0.8.0 h1:0YRrUErVU6K6xwExGNaCMF//FOfJT6XyeHAvSbZNEiY=

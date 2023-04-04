@@ -503,7 +503,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				overrideRemediationAction(instance, tObjectUnstructured)
 
-				_, err = res.Create(ctx, tObjectUnstructured, metav1.CreateOptions{})
+				eObject, err = res.Create(ctx, tObjectUnstructured, metav1.CreateOptions{})
 				if err != nil {
 					resultError = err
 					errMsg := fmt.Sprintf("Failed to create policy template: %s", err)
@@ -537,7 +537,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					}
 				}
 
-				err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res, gvk)
+				err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res, gvk.GroupVersion(), eObject)
 				if err != nil {
 					resultError = err
 
@@ -716,7 +716,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				}
 			}
 
-			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res, gvk)
+			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res, gvk.GroupVersion(), eObject)
 			if err != nil {
 				resultError = err
 				tLogger.Error(resultError, "Error after updating template (will requeue)")
@@ -726,7 +726,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			tLogger.Info("Existing object has been updated")
 		} else {
-			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, "", res, gvk)
+			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, "", res, gvk.GroupVersion(), eObject)
 			if err != nil {
 				resultError = err
 				tLogger.Error(resultError, "Error after confirming template matches (will requeue)")
@@ -1224,15 +1224,23 @@ func (r *PolicyReconciler) handleSyncSuccess(
 	tName string,
 	msg string,
 	resInt dynamic.ResourceInterface,
-	gvr *schema.GroupVersionKind,
+	gv schema.GroupVersion,
+	template *unstructured.Unstructured,
 ) error {
 	if msg != "" {
 		r.Recorder.Event(pol, "Normal", "PolicyTemplateSync", msg)
 	}
 
 	// Skip additional steps if a template-error is the most recent status or this isn't an OCM policy
-	if gvr.Group != policiesv1.GroupVersion.Group ||
+	if gv.Group != policiesv1.GroupVersion.Group ||
 		!strings.Contains(getLatestStatusMessage(pol, tIndex), "template-error;") {
+		return nil
+	}
+
+	// Don't need to check the error because if it's invalid or not set, an empty string is returned. In this case, we
+	// don't want to remove the field value.
+	compliantStatus, _, _ := unstructured.NestedString(template.Object, "status", "compliant")
+	if compliantStatus == "" {
 		return nil
 	}
 
