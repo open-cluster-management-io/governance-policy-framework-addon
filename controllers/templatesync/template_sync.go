@@ -821,8 +821,19 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	return reconcile.Result{}, resultError
 }
 
-// equivalentTemplates determines whether the template existing on the cluster and the policy template are the same
+// equivalentTemplates determines whether the template existing on the cluster and the policy template are the same.
+// Any missing defaults this function is aware of will be set on tObject.
 func equivalentTemplates(eObject *unstructured.Unstructured, tObject *unstructured.Unstructured) bool {
+	if tObject.GetKind() == "ConfigurationPolicy" {
+		pruneObjectBehavior, _, _ := unstructured.NestedString(tObject.Object, "spec", "pruneObjectBehavior")
+		if pruneObjectBehavior == "" {
+			err := unstructured.SetNestedField(tObject.Object, "None", "spec", "pruneObjectBehavior")
+			if err != nil {
+				log.Error(err, "Failed to set the default value of pruneObjectBehavior for")
+			}
+		}
+	}
+
 	if !equality.Semantic.DeepEqual(eObject.UnstructuredContent()["spec"], tObject.Object["spec"]) {
 		return false
 	}
