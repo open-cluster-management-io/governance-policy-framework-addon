@@ -284,12 +284,17 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 
 			history := managedPolicy.Status.Details[1].History
 			g.Expect(len(history)).ToNot(Equal(0))
-			expectedMsg := `NonCompliant; warn - All configmaps must have a 'my-gk-test' label (on ConfigMap ` +
-				`case17-gk-test/case17-test); warn - All configmaps must have a 'my-gk-test' label (on ConfigMap ` +
-				`case17-gk-test/case17-test2)`
-			g.Expect(history[0].Message).To(
-				Equal(expectedMsg),
-				fmt.Sprintf("Got %s but expected %s", history[0].Message, expectedMsg),
+			validMsgs := []string{
+				`NonCompliant; warn - All configmaps must have a 'my-gk-test' label (on ConfigMap ` +
+					`case17-gk-test/case17-test); warn - All configmaps must have a 'my-gk-test' label ` +
+					`(on ConfigMap case17-gk-test/case17-test2)`,
+				`NonCompliant; warn - All configmaps must have a 'my-gk-test' label (on ConfigMap ` +
+					`case17-gk-test/case17-test2); warn - All configmaps must have a 'my-gk-test' label ` +
+					`(on ConfigMap case17-gk-test/case17-test)`,
+			}
+			g.Expect(validMsgs).To(
+				ContainElement(history[0].Message),
+				fmt.Sprintf("Got %s but expected one of %v", history[0].Message, validMsgs),
 			)
 
 			// Verify that there are no duplicate status messages.
@@ -393,13 +398,19 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 
 			history := managedPolicy.Status.Details[1].History
 			g.Expect(len(history)).ToNot(Equal(0))
-			expectedMsg := `NonCompliant; The Gatekeeper validating webhook is disabled but the constraint's ` +
-				`spec.enforcementAction is deny. deny - All configmaps must have a 'my-gk-test' label (on ConfigMap ` +
-				`case17-gk-test/case17-test); deny - All configmaps must have a 'my-gk-test' label (on ConfigMap ` +
-				`case17-gk-test/case17-test2)`
-			g.Expect(history[0].Message).To(
-				Equal(expectedMsg),
-				fmt.Sprintf("Got %s but expected %s", history[0].Message, expectedMsg),
+			validMsgs := []string{
+				`NonCompliant; The Gatekeeper validating webhook is disabled but the constraint's ` +
+					`spec.enforcementAction is deny. deny - All configmaps must have a 'my-gk-test' label ` +
+					`(on ConfigMap case17-gk-test/case17-test); deny - All configmaps must have a 'my-gk-test' ` +
+					`label (on ConfigMap case17-gk-test/case17-test2)`,
+				`NonCompliant; The Gatekeeper validating webhook is disabled but the constraint's ` +
+					`spec.enforcementAction is deny. deny - All configmaps must have a 'my-gk-test' label ` +
+					`(on ConfigMap case17-gk-test/case17-test2); deny - All configmaps must have a 'my-gk-test' ` +
+					`label (on ConfigMap case17-gk-test/case17-test)`,
+			}
+			g.Expect(validMsgs).To(
+				ContainElement(history[0].Message),
+				fmt.Sprintf("Got %s but expected one of %v", history[0].Message, validMsgs),
 			)
 		}, gkAuditFrequency*3, 1).Should(Succeed())
 
