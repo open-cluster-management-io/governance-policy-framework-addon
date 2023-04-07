@@ -10,11 +10,12 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"open-cluster-management.io/governance-policy-framework-addon/tool"
 )
 
 const (
 	ControllerName = "uninstall-watcher"
-	DeploymentName = "governance-policy-framework-addon"
 )
 
 var (
@@ -107,7 +108,7 @@ func StartWatcher(ctx context.Context, mgr manager.Manager, namespace string) er
 		Version:   "v1",
 		Kind:      "Deployment",
 		Namespace: namespace,
-		Name:      DeploymentName,
+		Name:      tool.Options.DeploymentName,
 	}
 
 	err = dynamicWatcher.AddOrUpdateWatcher(self, self)

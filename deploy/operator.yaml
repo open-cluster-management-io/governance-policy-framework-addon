@@ -206,18 +206,19 @@ subjects:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  labels:
+    app: governance-policy-framework-addon
   name: governance-policy-framework-addon
   namespace: open-cluster-management-agent-addon
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: governance-policy-framework-addon
+      app: governance-policy-framework-addon
   template:
     metadata:
       labels:
-        app: governance-policy-framework
-        name: governance-policy-framework-addon
+        app: governance-policy-framework-addon
     spec:
       containers:
       - args:
@@ -235,6 +236,10 @@ spec:
               fieldPath: metadata.name
         - name: OPERATOR_NAME
           value: governance-policy-framework-addon
+        - name: DEPLOYMENT_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['app']
         image: quay.io/open-cluster-management/governance-policy-framework-addon:latest
         imagePullPolicy: Always
         livenessProbe:
