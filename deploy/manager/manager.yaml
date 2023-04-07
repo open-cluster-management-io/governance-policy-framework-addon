@@ -2,16 +2,17 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: governance-policy-framework-addon
+  labels:
+    app: governance-policy-framework-addon
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: governance-policy-framework-addon
+      app: governance-policy-framework-addon
   template:
     metadata:
       labels:
-        name: governance-policy-framework-addon
-        app: governance-policy-framework
+        app: governance-policy-framework-addon
     spec:
       securityContext:
         runAsNonRoot: true
@@ -38,6 +39,10 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: governance-policy-framework-addon
+            - name: DEPLOYMENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app']
           securityContext:
             allowPrivilegeEscalation: false
           livenessProbe:

@@ -4,6 +4,8 @@
 package tool
 
 import (
+	"os"
+
 	"github.com/spf13/pflag"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -25,6 +27,7 @@ type SyncerOptions struct {
 	// The namespace that the replicated policies should be synced to. This defaults to the same namespace as on the
 	// Hub.
 	ClusterNamespace string
+	DeploymentName   string
 }
 
 // Options default value
@@ -111,4 +114,11 @@ func ProcessFlags() {
 		"localhost:8383",
 		"The address the metrics endpoint binds to.",
 	)
+
+	Options.DeploymentName = os.Getenv("DEPLOYMENT_NAME")
+	if Options.DeploymentName == "" {
+		log.Info("Environment variable DEPLOYMENT_NAME is empty, using default 'governance-policy-framework-addon'")
+
+		Options.DeploymentName = "governance-policy-framework-addon"
+	}
 }
