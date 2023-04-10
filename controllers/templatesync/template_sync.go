@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	gktemplatesv1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
@@ -831,32 +832,73 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	return reconcile.Result{}, resultError
 }
 
-// equivalentTemplates determines whether the template existing on the cluster and the policy template are the same.
-// Any missing defaults this function is aware of will be set on tObject.
-func equivalentTemplates(eObject *unstructured.Unstructured, tObject *unstructured.Unstructured) bool {
-	if tObject.GetKind() == "ConfigurationPolicy" {
-		pruneObjectBehavior, _, _ := unstructured.NestedString(tObject.Object, "spec", "pruneObjectBehavior")
+// formatPolicyTemplate will return a copy of tObject with fields set or formatted in a semantically equivalent manner
+// to what is returned by the Kubernetes API. This is only done for fields it knows about.
+func formatPolicyTemplate(tObject *unstructured.Unstructured) *unstructured.Unstructured {
+	tObjectCopy := tObject.DeepCopy()
+
+	if tObjectCopy.GetKind() == "ConfigurationPolicy" {
+		pruneObjectBehavior, _, _ := unstructured.NestedString(tObjectCopy.Object, "spec", "pruneObjectBehavior")
 		if pruneObjectBehavior == "" {
-			err := unstructured.SetNestedField(tObject.Object, "None", "spec", "pruneObjectBehavior")
+			err := unstructured.SetNestedField(tObjectCopy.Object, "None", "spec", "pruneObjectBehavior")
 			if err != nil {
 				log.Error(err, "Failed to set the default value of pruneObjectBehavior for")
 			}
 		}
+	} else if tObjectCopy.GetKind() == "CertificatePolicy" {
+		spec, ok := tObjectCopy.Object["spec"].(map[string]interface{})
+		if !ok {
+			return tObjectCopy
+		}
+
+		for key, value := range spec {
+			if !strings.HasSuffix(key, "Duration") {
+				continue
+			}
+
+			valueStr, ok := value.(string)
+			if !ok {
+				continue
+			}
+
+			duration, err := time.ParseDuration(valueStr)
+			if err != nil {
+				log.V(1).Info(
+					"The duration could not be parsed. Ignoring.",
+					"key", key,
+					"value", "value",
+					"error", err.Error(),
+				)
+
+				continue
+			}
+
+			spec[key] = duration.String()
+		}
+
+		tObjectCopy.Object["spec"] = spec
 	}
 
-	if !equality.Semantic.DeepEqual(eObject.UnstructuredContent()["spec"], tObject.Object["spec"]) {
+	return tObjectCopy
+}
+
+// equivalentTemplates determines whether the template existing on the cluster and the policy template are the same.
+func equivalentTemplates(eObject *unstructured.Unstructured, tObject *unstructured.Unstructured) bool {
+	tObjectFormatted := formatPolicyTemplate(tObject)
+
+	if !equality.Semantic.DeepEqual(eObject.UnstructuredContent()["spec"], tObjectFormatted.Object["spec"]) {
 		return false
 	}
 
-	if !equality.Semantic.DeepEqual(eObject.GetAnnotations(), tObject.GetAnnotations()) {
+	if !equality.Semantic.DeepEqual(eObject.GetAnnotations(), tObjectFormatted.GetAnnotations()) {
 		return false
 	}
 
-	if !equality.Semantic.DeepEqual(eObject.GetLabels(), tObject.GetLabels()) {
+	if !equality.Semantic.DeepEqual(eObject.GetLabels(), tObjectFormatted.GetLabels()) {
 		return false
 	}
 
-	if !equality.Semantic.DeepEqual(eObject.GetOwnerReferences(), tObject.GetOwnerReferences()) {
+	if !equality.Semantic.DeepEqual(eObject.GetOwnerReferences(), tObjectFormatted.GetOwnerReferences()) {
 		return false
 	}
 
