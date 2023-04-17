@@ -80,6 +80,7 @@ type PolicyReconciler struct {
 	Config              *rest.Config
 	Recorder            record.EventRecorder
 	ClusterNamespace    string
+	Clientset           *kubernetes.Clientset
 	DisableGkSync       bool
 	createdGkConstraint *bool
 }
@@ -135,8 +136,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	var dClient dynamic.Interface
 
 	if len(instance.Spec.PolicyTemplates) > 0 {
-		clientset := kubernetes.NewForConfigOrDie(r.Config)
-		discoveryClient = clientset.Discovery()
+		discoveryClient = r.Clientset.Discovery()
 
 		// initialize dynamic client
 		dClient, err = dynamic.NewForConfig(r.Config)
