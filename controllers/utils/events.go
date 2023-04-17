@@ -28,6 +28,7 @@ func (c *ComplianceEventSender) SendEvent(
 	ctx context.Context,
 	instance client.Object,
 	owner metav1.OwnerReference,
+	reason string,
 	msg string,
 	compliance policyv1.ComplianceState,
 ) error {
@@ -37,15 +38,6 @@ func (c *ComplianceEventSender) SendEvent(
 	}
 
 	now := time.Now()
-	var reason string
-
-	if instance.GetNamespace() == "" {
-		reason = "policy: " + instance.GetName()
-	} else {
-		reason = fmt.Sprintf("policy: %s/%s", instance.GetNamespace(), instance.GetName())
-	}
-
-	gvk := instance.GetObjectKind().GroupVersionKind()
 
 	event := &corev1.Event{
 		ObjectMeta: metav1.ObjectMeta{
@@ -60,31 +52,36 @@ func (c *ComplianceEventSender) SendEvent(
 			UID:        owner.UID,
 			APIVersion: owner.APIVersion,
 		},
-
 		Reason:  reason,
 		Message: msg,
 		Source: corev1.EventSource{
 			Component: c.ControllerName,
 			Host:      c.InstanceName,
 		},
-		FirstTimestamp: metav1.NewTime(now),
-		LastTimestamp:  metav1.NewTime(now),
-		Count:          1,
-		Type:           "Normal",
-		EventTime:      metav1.NewMicroTime(now),
-		Action:         "ComplianceStateUpdate",
-		Related: &corev1.ObjectReference{
+		FirstTimestamp:      metav1.NewTime(now),
+		LastTimestamp:       metav1.NewTime(now),
+		Count:               1,
+		EventTime:           metav1.NewMicroTime(now),
+		Action:              "ComplianceStateUpdate",
+		ReportingController: c.ControllerName,
+		ReportingInstance:   c.InstanceName,
+	}
+
+	if instance != nil {
+		gvk := instance.GetObjectKind().GroupVersionKind()
+
+		event.Related = &corev1.ObjectReference{
 			Kind:       gvk.Kind,
 			Name:       instance.GetName(),
 			Namespace:  instance.GetNamespace(),
 			UID:        instance.GetUID(),
 			APIVersion: gvk.GroupVersion().String(),
-		},
-		ReportingController: c.ControllerName,
-		ReportingInstance:   c.InstanceName,
+		}
 	}
 
-	if compliance == policyv1.NonCompliant {
+	if compliance == policyv1.Compliant {
+		event.Type = "Normal"
+	} else {
 		event.Type = "Warning"
 	}
 
@@ -92,4 +89,12 @@ func (c *ComplianceEventSender) SendEvent(
 	_, err := eventClient.Create(ctx, event, metav1.CreateOptions{})
 
 	return err
+}
+
+func EventReason(ns, name string) string {
+	if ns == "" {
+		return fmt.Sprintf(PolicyClusterScopedFmtStr, name)
+	}
+
+	return fmt.Sprintf(PolicyFmtStr, ns, name)
 }

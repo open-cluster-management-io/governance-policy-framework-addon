@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
+
+	fwutils "open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 )
 
 // Helper function to create events
@@ -47,6 +49,7 @@ func generateEventOnPolicy(plcName string, cfgPlcName string, msg string, compli
 			Name:       managedPlc.GetName(),
 			UID:        managedPlc.GetUID(),
 		},
+		fwutils.EventReason(clusterNamespace, cfgPlcName),
 		msg,
 		policiesv1.ComplianceState(complianceState),
 	)
