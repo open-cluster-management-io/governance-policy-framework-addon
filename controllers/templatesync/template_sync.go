@@ -263,8 +263,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			resultError = err
 			errMsg := fmt.Sprintf("Failed to decode policy template with err: %s", err)
 
-			//nolint:errcheck // it will already be requeued for the resultError.
-			r.emitTemplateError(ctx, instance, tIndex, fmt.Sprintf("[template %v]", tIndex), false, errMsg)
+			_ = r.emitTemplateError(ctx, instance, tIndex, fmt.Sprintf("[template %v]", tIndex), false, errMsg)
+
 			reqLogger.Error(resultError, "Failed to decode the policy template", "templateIndex", tIndex)
 
 			policyUserErrorsCounter.WithLabelValues(instance.Name, "", "format-error").Inc()
@@ -312,9 +312,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				resultError = fmt.Errorf("dependency on %s has conflicting compliance states", dep.Name)
 				errMsg := fmt.Sprintf("Failed to decode policy template with err: %s", resultError)
 
-				//nolint:errcheck // it will already be requeued for the resultError.
-				r.emitTemplateError(ctx, instance, tIndex,
+				_ = r.emitTemplateError(ctx, instance, tIndex,
 					fmt.Sprintf("[template %v]", tIndex), isClusterScoped, errMsg)
+
 				reqLogger.Error(resultError, "Failed to decode the policy template", "templateIndex", tIndex)
 
 				depConflictErr = true
@@ -342,8 +342,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			errMsg := fmt.Sprintf("Failed to get name from policy template at index %v", tIndex)
 			resultError = k8serrors.NewBadRequest(errMsg)
 
-			//nolint:errcheck // it will already be requeued for the resultError.
-			r.emitTemplateError(ctx, instance, tIndex, fmt.Sprintf("[template %v]", tIndex), isClusterScoped, errMsg)
+			_ = r.emitTemplateError(ctx, instance, tIndex,
+				fmt.Sprintf("[template %v]", tIndex), isClusterScoped, errMsg)
+
 			reqLogger.Error(resultError, "Failed to process the policy template", "templateIndex", tIndex)
 
 			policyUserErrorsCounter.WithLabelValues(instance.Name, "", "format-error").Inc()
@@ -372,8 +373,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			errMsg += fmt.Sprintf(": %s", err)
 
-			//nolint:errcheck // it will already be requeued for the resultError.
-			r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+			_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+
 			tLogger.Error(err, "Could not find an API mapping for the object definition",
 				"group", gvk.Group,
 				"version", gvk.Version,
@@ -421,8 +422,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			resultError = err
 
-			//nolint:errcheck // it will already be requeued for the resultError.
-			r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+			_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+
 			tLogger.Error(err, "Unsupported policy-template kind found in object definition",
 				"group", gvk.Group,
 				"version", gvk.Version,
@@ -442,8 +443,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				errMsg := fmt.Sprintf("Templates are not supported for kind : %s", gvk.Kind)
 				resultError = k8serrors.NewBadRequest(errMsg)
 
-				//nolint:errcheck // it will already be requeued for the resultError.
-				r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+				_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+
 				tLogger.Error(resultError, "Failed to process the policy template")
 
 				policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
@@ -472,8 +473,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			resultError = err
 			errMsg := fmt.Sprintf("Failed to unmarshal the policy template: %s", err)
 
-			//nolint:errcheck // it will already be requeued for the resultError.
-			r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+			_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+
 			tLogger.Error(resultError, "Failed to unmarshal the policy template")
 
 			policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "unmarshal-error").Inc()
@@ -546,8 +547,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					resultError = err
 					errMsg := fmt.Sprintf("Failed to create policy template: %s", err)
 
-					//nolint:errcheck // it will already be requeued for the resultError.
-					r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+					_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+
 					tLogger.Error(resultError, "Failed to create policy template")
 
 					policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "create-error").Inc()
@@ -595,8 +596,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				resultError = err
 				errMsg := fmt.Sprintf("Failed to get the object in the policy template: %s", err)
 
-				//nolint:errcheck // it will already be requeued for the resultError.
-				r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+				_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+
 				tLogger.Error(err, "Failed to get the object in the policy template",
 					"namespace", instance.GetNamespace(),
 					"kind", gvk.Kind,
@@ -692,8 +693,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			resultError = k8serrors.NewBadRequest(errMsg)
 
-			//nolint:errcheck // it will already be requeued for the resultError.
-			r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+			_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+
 			tLogger.Error(resultError, "Failed to create the policy template")
 
 			policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
@@ -739,8 +740,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				resultError = err
 				errMsg := fmt.Sprintf("Failed to update policy template %s: %s", tName, err)
 
-				//nolint:errcheck // it will already be requeued for the resultError.
-				r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+				_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+
 				tLogger.Error(err, "Failed to update the policy template")
 
 				policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
