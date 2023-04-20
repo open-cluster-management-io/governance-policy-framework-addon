@@ -297,9 +297,9 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 				fmt.Sprintf("Got %s but expected one of %v", history[0].Message, validMsgs),
 			)
 
-			// Verify that there are no duplicate status messages.
+			// Verify that there are no duplicate gatekeeper status messages.
 			for i, historyEvent := range managedPolicy.Status.Details[1].History {
-				if i == 0 || strings.HasPrefix(historyEvent.Message, "NonCompliant; template-error;") {
+				if i == 0 || strings.Contains(historyEvent.Message, "NonCompliant; template-error;") {
 					continue
 				}
 
