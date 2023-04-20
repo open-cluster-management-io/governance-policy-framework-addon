@@ -47,11 +47,12 @@ jobs:
       run: |
         go mod verify
 
-    - name: Verify format
+    - name: Some quality checks
       run: |
         make fmt
         git diff --exit-code
         make lint
+        make gosec-scan
 
     - name: Verify deploy/operator.yaml
       run: |
