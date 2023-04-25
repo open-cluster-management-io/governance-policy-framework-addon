@@ -236,6 +236,13 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 
 		constraintsToWatch = append(constraintsToWatch, constraintObjID)
 
+		_, auditRan, _ := unstructured.NestedInt64(constraint.Object, "status", "totalViolations")
+		if !auditRan {
+			log.V(1).Info("The constraint audit results haven't yet been posted. Skipping status update.")
+
+			continue
+		}
+
 		violations, _, err := unstructured.NestedSlice(constraint.Object, "status", "violations")
 		if err != nil {
 			log.Error(err, "The constraint status is invalid", "constraint", constraintObjID)
