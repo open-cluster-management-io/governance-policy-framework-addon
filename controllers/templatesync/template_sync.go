@@ -1397,16 +1397,23 @@ func (r *PolicyReconciler) hasPolicyTemplateLabel(
 	}
 
 	err := r.Get(ctx, crdName, &crd)
-	if err != nil {
-		// If it wasn't found, then it wasn't in the cache and doesn't have the label
-		if k8serrors.IsNotFound(err) {
-			return false, nil
-		}
+	if err == nil {
+		return crd.GetLabels()[utils.PolicyTypeLabel] == "template", nil
+	} else if meta.IsNoMatchError(err) {
+		betaCrd := extensionsv1beta1.CustomResourceDefinition{}
 
-		return false, err
+		err = r.Get(ctx, crdName, &betaCrd)
+		if err == nil {
+			return betaCrd.GetLabels()[utils.PolicyTypeLabel] == "template", nil
+		}
 	}
 
-	return crd.GetLabels()[utils.PolicyTypeLabel] == "template", nil
+	// If it wasn't found, then it wasn't in the cache and doesn't have the label
+	if k8serrors.IsNotFound(err) {
+		return false, nil
+	}
+
+	return false, err
 }
 
 // hasClusterwideFinalizer returns a boolean for whether a policy has a clusterwide finalizer,
