@@ -38,7 +38,7 @@ var _ = Describe("Test event message handling", func() {
 			"-n",
 			clusterNamespaceOnHub,
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(
 			clientHubDynamic,
@@ -62,7 +62,7 @@ var _ = Describe("Test event message handling", func() {
 			clusterNamespace,
 			"--all",
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 	It("Should remove `(combined from similar events):` prefix but still noncompliant", func() {
 		By("Generating an event in ns:" + clusterNamespace + " that contains `(combined from similar events):` prefix")
@@ -81,7 +81,7 @@ var _ = Describe("Test event message handling", func() {
 			"(combined from similar events): NonCompliant; Violation detected")
 		By("Checking if violation message contains the prefix")
 		var plc *policiesv1.Policy
-		Eventually(func(g Gomega) interface{} {
+		Eventually(func(g Gomega) []policiesv1.ComplianceHistory {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -90,13 +90,13 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			if len(plc.Status.Details) < 1 {
-				return 0
+				return nil
 			}
 
-			return len(plc.Status.Details[0].History)
-		}, defaultTimeoutSeconds, 1).Should(Equal(1))
+			return plc.Status.Details[0].History
+		}, defaultTimeoutSeconds, 1).Should(HaveLen(1))
 		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
@@ -106,7 +106,7 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			if len(plc.Status.Details) < 1 {
 				return ""
 			}
@@ -133,7 +133,7 @@ var _ = Describe("Test event message handling", func() {
 			"(combined from similar events): Compliant; no violation detected")
 		By("Checking if violation message contains the prefix")
 		var plc *policiesv1.Policy
-		Eventually(func(g Gomega) interface{} {
+		Eventually(func(g Gomega) []policiesv1.ComplianceHistory {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -142,13 +142,13 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			if len(plc.Status.Details) < 1 {
-				return 0
+				return nil
 			}
 
-			return len(plc.Status.Details[0].History)
-		}, defaultTimeoutSeconds, 1).Should(Equal(1))
+			return plc.Status.Details[0].History
+		}, defaultTimeoutSeconds, 1).Should(HaveLen(1))
 		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
@@ -158,7 +158,7 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			if len(plc.Status.Details) < 1 {
 				return ""
 			}
@@ -185,7 +185,7 @@ var _ = Describe("Test event message handling", func() {
 			"NonCompliant")
 		By("Checking if violation message is in history")
 		var plc *policiesv1.Policy
-		Eventually(func(g Gomega) interface{} {
+		Eventually(func(g Gomega) []policiesv1.ComplianceHistory {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -194,13 +194,13 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			if len(plc.Status.Details) < 1 {
-				return 0
+				return nil
 			}
 
-			return len(plc.Status.Details[0].History)
-		}, defaultTimeoutSeconds, 1).Should(Equal(1))
+			return plc.Status.Details[0].History
+		}, defaultTimeoutSeconds, 1).Should(HaveLen(1))
 		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
@@ -210,7 +210,7 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			if len(plc.Status.Details) < 1 {
 				return ""
 			}
@@ -237,7 +237,7 @@ var _ = Describe("Test event message handling", func() {
 			"Compliant")
 		By("Checking if violation message is in history")
 		var plc *policiesv1.Policy
-		Eventually(func(g Gomega) interface{} {
+		Eventually(func(g Gomega) []policiesv1.ComplianceHistory {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -246,13 +246,13 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			if len(plc.Status.Details) < 1 {
-				return 0
+				return nil
 			}
 
-			return len(plc.Status.Details[0].History)
-		}, defaultTimeoutSeconds, 1).Should(Equal(1))
+			return plc.Status.Details[0].History
+		}, defaultTimeoutSeconds, 1).Should(HaveLen(1))
 		Eventually(func(g Gomega) interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
@@ -262,7 +262,7 @@ var _ = Describe("Test event message handling", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			if len(plc.Status.Details) < 1 {
 				return ""
 			}

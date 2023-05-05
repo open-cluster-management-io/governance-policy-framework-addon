@@ -26,7 +26,7 @@ var _ = Describe("Test status sync", func() {
 	AfterEach(func() {
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("delete", "-f", case2PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
@@ -100,9 +100,9 @@ var _ = Describe("Test status sync", func() {
 			defaultTimeoutSeconds)
 		var plc *policiesv1.Policy
 		err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-		Expect(err).To(BeNil())
-		Expect(len(plc.Status.Details)).To(Equal(1))
-		Expect(len(plc.Status.Details[0].History)).To(Equal(2))
+		Expect(err).ToNot(HaveOccurred())
+		Expect((plc.Status.Details)).To(HaveLen(1))
+		Expect((plc.Status.Details[0].History)).To(HaveLen(2))
 		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case2-test-policy-configurationpolicy"))
 		By("Checking if hub policy status is in sync")
 		Eventually(func() interface{} {
@@ -146,9 +146,9 @@ var _ = Describe("Test status sync", func() {
 			defaultTimeoutSeconds)
 		var plc *policiesv1.Policy
 		err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-		Expect(err).To(BeNil())
-		Expect(len(plc.Status.Details)).To(Equal(1))
-		Expect(len(plc.Status.Details[0].History)).To(Equal(3))
+		Expect(err).ToNot(HaveOccurred())
+		Expect((plc.Status.Details)).To(HaveLen(1))
+		Expect((plc.Status.Details[0].History)).To(HaveLen(3))
 		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case2-test-policy-configurationpolicy"))
 		By("Checking if hub policy status is in sync")
 		Eventually(func() interface{} {
@@ -164,7 +164,7 @@ var _ = Describe("Test status sync", func() {
 		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
 		By("clean up all events")
 		_, err = kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 	It("Should hold up to last 10 history", func() {
 		By("Generating an a lot of event on the policy")
@@ -210,7 +210,7 @@ var _ = Describe("Test status sync", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 
 			if len(plc.Status.Details) == 0 {
 				return "status.details[] is empty"
@@ -222,12 +222,12 @@ var _ = Describe("Test status sync", func() {
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant; No violation assert"))
 		err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		By("Checking no violation event is the first one in history")
 		Expect(plc.Status.ComplianceState).To(Equal(policiesv1.Compliant))
-		Expect(len(plc.Status.Details)).To(Equal(1))
+		Expect((plc.Status.Details)).To(HaveLen(1))
 		By("Checking if size of the history is 10")
-		Expect(len(plc.Status.Details[0].History)).To(Equal(10))
+		Expect(plc.Status.Details[0].History).To(HaveLen(10))
 		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case2-test-policy-configurationpolicy"))
 		By("Generating a violation event")
 		managedRecorder.Event(
@@ -244,17 +244,17 @@ var _ = Describe("Test status sync", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant; Violation assert"))
 		err = runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		By("Checking violation event is the first one in history")
 		Expect(plc.Status.ComplianceState).To(Equal(policiesv1.NonCompliant))
-		Expect(len(plc.Status.Details)).To(Equal(1))
+		Expect((plc.Status.Details)).To(HaveLen(1))
 		By("Checking if size of the history is 10")
-		Expect(len(plc.Status.Details[0].History)).To(Equal(10))
+		Expect(plc.Status.Details[0].History).To(HaveLen(10))
 		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case2-test-policy-configurationpolicy"))
 		By("Checking if hub policy status is in sync")
 		Eventually(func() interface{} {
@@ -276,6 +276,6 @@ var _ = Describe("Test status sync", func() {
 			clusterNamespace,
 			"--all",
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 })

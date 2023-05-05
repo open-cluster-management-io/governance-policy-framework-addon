@@ -23,11 +23,11 @@ var _ = Describe("Test error handling", func() {
 
 	AfterEach(func() {
 		_, err := kubectlHub("delete", "policies", "--all", "-A")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		_, err = kubectlManaged("delete", "configurationpolicies", "--all", "-A")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		_, err = kubectlManaged("delete", "events", "--all", "-A")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 	})
 	It("should not override remediationAction if doesn't exist on parent policy", func() {
 		hubApplyPolicy("case10-remediation-action-not-exists",
@@ -147,7 +147,7 @@ var _ = Describe("Test error handling", func() {
 		cfgInt := clientManagedDynamic.Resource(gvrConfigurationPolicy).Namespace(clusterNamespace)
 		_, err := cfgInt.Patch(context.TODO(), "case10-config-policy", types.JSONPatchType,
 			compliancePatch, metav1.PatchOptions{}, "status")
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
 		By("Patching the policy to make the template invalid")
 		errorPatch := []byte(`[{` +
@@ -158,7 +158,7 @@ var _ = Describe("Test error handling", func() {
 		_, err = polInt.Patch(
 			context.TODO(), "case10-test-policy", types.JSONPatchType, errorPatch, metav1.PatchOptions{},
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
 		By("Checking for the error event")
 		Eventually(
@@ -174,13 +174,13 @@ var _ = Describe("Test error handling", func() {
 			`"value":{"details":[{"history":[{"message":"template-error;"}]}]}}]`)
 		_, err = polInt.Patch(context.TODO(), "case10-test-policy", types.JSONPatchType,
 			statusPatch, metav1.PatchOptions{}, "status")
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
 		By("Checking that the complianceState is still on the configuration policy")
 		cfgPolicy, err := cfgInt.Get(context.TODO(), "case10-config-policy", metav1.GetOptions{}, "status")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		compState, found, err := unstructured.NestedString(cfgPolicy.Object, "status", "compliant")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeTrue())
 		Expect(compState).To(Equal("testing"))
 
@@ -203,7 +203,7 @@ var _ = Describe("Test error handling", func() {
 	It("should throw a noncompliance event if a non-configurationpolicy uses a hub template", func() {
 		By("Deploying a test policy CRD")
 		_, err := kubectlManaged("apply", "-f", yamlBasePath+"mock-crd.yaml")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		DeferCleanup(func() error {
 			_, err := kubectlManaged("delete", "-f", yamlBasePath+"mock-crd.yaml")
 
@@ -249,7 +249,7 @@ var _ = Describe("Test error handling", func() {
 			"--filename=../resources/case10_template_sync_error_test/working-policy-configpol.yaml",
 			"--namespace="+clusterNamespace,
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,

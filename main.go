@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-logr/zapr"
 	gktemplatesv1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
@@ -326,22 +327,22 @@ func main() {
 	if err != nil {
 		log.Error(err, "Failed to get operator namespace")
 		os.Exit(1)
-	} else {
-		wg.Add(1)
-
-		go func() {
-			if err := uninstall.StartWatcher(mgrCtx, mgr, operatorNs); err != nil {
-				log.Error(err, "problem running uninstall-watcher")
-
-				// On errors, the parent context (mainCtx) may not have closed, so cancel the child context.
-				mgrCtxCancel()
-
-				errorExit = true
-			}
-
-			wg.Done()
-		}()
 	}
+
+	wg.Add(1)
+
+	go func() {
+		if err := uninstall.StartWatcher(mgrCtx, mgr, operatorNs); err != nil {
+			log.Error(err, "problem running uninstall-watcher")
+
+			// On errors, the parent context (mainCtx) may not have closed, so cancel the child context.
+			mgrCtxCancel()
+
+			errorExit = true
+		}
+
+		wg.Done()
+	}()
 
 	if !tool.Options.DisableSpecSync {
 		wg.Add(1)
@@ -701,7 +702,11 @@ func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...stri
 					return
 				}
 
-				defer resp.Body.Close()
+				defer func() {
+					if err := resp.Body.Close(); err != nil {
+						log.Info(fmt.Sprintf("Error closing %s response reader: %s\n", endpoint, err))
+					}
+				}()
 
 				if resp.StatusCode != http.StatusOK {
 					body, err := io.ReadAll(resp.Body)
@@ -724,7 +729,10 @@ func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...stri
 		})
 	}
 
-	server := &http.Server{Addr: tool.Options.ProbeAddr}
+	server := &http.Server{
+		ReadHeaderTimeout: 10 * time.Second,
+		Addr:              tool.Options.ProbeAddr,
+	}
 
 	// Once the input context is done, shutdown the server
 	go func() {
@@ -733,7 +741,7 @@ func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...stri
 		log.Info("Stopping the health endpoint proxy")
 
 		// Don't pass the already closed context or else the clean up won't happen
-		// nolint: contextcheck
+		//nolint:contextcheck
 		err := server.Shutdown(context.TODO())
 		if err != nil {
 			log.Error(err, "Failed to shutdown the health endpoints")

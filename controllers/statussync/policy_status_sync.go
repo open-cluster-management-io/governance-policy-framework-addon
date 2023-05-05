@@ -318,10 +318,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			newHistory = append(newHistory, history[historyIndex].ComplianceHistory)
 
 			for j := historyIndex; j < len(history); j++ {
-				if history[historyIndex].EventName == history[j].EventName &&
-					history[historyIndex].Message == history[j].Message {
-					// same event, filter it
-				} else {
+				// Skip over duplicate statuses where the event name and message match the current status
+				if history[historyIndex].EventName != history[j].EventName ||
+					history[historyIndex].Message != history[j].Message {
 					historyIndex = j - 1
 
 					break

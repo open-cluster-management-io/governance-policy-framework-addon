@@ -26,7 +26,7 @@ var _ = Describe("Test mutation recovery", func() {
 	AfterEach(func() {
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("delete", "-f", case1PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
@@ -112,7 +112,7 @@ var _ = Describe("Test mutation recovery", func() {
 			clusterNamespace,
 			"--ignore-not-found",
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		By("Comparing spec between hub and managed policy")
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
@@ -172,6 +172,6 @@ var _ = Describe("Test mutation recovery", func() {
 		Eventually(checkCompliance(case1PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("clean up all events")
 		_, err := kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 })

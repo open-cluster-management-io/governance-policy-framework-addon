@@ -48,7 +48,7 @@ var _ = Describe("Test spec sync", func() {
 		Expect(hubPlc).NotTo(BeNil())
 		Expect(hubPlc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("inform"))
 		hubPlc, err := patchRemediationAction(clientHubDynamic, hubPlc, "enforce")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Eventually(func() interface{} {
 			managedPlc := utils.GetWithTimeout(
 				clientManagedDynamic,
@@ -80,7 +80,7 @@ var _ = Describe("Test spec sync", func() {
 	It("should delete policy on managed cluster", func() {
 		By("Deleting policy on hub")
 		_, err := kubectlHub("delete", "policy", "-n", clusterNamespaceOnHub, "--all")
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)

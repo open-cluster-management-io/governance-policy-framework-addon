@@ -108,7 +108,7 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 		_, err := utils.KubectlWithOutput(
 			"apply", "-f", case11PolicyYaml, "-n", clusterNamespace, case11managedconfig,
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
 		Expect(case11Event(
 			case11Event1,
@@ -117,7 +117,7 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 			"Normal",
 			time.Date(2022, 10, 3, 14, 40, 47, 0, time.UTC),
 			false,
-		)).Should(BeNil())
+		)).Should(Succeed())
 
 		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
 			Should(Equal("Compliant"))
@@ -133,7 +133,7 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 			"Warning",
 			time.Date(2022, 10, 3, 14, 40, 47, 0, time.UTC),
 			false,
-		)).Should(BeNil())
+		)).Should(Succeed())
 
 		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
 			Should(Equal("NonCompliant"))
@@ -149,7 +149,7 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 			"Normal",
 			time.Date(2022, 10, 3, 14, 40, 47, 0, time.UTC),
 			false,
-		)).Should(BeNil())
+		)).Should(Succeed())
 
 		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
 			Should(Equal("Compliant"))
@@ -167,7 +167,7 @@ var _ = Describe("Test event sorting by eventtime when timestamps collide", Orde
 		_, err := utils.KubectlWithOutput(
 			"apply", "-f", case11PolicyYaml, "-n", clusterNamespace, case11managedconfig,
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
 		Expect(case11Event(
 			case11Event4,
@@ -176,7 +176,7 @@ var _ = Describe("Test event sorting by eventtime when timestamps collide", Orde
 			"Normal",
 			time.Date(2022, 10, 3, 14, 40, 47, 111111, time.UTC),
 			true,
-		)).Should(BeNil())
+		)).Should(Succeed())
 
 		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
 			Should(Equal("Compliant"))
@@ -192,7 +192,7 @@ var _ = Describe("Test event sorting by eventtime when timestamps collide", Orde
 			"Warning",
 			time.Date(2022, 10, 3, 14, 40, 47, 222222, time.UTC),
 			true,
-		)).Should(BeNil())
+		)).Should(Succeed())
 
 		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
 			Should(Equal("NonCompliant"))
@@ -208,7 +208,7 @@ var _ = Describe("Test event sorting by eventtime when timestamps collide", Orde
 			"Warning",
 			time.Date(2022, 10, 3, 14, 40, 47, 333333, time.UTC),
 			true,
-		)).Should(BeNil())
+		)).Should(Succeed())
 
 		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
 			Should(Equal("Compliant"))
