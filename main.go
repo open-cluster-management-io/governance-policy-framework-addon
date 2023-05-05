@@ -219,16 +219,6 @@ func main() {
 		),
 	}
 
-	if tool.Options.LegacyLeaderElection {
-		// If legacyLeaderElection is enabled, then that means the lease API is not available.
-		// In this case, use the legacy leader election method of a ConfigMap.
-		mgrOptionsBase.LeaderElectionResourceLock = "configmaps"
-	} else {
-		// use the leases leader election by default for controller-runtime 0.11 instead of
-		// the default of configmapsleases (leases is the new default in 0.12)
-		mgrOptionsBase.LeaderElectionResourceLock = "leases"
-	}
-
 	// This lease is not related to leader election. This is to report the status of the controller
 	// to the addon framework. This can be seen in the "status" section of the ManagedClusterAddOn
 	// resource objects.

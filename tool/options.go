@@ -21,7 +21,6 @@ type SyncerOptions struct {
 	DisableGkSync             bool
 	EnableLease               bool
 	EnableLeaderElection      bool
-	LegacyLeaderElection      bool
 	ProbeAddr                 string
 	MetricsAddr               string
 	// The namespace that the replicated policies should be synced to. This defaults to the same namespace as on the
@@ -92,13 +91,6 @@ func ProcessFlags() {
 		true,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.",
-	)
-
-	flag.BoolVar(
-		&Options.LegacyLeaderElection,
-		"legacy-leader-elect",
-		false,
-		"Use a legacy leader election method for controller manager instead of the lease API.",
 	)
 
 	flag.StringVar(
