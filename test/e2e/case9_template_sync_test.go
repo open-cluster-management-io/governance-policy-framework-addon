@@ -29,7 +29,7 @@ var _ = Describe("Test template sync", func() {
 		_, err := kubectlHub("delete", "-f", case9PolicyYaml, "-n", clusterNamespaceOnHub)
 		var e *exec.ExitError
 		if !errors.As(err, &e) {
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 		}
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
@@ -50,7 +50,7 @@ var _ = Describe("Test template sync", func() {
 			clientHubDynamic, gvrPolicy, case9PolicyName, clusterNamespaceOnHub, true, defaultTimeoutSeconds,
 		)
 		plc, err := patchRemediationAction(clientHubDynamic, plc, "enforce")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(plc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("enforce"))
 		By("Checking template policy remediationAction")
 		Eventually(func() interface{} {
@@ -103,7 +103,7 @@ var _ = Describe("Test template sync", func() {
 	It("should delete template policy on managed cluster", func() {
 		By("Deleting parent policy")
 		_, err := kubectlHub("delete", "-f", case9PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		By("Checking the existence of template policy")

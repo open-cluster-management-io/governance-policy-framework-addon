@@ -35,7 +35,7 @@ var _ = Describe("Test disabled Gatekeeper sync", Ordered, Label("skip-minimum")
 				context.TODO(), pName, metav1.DeleteOptions{},
 			)
 			if !k8serrors.IsNotFound(err) {
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 			}
 
 			By("Cleaning up the events for the policy " + pName)
@@ -44,7 +44,7 @@ var _ = Describe("Test disabled Gatekeeper sync", Ordered, Label("skip-minimum")
 				"--field-selector=involvedObject.name="+pName,
 				"--ignore-not-found",
 			)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		}
 
 		opt := metav1.ListOptions{}
@@ -54,7 +54,7 @@ var _ = Describe("Test disabled Gatekeeper sync", Ordered, Label("skip-minimum")
 	It("should create the policy on the managed cluster", func() {
 		By("Creating policy " + policyName + " on the hub in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("apply", "-f", policyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
 		By("Verifying policy " + policyName + " synced to the managed cluster and is NonCompliant")
 		Eventually(func(g Gomega) {
@@ -62,7 +62,7 @@ var _ = Describe("Test disabled Gatekeeper sync", Ordered, Label("skip-minimum")
 				defaultTimeoutSeconds)
 			g.Expect(plc).NotTo(BeNil())
 			compliance, _, err := unstructured.NestedString(plc.Object, "status", "compliant")
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(compliance).To(Equal("NonCompliant"))
 		}, defaultTimeoutSeconds, 1).Should(Succeed())
 
@@ -71,13 +71,13 @@ var _ = Describe("Test disabled Gatekeeper sync", Ordered, Label("skip-minimum")
 			plc := propagatorutils.GetWithTimeout(clientHubDynamic, gvrPolicy, policyName, clusterNamespaceOnHub, true,
 				defaultTimeoutSeconds)
 			details, _, err := unstructured.NestedSlice(plc.Object, "status", "details")
-			g.Expect(err).To(BeNil())
-			g.Expect(details).To(Not(HaveLen(0)))
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(details).ToNot(BeEmpty())
 			history, _, err := unstructured.NestedSlice(details[0].(map[string]interface{}), "history")
-			g.Expect(err).To(BeNil())
-			g.Expect(history).To(Not(HaveLen(0)))
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(history).ToNot(BeEmpty())
 			message, _, err := unstructured.NestedString(history[0].(map[string]interface{}), "message")
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(message).To(ContainSubstring("the Gatekeeper integration is disabled"))
 		}, defaultTimeoutSeconds, 1).Should(Succeed())
 	})

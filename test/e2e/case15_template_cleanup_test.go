@@ -24,7 +24,7 @@ var _ = Describe("Test template sync", func() {
 	BeforeEach(func() {
 		By("Creating a policy on the hub in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("apply", "-f", case15PolicyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case15PolicyName, clusterNamespace, true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
@@ -32,7 +32,7 @@ var _ = Describe("Test template sync", func() {
 	AfterEach(func() {
 		By("Deleting a policy on the hub in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("delete", "-f", case15PolicyYaml, "-n", clusterNamespaceOnHub, "--ignore-not-found=true")
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 	})
@@ -55,7 +55,7 @@ var _ = Describe("Test template sync", func() {
 
 		By("Renaming one of the configurationpolicies")
 		_, err := kubectlHub("apply", "-f", case15PolicyYamlPatchRename, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case15PolicyName, clusterNamespace, true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
@@ -89,7 +89,7 @@ var _ = Describe("Test template sync", func() {
 
 		By("Removing one of the configurationpolicies")
 		_, err = kubectlHub("apply", "-f", case15PolicyYamlPatchDelete, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		plc = utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case15PolicyName, clusterNamespace, true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
@@ -105,7 +105,7 @@ var _ = Describe("Test template sync", func() {
 		By("Verifying parent label can be set after template creation")
 		_, err = kubectlManaged("patch", "configurationpolicy", case15ConfigPolicyNameStable, "-n", clusterNamespace,
 			"--type", "merge", "--patch-file", "../resources/case15_template_cleanup/case15-patchlabel.yaml")
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
 		Eventually(func() interface{} {
 			configPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,

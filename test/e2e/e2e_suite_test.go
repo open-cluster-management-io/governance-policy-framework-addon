@@ -147,7 +147,7 @@ var _ = BeforeSuite(func() {
 	By("Create EventRecorder")
 	var err error
 	managedRecorder, err = testutils.CreateRecorder(clientManaged, "status-sync-controller-test")
-	Expect(err).To(BeNil())
+	Expect(err).ToNot(HaveOccurred())
 
 	if os.Getenv("E2E_CLUSTER_NAMESPACE") != "" {
 		clusterNamespace = os.Getenv("E2E_CLUSTER_NAMESPACE")
@@ -158,14 +158,14 @@ var _ = BeforeSuite(func() {
 			metav1.CreateOptions{},
 		)
 		if !errors.IsAlreadyExists(err) {
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 		}
 	} else {
 		clusterNamespace = testNamespace
 	}
 
 	managedConfig, err := LoadConfig("", kubeconfigManaged, "")
-	Expect(err).To(BeNil())
+	Expect(err).ToNot(HaveOccurred())
 
 	managedEventSender = utils.ComplianceEventSender{
 		ClusterNamespace: clusterNamespace,
@@ -256,7 +256,7 @@ func kubectlManaged(args ...string) (string, error) {
 	return propagatorutils.KubectlWithOutput(args...)
 }
 
-// nolint: unparam
+//nolint:unparam
 func patchRemediationAction(
 	client dynamic.Interface, plc *unstructured.Unstructured, remediationAction string,
 ) (
@@ -296,7 +296,7 @@ func hubApplyPolicy(name, path string) {
 	By("Applying policy " + path + " to the hub in ns: " + clusterNamespaceOnHub)
 
 	_, err := kubectlHub("apply", "-f", path, "-n", clusterNamespaceOnHub)
-	ExpectWithOffset(1, err).Should(BeNil())
+	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
 
 	hubPlc := propagatorutils.GetWithTimeout(
 		clientHubDynamic,

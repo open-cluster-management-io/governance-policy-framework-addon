@@ -56,7 +56,7 @@ var _ = Describe("Test uninstallation procedure", Ordered, Label("uninstall"), f
 		}
 
 		_, err := clientManaged.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterAll(func() {
@@ -65,7 +65,7 @@ var _ = Describe("Test uninstallation procedure", Ordered, Label("uninstall"), f
 			context.TODO(), policyName, metav1.DeleteOptions{},
 		)
 		if !k8serrors.IsNotFound(err) {
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		}
 
 		By("Cleaning up the events for the policy " + policyName)
@@ -77,7 +77,7 @@ var _ = Describe("Test uninstallation procedure", Ordered, Label("uninstall"), f
 			"--field-selector=involvedObject.name="+policyName,
 			"--ignore-not-found",
 		)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 
 		opt := metav1.ListOptions{}
 		propagatorutils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
@@ -85,14 +85,14 @@ var _ = Describe("Test uninstallation procedure", Ordered, Label("uninstall"), f
 		By("Deleting the namespace " + configMapNamespace)
 		err = clientManaged.CoreV1().Namespaces().Delete(context.TODO(), configMapNamespace, metav1.DeleteOptions{})
 		if !k8serrors.IsNotFound(err) {
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		}
 	})
 
 	It("should create the policy and create the constraint", func() {
 		By("Creating policy " + policyName + " on the hub in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("apply", "-f", policyYaml, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		plc := propagatorutils.GetWithTimeout(clientManagedDynamic, gvrPolicy, policyName, clusterNamespace, true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
@@ -105,18 +105,18 @@ var _ = Describe("Test uninstallation procedure", Ordered, Label("uninstall"), f
 	It("should make the uninstallation more interesting", func() {
 		By("Adding an invalid template to the policy")
 		_, err := kubectlHub("apply", "-f", policyYamlUpdated, "-n", clusterNamespaceOnHub)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
 		By("Adding a finalizer to the constraint")
 		_, err = kubectlManaged("patch", constraintResource, gkConstraintName, "--type=json",
 			`-p=[{"op":"add","path":"/metadata/finalizers","value":[test.io/foo]}]`)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 
 	It("should trigger the uninstallation and successfully delete all the policies", func() {
 		// Note: the test runs in an env where the default KUBECONFIG is for the managed cluster
 		err := uninstall.Trigger([]string{"--policy-namespace=" + clusterNamespace, "--timeout-seconds=60"})
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
 		By("Verifying there are no policies left on the managed cluster")
 		propagatorutils.ListWithTimeout(clientManagedDynamic, gvrPolicy, metav1.ListOptions{}, 0, true,

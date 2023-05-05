@@ -53,7 +53,7 @@ func generateEventOnPolicy(plcName string, cfgPlcName string, msg string, compli
 		msg,
 		policiesv1.ComplianceState(complianceState),
 	)
-	Expect(err).To(BeNil())
+	Expect(err).ToNot(HaveOccurred())
 }
 
 var _ = Describe("Test dependency logic in template sync", Ordered, func() {
@@ -80,14 +80,14 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		DeferCleanup(func() {
 			By("Deleting policy " + policyName + " on hub cluster in ns: " + clusterNamespaceOnHub)
 			_, err := kubectlHub("delete", "-f", yamlFile, "-n", clusterNamespaceOnHub)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	}
 
 	AfterEach(func() {
 		By("clean up all events")
 		_, err := kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 
 	It("Should set to compliant when dep status is compliant", func() {

@@ -4,7 +4,6 @@ package gatekeepersync
 
 import (
 	"context"
-
 	// #nosec G505
 	"crypto/sha1"
 	"encoding/json"

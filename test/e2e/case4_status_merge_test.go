@@ -32,6 +32,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
 	})
+
 	AfterEach(func() {
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub(
@@ -41,7 +42,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			"-n",
 			clusterNamespaceOnHub,
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(
 			clientHubDynamic,
@@ -65,8 +66,9 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			clusterNamespace,
 			"--all",
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 	})
+
 	It("Should merge existing status with new status from event", func() {
 		By("Generating some events in ns:" + clusterNamespace)
 		managedPlc := utils.GetWithTimeout(
@@ -81,7 +83,8 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			"Normal",
 			"policy: managed/case4-test-policy-configurationpolicy",
 			"Compliant; No violation detected")
-		By("Checking if policy status is noncompliant")
+
+		By("Checking if policy status is compliant")
 		Eventually(func() interface{} {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
@@ -93,8 +96,10 @@ var _ = Describe("Test status sync with multiple templates", func() {
 
 			return getCompliant(managedPlc)
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+
 		// Wait for slow events to show up, otherwise the delete might not get all of them.
 		time.Sleep(15 * time.Second)
+
 		By("Delete events in ns:" + clusterNamespace)
 		_, err := kubectlManaged(
 			"delete",
@@ -103,7 +108,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			clusterNamespace,
 			"--all",
 		)
-		Expect(err).Should(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 		utils.ListWithTimeout(
 			clientManagedDynamic,
 			gvrEvent,
@@ -111,6 +116,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			0,
 			true,
 			defaultTimeoutSeconds)
+
 		By("Generating some new events in ns:" + clusterNamespace)
 		managedRecorder.Event(
 			managedPlc,
@@ -122,6 +128,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			"Normal",
 			"policy: managed/case4-test-policy-configurationpolicy",
 			"Compliant; No violation detected")
+
 		By("Checking if history size = 3")
 		var plc *policiesv1.Policy
 		Eventually(func(g Gomega) interface{} {
@@ -133,10 +140,10 @@ var _ = Describe("Test status sync with multiple templates", func() {
 				true,
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
-			g.Expect(err).To(BeNil())
+			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case4-test-policy-configurationpolicy"))
 
-			return len(plc.Status.Details[0].History)
-		}, defaultTimeoutSeconds, 1).Should(Equal(3))
+			return plc.Status.Details[0].History
+		}, defaultTimeoutSeconds, 1).Should(HaveLen(3))
 	})
 })
