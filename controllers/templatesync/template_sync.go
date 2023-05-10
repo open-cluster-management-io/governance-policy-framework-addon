@@ -37,7 +37,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -62,7 +61,7 @@ func (r *PolicyReconciler) Setup(mgr ctrl.Manager, depEvents *source.Channel) er
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(ControllerName).
 		For(&policiesv1.Policy{}).
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		WithEventFilter(templatePredicates()).
 		Watches(depEvents, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
