@@ -5,6 +5,7 @@ package e2e
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -338,7 +339,46 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		// should be noncompliant - template A is pending and B is noncompliant
-		By("Checking if policy status is pending")
+		By("Checking if policy status is noncompliant")
 		Eventually(checkCompliance(case12Plc2TemplatesName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+	})
+	It("Should correct a late compliance event while the policy is pending", func() {
+		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
+		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
+
+		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		hubPolicyApplyAndDeferCleanup(case12PolicyYaml, case12PolicyName)
+
+		By("Generating a noncompliant event on the dependency")
+		generateEventOnPolicy(
+			case12DepName,
+			"namespace-foo-setup-configpolicy",
+			"there is violation",
+			"NonCompliant",
+		)
+
+		By("Checking if dependency status is noncompliant")
+		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+
+		By("Checking if policy status is pending")
+		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
+
+		By("Generating an (incorrect, late) compliance event on the policy")
+		generateEventOnPolicy(
+			case12PolicyName,
+			"case12-config-policy",
+			"No violation detected",
+			"Compliant",
+		)
+
+		// Sleep 5 seconds to avoid the Compliant status that only sometimes appears;
+		// otherwise, the next Eventually might finish *before* that status comes and goes.
+		time.Sleep(5 * time.Second)
+
+		By("Checking if policy status is pending")
+		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Pending"))
+
+		By("Checking if policy status is consistently pending")
+		Consistently(checkCompliance(case12PolicyName), "15s", 1).Should(Equal("Pending"))
 	})
 })
