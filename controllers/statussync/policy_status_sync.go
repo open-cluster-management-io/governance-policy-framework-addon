@@ -418,8 +418,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			}
 
 			r.HubRecorder.Event(hubPlc, "Normal", "PolicyStatusSync",
-				fmt.Sprintf("Policy %s status was updated in cluster namespace %s", hubPlc.GetName(),
-					hubPlc.GetNamespace()))
+				fmt.Sprintf("Policy %s status was updated to %s in cluster namespace %s", hubPlc.GetName(),
+					hubPlc.Status.ComplianceState, hubPlc.GetNamespace()))
 		} else {
 			reqLogger.Info("status match on hub, nothing to update")
 		}
