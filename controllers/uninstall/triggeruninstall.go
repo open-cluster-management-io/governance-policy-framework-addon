@@ -7,16 +7,18 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/zapr"
 	"github.com/spf13/pflag"
+	"github.com/stolostron/go-log-utils/zaputil"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
 	policyv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
@@ -26,7 +28,7 @@ var (
 	timeoutSeconds      uint
 )
 
-var triggerLog = logf.Log.WithName("trigger-uninstall")
+var triggerLog = ctrl.Log.WithName("trigger-uninstall")
 
 const AnnotationKey = "policy.open-cluster-management.io/uninstalling"
 
@@ -34,11 +36,11 @@ const AnnotationKey = "policy.open-cluster-management.io/uninstalling"
 // It will return nil only when all the policies are gone.
 // It takes command line arguments to configure itself.
 func Trigger(args []string) error {
-	triggerLog.Info("Triggering uninstallation preparation")
-
 	if err := parseUninstallFlags(args); err != nil {
 		return err
 	}
+
+	triggerLog.Info("Triggering uninstallation preparation")
 
 	terminatingCtx := ctrl.SetupSignalHandler()
 	ctx, cancelCtx := context.WithTimeout(terminatingCtx, time.Duration(timeoutSeconds)*time.Second)
@@ -99,6 +101,28 @@ func parseUninstallFlags(args []string) error {
 	err := triggerUninstallFlagSet.Parse(args)
 	if err != nil {
 		return err
+	}
+
+	zflags := zaputil.FlagConfig{
+		LevelName:   "log-level",
+		EncoderName: "log-encoder",
+	}
+
+	zflags.Bind(flag.CommandLine)
+	klog.InitFlags(flag.CommandLine)
+
+	ctrlZap, err := zflags.BuildForCtrl()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to build zap logger for controller: %v", err))
+	}
+
+	ctrl.SetLogger(zapr.NewLogger(ctrlZap))
+
+	klogZap, err := zaputil.BuildForKlog(zflags.GetConfig(), flag.CommandLine)
+	if err != nil {
+		triggerLog.Error(err, "Failed to build zap logger for klog, those logs will not go through zap")
+	} else {
+		klog.SetLogger(zapr.NewLogger(klogZap).WithName("klog"))
 	}
 
 	if deploymentName == "" || deploymentNamespace == "" || policyNamespace == "" {
@@ -194,7 +218,7 @@ func deletePolicies(ctx context.Context, dynamicClient dynamic.Interface) error 
 
 		err = policyInterface.DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
 		if err != nil {
-			log.Error(err, "Unable to delete all policies. Will retry.")
+			triggerLog.Error(err, "Unable to delete all policies. Will retry.")
 		}
 
 		triggerLog.Info("The uninstall preparation is not complete. Sleeping two seconds before checking again.")
