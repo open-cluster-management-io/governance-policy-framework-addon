@@ -17,8 +17,11 @@ import (
 
 var _ = Describe("Test error handling", func() {
 	const (
-		caseNumber   = "case10"
-		yamlBasePath = "../resources/" + caseNumber + "_template_sync_error_test/"
+		caseNumber          = "case10"
+		yamlBasePath        = "../resources/" + caseNumber + "_template_sync_error_test/"
+		dupNamePolicyYaml   = yamlBasePath + "dup-name-policy.yaml"
+		dupNamePolicyName   = "dup-policy"
+		dupConfigPolicyName = "policy-config-dup"
 	)
 
 	AfterEach(func() {
@@ -28,6 +31,24 @@ var _ = Describe("Test error handling", func() {
 		Expect(err).ToNot(HaveOccurred())
 		_, err = kubectlManaged("delete", "events", "--all", "-A")
 		Expect(err).ToNot(HaveOccurred())
+	})
+	It("should not reconcile the policy when there are same names in policy-template", func() {
+		By("Creating policy")
+		hubApplyPolicy(dupNamePolicyName, dupNamePolicyYaml)
+
+		By("Should generate warning events")
+		Eventually(
+			checkForEvent(dupNamePolicyName,
+				"There are duplicate names in configurationpolicies, please check the policy"),
+			defaultTimeoutSeconds,
+			1,
+		).Should(BeTrue())
+
+		By("Should not create any configuration policy")
+		Consistently(func() interface{} {
+			return utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy, dupConfigPolicyName,
+				testNamespace, false, defaultTimeoutSeconds)
+		}, 10, 1).Should(BeNil())
 	})
 	It("should not override remediationAction if doesn't exist on parent policy", func() {
 		hubApplyPolicy("case10-remediation-action-not-exists",
