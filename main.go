@@ -381,22 +381,20 @@ func getManager(
 
 	options.LeaderElectionID = "governance-policy-framework-addon.open-cluster-management.io"
 	options.HealthProbeBindAddress = healthAddr
-	options.Namespace = tool.Options.ClusterNamespace
-	options.NewCache = cache.BuilderWithOptions(
-		cache.Options{
-			SelectorsByObject: cache.SelectorsByObject{
-				&extensionsv1.CustomResourceDefinition{}: {
-					Label: crdLabelSelector,
-				},
-				&extensionsv1beta1.CustomResourceDefinition{}: {
-					Label: crdLabelSelector,
-				},
-				&admissionregistration.ValidatingWebhookConfiguration{}: {
-					Field: fields.SelectorFromSet(fields.Set{"metadata.name": gatekeepersync.GatekeeperWebhookName}),
-				},
+	options.Cache = cache.Options{
+		ByObject: map[client.Object]cache.ByObject{
+			&extensionsv1.CustomResourceDefinition{}: {
+				Label: crdLabelSelector,
+			},
+			&extensionsv1beta1.CustomResourceDefinition{}: {
+				Label: crdLabelSelector,
+			},
+			&admissionregistration.ValidatingWebhookConfiguration{}: {
+				Field: fields.SelectorFromSet(fields.Set{"metadata.name": gatekeepersync.GatekeeperWebhookName}),
 			},
 		},
-	)
+		Namespaces: []string{tool.Options.ClusterNamespace},
+	}
 
 	mgr, err := ctrl.NewManager(managedCfg, options)
 	if err != nil {
@@ -504,24 +502,20 @@ func getHubManager(
 
 	managedRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: specsync.ControllerName})
 
-	// Set a field selector so that a watch on secrets will be limited to just the secret with the policy template
-	// encryption key.
-	newCacheFunc := cache.BuilderWithOptions(
-		cache.Options{
-			SelectorsByObject: cache.SelectorsByObject{
-				&v1.Secret{}: {
-					Field: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
-				},
-			},
-		},
-	)
-
 	// Set the manager options
 	options.HealthProbeBindAddress = healthAddr
 	options.LeaderElectionID = "governance-policy-framework-addon2.open-cluster-management.io"
 	options.LeaderElectionConfig = managedCfg
-	options.Namespace = tool.Options.ClusterNamespaceOnHub
-	options.NewCache = newCacheFunc
+	// Set a field selector so that a watch on secrets will be limited to just the secret with the policy template
+	// encryption key.
+	options.Cache = cache.Options{
+		ByObject: map[client.Object]cache.ByObject{
+			&v1.Secret{}: {
+				Field: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+			},
+		},
+		Namespaces: []string{tool.Options.ClusterNamespaceOnHub},
+	}
 
 	// Disable the metrics endpoint for this manager. Note that since they both use the global
 	// metrics registry, metrics for this manager are still exposed by the other manager.
