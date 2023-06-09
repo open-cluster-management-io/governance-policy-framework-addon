@@ -48,7 +48,7 @@ func (r *GatekeeperConstraintReconciler) SetupWithManager(mgr ctrl.Manager, cons
 		For(&policyv1.Policy{}).
 		WithEventFilter(policyPredicates()).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
-		Watches(constraintEvents, &handler.EnqueueRequestForObject{}).
+		WatchesRawSource(constraintEvents, &handler.EnqueueRequestForObject{}).
 		Named(ControllerName).
 		Complete(r)
 }

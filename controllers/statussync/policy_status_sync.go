@@ -27,7 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
@@ -42,7 +41,7 @@ func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&policiesv1.Policy{}).
 		Watches(
-			&source.Kind{Type: &corev1.Event{}},
+			&corev1.Event{},
 			handler.EnqueueRequestsFromMapFunc(eventMapper),
 			builder.WithPredicates(eventPredicateFuncs),
 		).

@@ -4,6 +4,7 @@
 package statussync
 
 import (
+	"context"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func eventMapper(obj client.Object) []reconcile.Request {
+func eventMapper(_ context.Context, obj client.Object) []reconcile.Request {
 	//nolint:forcetypeassert
 	event := obj.(*corev1.Event)
 

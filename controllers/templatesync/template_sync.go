@@ -62,7 +62,7 @@ func (r *PolicyReconciler) Setup(mgr ctrl.Manager, depEvents *source.Channel) er
 		Named(ControllerName).
 		For(&policiesv1.Policy{}).
 		WithEventFilter(templatePredicates()).
-		Watches(depEvents, &handler.EnqueueRequestForObject{}).
+		WatchesRawSource(depEvents, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
