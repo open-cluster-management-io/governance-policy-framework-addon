@@ -1,0 +1,52 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata: 
+  name: dup-policy
+  labels:
+    policy.open-cluster-management.io/cluster-name: managed
+    policy.open-cluster-management.io/cluster-namespace: managed
+    policy.open-cluster-management.io/root-policy: dup-policy
+spec: 
+  disabled: false
+  policy-templates: 
+    - objectDefinition: 
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata: 
+          name: policy-config-dup
+        spec: 
+          namespaceSelector: 
+            exclude: 
+              - kube-*
+            include: 
+              - default
+          object-templates: 
+            - complianceType: musthave
+              objectDefinition: 
+                apiVersion: v1
+                kind: Pod
+                metadata: 
+                  name: pod-2
+                spec: 
+                  containers: 
+                    - name: nginx
+                      image: nginx:1.18.0
+                      ports: 
+                        - containerPort: 80
+          remediationAction: inform
+          severity: low
+    - objectDefinition: 
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata: 
+          name: policy-config-dup
+        spec: 
+          object-templates: 
+            - complianceType: musthave
+              objectDefinition: 
+                apiVersion: v1
+                kind: Namespace
+                metadata: 
+                  name: my-namespace
+          remediationAction: inform
+          severity: low
