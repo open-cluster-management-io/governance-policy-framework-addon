@@ -1193,10 +1193,7 @@ func generatePendingMsg(dependencyFailures []depclient.ObjectIdentifier) string 
 
 func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured *unstructured.Unstructured) {
 	// override RemediationAction only when it is set on parent
-	if instance.Spec.RemediationAction == "" {
-		return
-	}
-
+	// or when a policy is set to informonly
 	if tObjectUnstructured.GroupVersionKind().Group == utils.GConstraint {
 		var enforcementAction string
 
@@ -1210,20 +1207,38 @@ func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured 
 		}
 
 		if spec, ok := tObjectUnstructured.Object["spec"]; ok {
-			specObject, ok := spec.(map[string]interface{})
-			if ok {
+			if specObject, ok := spec.(map[string]interface{}); ok {
 				specObject["enforcementAction"] = enforcementAction
 			}
 		}
+
+		return
 	} else if tObjectUnstructured.GroupVersionKind().Group == utils.GvkConstraintTemplate.Group {
 		// Don't override anything if it's a ConstraintTemplate
 		return
-	} else {
-		if spec, ok := tObjectUnstructured.Object["spec"]; ok {
-			specObject, ok := spec.(map[string]interface{})
-			if ok {
-				specObject["remediationAction"] = string(instance.Spec.RemediationAction)
+	}
+
+	spec, ok := tObjectUnstructured.Object["spec"]
+	if !ok {
+		return
+	}
+
+	specObject, ok := spec.(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	if remediationAction, ok := specObject["remediationAction"]; ok {
+		if _, ok := remediationAction.(string); ok {
+			if strings.EqualFold(specObject["remediationAction"].(string), "informonly") {
+				specObject["remediationAction"] = strings.ToLower(string(policiesv1.Inform))
+
+				return
 			}
+		}
+
+		if instance.Spec.RemediationAction != "" {
+			specObject["remediationAction"] = string(instance.Spec.RemediationAction)
 		}
 	}
 }
