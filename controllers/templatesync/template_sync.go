@@ -1260,7 +1260,7 @@ func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured 
 func (r *PolicyReconciler) emitTemplateSuccess(
 	ctx context.Context, pol *policiesv1.Policy, tIndex int, tName string, clusterScoped bool, msg string,
 ) error {
-	err := r.emitTemplateEvent(ctx, pol, tIndex, tName, clusterScoped, "Normal", "Compliant; ", msg)
+	err := r.emitTemplateEvent(ctx, pol, tIndex, tName, clusterScoped, "Normal", policiesv1.Compliant, msg)
 	if err != nil {
 		tlog := log.WithValues("Policy.Namespace", pol.Namespace, "Policy.Name", pol.Name, "template", tName)
 		tlog.Error(err, "Failed to emit template success event")
@@ -1276,7 +1276,7 @@ func (r *PolicyReconciler) emitTemplateError(
 	ctx context.Context, pol *policiesv1.Policy, tIndex int, tName string, clusterScoped bool, errMsg string,
 ) error {
 	err := r.emitTemplateEvent(ctx, pol, tIndex, tName, clusterScoped,
-		"Warning", "NonCompliant; template-error; ", errMsg)
+		"Warning", policiesv1.NonCompliant, "template-error; "+errMsg)
 	if err != nil {
 		tlog := log.WithValues("Policy.Namespace", pol.Namespace, "Policy.Name", pol.Name, "template", tName)
 		tlog.Error(err, "Failed to emit template error event")
@@ -1291,16 +1291,16 @@ func (r *PolicyReconciler) emitTemplateError(
 func (r *PolicyReconciler) emitTemplatePending(
 	ctx context.Context, pol *policiesv1.Policy, tIndex int, tName string, clusterScoped bool, msg string,
 ) error {
-	msgMeta := "Pending; "
+	compliance := policiesv1.Pending
 	eventType := "Warning"
 
 	if pol.Spec.PolicyTemplates[tIndex].IgnorePending {
-		msgMeta = "Compliant; "
+		compliance = policiesv1.Compliant
 		msg += " but ignorePending is true"
 		eventType = "Normal"
 	}
 
-	err := r.emitTemplateEvent(ctx, pol, tIndex, tName, clusterScoped, eventType, msgMeta, msg)
+	err := r.emitTemplateEvent(ctx, pol, tIndex, tName, clusterScoped, eventType, compliance, msg)
 	if err != nil {
 		tlog := log.WithValues("Policy.Namespace", pol.Namespace, "Policy.Name", pol.Name, "template", tName)
 		tlog.Error(err, "Failed to emit template pending event")
@@ -1310,14 +1310,13 @@ func (r *PolicyReconciler) emitTemplatePending(
 }
 
 // emitTemplateEvent performs actions that ensure correct reporting of template sync events. If the
-// policy's status already reflects the current status, then no actions are taken. The msgMeta and
-// msg are concatenated without spaces, so any spacing should be included inside the msgMeta string.
+// policy's status already reflects the current status, then no actions are taken.
 func (r *PolicyReconciler) emitTemplateEvent(
 	ctx context.Context, pol *policiesv1.Policy, tIndex int, tName string, clusterScoped bool,
-	eventType string, msgMeta string, msg string,
+	eventType string, compliance policiesv1.ComplianceState, msg string,
 ) error {
 	// check if the error is already present in the policy status - if so, return early
-	if strings.Contains(getLatestStatusMessage(pol, tIndex), msgMeta+msg) {
+	if strings.Contains(getLatestStatusMessage(pol, tIndex), string(compliance)+"; "+msg) {
 		return nil
 	}
 
@@ -1346,16 +1345,7 @@ func (r *PolicyReconciler) emitTemplateEvent(
 		UID:        pol.UID,
 	}
 
-	var compState policiesv1.ComplianceState
-	if strings.HasPrefix(msgMeta, "Compliant") {
-		compState = policiesv1.Compliant
-	} else if strings.HasPrefix(msgMeta, "NonCompliant") {
-		compState = policiesv1.NonCompliant
-	} else if strings.HasPrefix(msgMeta, "Pending") {
-		compState = policiesv1.Pending
-	}
-
-	return sender.SendEvent(ctx, nil, ownerref, policyComplianceReason, msgMeta+msg, compState)
+	return sender.SendEvent(ctx, nil, ownerref, policyComplianceReason, msg, compliance)
 }
 
 // handleSyncSuccess performs common actions that should be run whenever a template is in sync,
