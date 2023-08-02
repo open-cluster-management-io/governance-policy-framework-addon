@@ -5,7 +5,7 @@ metadata:
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: policy-informonly
+    policy.open-cluster-management.io/root-policy: case20-policy-informonly
 spec:
   remediationAction: enforce
   disabled: false

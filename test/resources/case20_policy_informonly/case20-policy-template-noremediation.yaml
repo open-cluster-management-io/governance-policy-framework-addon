@@ -1,21 +1,21 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: case20-policy-informonly-no-remediationaction
+  name: case20-policy-template-no-remediationaction
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: case20-policy-informonly-no-remediationaction
+    policy.open-cluster-management.io/root-policy: case20-policy-template-no-remediationaction
 spec:
+  remediationAction: inform
   disabled: false
   policy-templates:
     - objectDefinition:
         apiVersion: policy.open-cluster-management.io/v1
         kind: ConfigurationPolicy
         metadata:
-          name: create-configmap-no-remediationaction
+          name: create-configmap-policy-template
         spec:
-          remediationAction: InformOnly
           object-templates:
           - complianceType: musthave
             objectDefinition:
