@@ -1236,10 +1236,10 @@ func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured 
 				return
 			}
 		}
+	}
 
-		if instance.Spec.RemediationAction != "" {
-			specObject["remediationAction"] = string(instance.Spec.RemediationAction)
-		}
+	if instance.Spec.RemediationAction != "" {
+		specObject["remediationAction"] = string(instance.Spec.RemediationAction)
 	}
 }
 
