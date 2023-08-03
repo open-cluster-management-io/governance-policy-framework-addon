@@ -29,6 +29,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
@@ -68,6 +69,7 @@ var (
 	eventsScheme = k8sruntime.NewScheme()
 	log          = ctrl.Log.WithName("setup")
 	scheme       = k8sruntime.NewScheme()
+	eventFilter  fields.Selector
 )
 
 func printVersion() {
@@ -91,6 +93,14 @@ func init() {
 	utilruntime.Must(gktemplatesv1.AddToScheme(scheme))
 	utilruntime.Must(gktemplatesv1beta1.AddToScheme(scheme))
 	utilruntime.Must(appsv1.AddToScheme(scheme))
+
+	// Filter out events not related to policy compliance
+	eventFilter = fields.ParseSelectorOrDie(
+		`involvedObject.kind=Policy,` +
+			`reason!="PolicySpecSync",` +
+			`reason!="PolicyTemplateSync",` +
+			`reason!="PolicyStatusSync"`,
+	)
 }
 
 func main() {
@@ -391,6 +401,27 @@ func getManager(
 			},
 			&admissionregistration.ValidatingWebhookConfiguration{}: {
 				Field: fields.SelectorFromSet(fields.Set{"metadata.name": gatekeepersync.GatekeeperWebhookName}),
+			},
+			&v1.Event{}: {
+				Field: eventFilter,
+				Transform: func(obj interface{}) (interface{}, error) {
+					event := obj.(*v1.Event)
+					// Only cache fields that are utilized by the controllers.
+					guttedEvent := &v1.Event{
+						InvolvedObject: event.InvolvedObject,
+						TypeMeta:       event.TypeMeta,
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      event.ObjectMeta.Name,
+							Namespace: event.ObjectMeta.Namespace,
+						},
+						LastTimestamp: event.LastTimestamp,
+						Message:       event.Message,
+						Reason:        event.Reason,
+						EventTime:     event.EventTime,
+					}
+
+					return guttedEvent, nil
+				},
 			},
 		},
 		Namespaces: []string{tool.Options.ClusterNamespace},
