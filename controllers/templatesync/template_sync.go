@@ -563,7 +563,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 					tLogger.Error(resultError, "Failed to create policy template")
 
-					policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "create-error").Inc()
+					// check for syntax error in policy
+					if k8serrors.IsInvalid(err) {
+						policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
+					} else {
+						policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "create-error").Inc()
+					}
 
 					continue
 				}
@@ -756,7 +761,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				tLogger.Error(err, "Failed to update the policy template")
 
-				policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
+				// check for syntax error in policy
+				if k8serrors.IsInvalid(err) {
+					policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
+				} else {
+					policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
+				}
 
 				continue
 			}
