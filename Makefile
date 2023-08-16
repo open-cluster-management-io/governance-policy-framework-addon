@@ -162,12 +162,23 @@ kind-bootstrap-cluster: kind-bootstrap-cluster-dev kind-deploy-controller
 .PHONY: kind-bootstrap-cluster-dev
 kind-bootstrap-cluster-dev: kind-create-all-clusters install-crds kind-controller-all-kubeconfigs
 
+
+HOSTED ?= none
+
+.PHONY: kind-deploy-controller-dev
+kind-deploy-controller-dev: 
+	if [ "$(HOSTED)" = "hosted" ]; then\
+		$(MAKE) kind-deploy-controller-dev-addon ;\
+	else\
+		$(MAKE) kind-deploy-controller-dev-normal ;\
+	fi
+
 .PHONY: kind-deploy-controller
 kind-deploy-controller: generate-operator-yaml install-resources deploy
 	-kubectl create secret -n $(KIND_NAMESPACE) generic hub-kubeconfig --from-file=kubeconfig=$(HUB_CONFIG_INTERNAL) --kubeconfig=$(MANAGED_CONFIG)_e2e
 
-.PHONY: kind-deploy-controller-dev
-kind-deploy-controller-dev: kind-deploy-controller
+.PHONY: kind-deploy-controller-dev-normal
+kind-deploy-controller-dev-normal: kind-deploy-controller
 	@echo Pushing image to KinD cluster
 	kind load docker-image $(REGISTRY)/$(IMG):$(TAG) --name $(KIND_NAME)
 	@echo "Patch deployment image"
@@ -186,6 +197,13 @@ kind-controller-all-kubeconfigs:
 	CLUSTER_NAME=$(MANAGED_CLUSTER_NAME) $(MAKE) kind-controller-kubeconfig
 	CLUSTER_NAME=$(HUB_CLUSTER_NAME) KIND_NAME=$(KIND_HUB_NAME) KIND_CLUSTER_NAME=$(KIND_HUB_CLUSTER_NAME) $(MAKE) kind-controller-kubeconfig
 	yq e '.clusters[0].cluster.server = "https://$(KIND_HUB_NAME)-control-plane:6443"' $(HUB_CONFIG) > $(HUB_CONFIG_INTERNAL)
+
+.PHONY: kind-deploy-controller-dev-addon
+kind-deploy-controller-dev-addon:
+	@echo Hosted mode test
+	kind load docker-image $(REGISTRY)/$(IMG):$(TAG) --name $(KIND_NAME)
+	kubectl annotate -n $(subst -hosted,,$(KIND_NAMESPACE)) --overwrite managedclusteraddon governance-policy-framework\
+		addon.open-cluster-management.io/values='{"global":{"imagePullPolicy": "Never", "imageOverrides":{"governance_policy_framework_addon": "$(REGISTRY)/$(IMG):$(TAG)"}}}'
 
 .PHONY: kind-delete-cluster
 kind-delete-cluster:
