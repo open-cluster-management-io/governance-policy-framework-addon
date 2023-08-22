@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -84,7 +85,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	if uninstall.DeploymentIsUninstalling {
 		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
 
-		return reconcile.Result{}, nil
+		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
 	reqLogger.Info("Reconciling the policy")
