@@ -32,13 +32,6 @@ type reconciler struct {
 func (r *reconciler) Reconcile(ctx context.Context, obj client.ObjectIdentifier) (reconcile.Result, error) {
 	log := log.WithValues("name", obj.Name, "namespace", obj.Namespace)
 
-	if DeploymentIsUninstalling {
-		log.Info("Skipping reconcile because the uninstall flag is already true. " +
-			"To reset the flag, stop this container.")
-
-		return reconcile.Result{}, nil
-	}
-
 	log.Info("Checking the deployment for the annotation " + AnnotationKey)
 
 	deployment, err := r.AppsV1().Deployments(obj.Namespace).Get(ctx, obj.Name, v1.GetOptions{})
@@ -57,14 +50,16 @@ func (r *reconciler) Reconcile(ctx context.Context, obj client.ObjectIdentifier)
 	}
 
 	if deployment.GetAnnotations()[AnnotationKey] == "true" {
-		log.Info("Annotation " + AnnotationKey + " found and was true. Setting the uninstall flag.")
+		log.Info("Annotation " + AnnotationKey + " found and was true. Setting the uninstall flag to true.")
 
 		DeploymentIsUninstalling = true
 
 		return reconcile.Result{}, nil
 	}
 
-	log.Info("Annotation " + AnnotationKey + " not found, or not true. No changes.")
+	log.Info("Annotation " + AnnotationKey + " not found, or not true. Setting the uninstall flag to false.")
+
+	DeploymentIsUninstalling = false
 
 	return reconcile.Result{}, nil
 }

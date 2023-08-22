@@ -6,6 +6,7 @@ package specsync
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -70,7 +71,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	if uninstall.DeploymentIsUninstalling {
 		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
 
-		return reconcile.Result{}, nil
+		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
 	reqLogger.Info("Reconciling Policy...")

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
@@ -93,7 +94,7 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 	if uninstall.DeploymentIsUninstalling {
 		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
 
-		return reconcile.Result{}, nil
+		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
 	log.Info("Reconciling a Policy with one or more Gatekeeper constraints")

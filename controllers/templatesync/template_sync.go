@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	gktemplatesv1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
@@ -218,7 +219,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	if uninstall.DeploymentIsUninstalling {
 		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
 
-		return reconcile.Result{}, nil
+		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
 	// Handle dependencies that apply to the parent policy
