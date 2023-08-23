@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -173,7 +174,23 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	// plc matches hub plc, then get events
 	eventList := &corev1.EventList{}
-	err = r.ManagedClient.List(ctx, eventList, client.InNamespace(instance.GetNamespace()))
+	// Filter out events not related to this policy's compliance
+	fieldSelector, err := fields.ParseSelector(
+		`involvedObject.kind="` + policiesv1.Kind + `",` +
+			`involvedObject.apiVersion="` + policiesv1APIVersion + `",` +
+			`involvedObject.name="` + instance.GetName() + `"`)
+	if err != nil {
+		reqLogger.Error(err, "Unable to parse FieldSelector, using an empty one")
+
+		panic("Unable to parse FieldSelector") // during testing only!!!
+	}
+
+	opts := client.ListOptions{
+		Namespace:     instance.GetNamespace(),
+		FieldSelector: fieldSelector,
+	}
+
+	err = r.ManagedClient.List(ctx, eventList, &opts)
 
 	if err != nil {
 		// there is an error to list events, requeue
@@ -188,6 +205,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	for _, event := range eventList.Items {
 		// sample event.Reason -- reason: 'policy: calamari/policy-grc-rbactest-example'
 		reason := rgx.FindString(event.Reason)
+		// most of these will be true because of the FieldSelector, unless that failed to be parsed.
 		if event.InvolvedObject.Kind == policiesv1.Kind && event.InvolvedObject.APIVersion == policiesv1APIVersion &&
 			event.InvolvedObject.Name == instance.GetName() && reason != "" {
 			templateName := rgx.FindStringSubmatch(event.Reason)[2]
