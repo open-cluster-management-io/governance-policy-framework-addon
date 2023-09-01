@@ -1551,6 +1551,9 @@ func hasDupName(pol *policiesv1.Policy) bool {
 		}
 
 		name := unstructured.GetName()
+		apiv := unstructured.GetAPIVersion()
+		kind := unstructured.GetKind()
+		name = fmt.Sprintf("%s/%s/%s", name, apiv, kind)
 
 		if _, has := foundNames[name]; has {
 			return true
