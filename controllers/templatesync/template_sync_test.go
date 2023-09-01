@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	gktemplatesv1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -89,5 +90,126 @@ func TestHandleSyncSuccessNoDoubleRemoveStatus(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("handleSyncSuccess failed unexpectedly: %s", err)
+	}
+}
+
+func TestHasDuplicateNames(t *testing.T) {
+	policy := policiesv1.Policy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Policy",
+			APIVersion: "policy.open-cluster-management.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-policy",
+			Namespace: "managed",
+		},
+	}
+
+	configPolicy := configpoliciesv1.ConfigurationPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigurationPolicy",
+			APIVersion: "policy.open-cluster-management.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-configpolicy",
+			Namespace: "managed",
+		},
+	}
+
+	outBytes, err := runtime.Encode(unstructured.UnstructuredJSONScheme, &configPolicy)
+	if err != nil {
+		t.Fatalf("Could not serialize the config policy: %s", err)
+	}
+
+	raw := runtime.RawExtension{
+		Raw: outBytes,
+	}
+
+	x := policiesv1.PolicyTemplate{
+		ObjectDefinition: raw,
+	}
+
+	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &x)
+
+	has := hasDupName(&policy)
+	if has {
+		t.Fatal("Duplicate names found in templates but not expected")
+	}
+
+	// add a gatekeeper constraint template with a duplicate name
+	gkt := gktemplatesv1.ConstraintTemplate{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConstraintTemplate",
+			APIVersion: "templates.gatekeeper.sh/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-configpolicy",
+		},
+	}
+
+	outBytes, err = runtime.Encode(unstructured.UnstructuredJSONScheme, &gkt)
+	if err != nil {
+		t.Fatalf("Could not serialize the constraint template: %s", err)
+	}
+
+	y := policiesv1.PolicyTemplate{
+		ObjectDefinition: runtime.RawExtension{
+			Raw: outBytes,
+		},
+	}
+
+	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &y)
+
+	has = hasDupName(&policy)
+	if has {
+		t.Fatal("Duplicate names found in templates but not expected")
+	}
+
+	// add a gatekeeper constraint with a duplicate name
+	gkc := gktemplatesv1.ConstraintTemplate{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ContainerEnvMaxMemory",
+			APIVersion: "constraints.gatekeeper.sh/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-configpolicy",
+		},
+	}
+
+	outBytes, err = runtime.Encode(unstructured.UnstructuredJSONScheme, &gkc)
+	if err != nil {
+		t.Fatalf("Could not serialize the constraint template: %s", err)
+	}
+
+	z := policiesv1.PolicyTemplate{
+		ObjectDefinition: runtime.RawExtension{
+			Raw: outBytes,
+		},
+	}
+
+	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &z)
+
+	has = hasDupName(&policy)
+	if has {
+		t.Fatal("Duplicate names found in templates but not expected")
+	}
+
+	// add a config policy with a duplicate name
+	outBytes, err = runtime.Encode(unstructured.UnstructuredJSONScheme, &configPolicy)
+	if err != nil {
+		t.Fatalf("Could not serialize the config policy: %s", err)
+	}
+
+	x2 := policiesv1.PolicyTemplate{
+		ObjectDefinition: runtime.RawExtension{
+			Raw: outBytes,
+		},
+	}
+
+	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &x2)
+
+	has = hasDupName(&policy)
+	if !has { // expect duplicate detection to return true
+		t.Fatal("Duplicate name not detected")
 	}
 }
