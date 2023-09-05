@@ -215,17 +215,23 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	reqLogger.Info("Updating status for policy templates")
 
-	for _, policyT := range instance.Spec.PolicyTemplates {
+	for i, policyT := range instance.Spec.PolicyTemplates {
+		existingDpt := &policiesv1.DetailsPerTemplate{}
+
+		var tName string
+
 		object, _, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
 			// failed to decode PolicyTemplate, skipping it
 			reqLogger.Error(err, "Failed to decode policy template, skipping it")
 
-			break
+			existingDpt.ComplianceState = policiesv1.NonCompliant
+			newStatus.Details = append(newStatus.Details, existingDpt)
+			tName = fmt.Sprintf("template-%v", i) // template-sync emits this name on error
+		} else {
+			tName = object.(metav1.Object).GetName()
 		}
 
-		tName := object.(metav1.Object).GetName()
-		existingDpt := &policiesv1.DetailsPerTemplate{}
 		// retrieve existingDpt from instance.status.details field
 		found := false
 

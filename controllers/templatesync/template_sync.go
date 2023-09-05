@@ -173,7 +173,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		reqLogger.Info(msg)
 
 		for tIndex := range instance.Spec.PolicyTemplates {
-			_ = r.emitTemplateError(ctx, instance, tIndex, fmt.Sprintf("[template %v]", tIndex), false, msg)
+			_ = r.emitTemplateError(ctx, instance, tIndex, fmt.Sprintf("template-%v", tIndex), false, msg)
 		}
 
 		return reconcile.Result{}, nil
@@ -276,7 +276,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			resultError = err
 			errMsg := fmt.Sprintf("Failed to decode policy template with err: %s", err)
 
-			_ = r.emitTemplateError(ctx, instance, tIndex, fmt.Sprintf("[template %v]", tIndex), false, errMsg)
+			_ = r.emitTemplateError(ctx, instance, tIndex, fmt.Sprintf("template-%v", tIndex), false, errMsg)
 
 			reqLogger.Error(resultError, "Failed to decode the policy template", "templateIndex", tIndex)
 
@@ -326,7 +326,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				errMsg := fmt.Sprintf("Failed to decode policy template with err: %s", resultError)
 
 				_ = r.emitTemplateError(ctx, instance, tIndex,
-					fmt.Sprintf("[template %v]", tIndex), isClusterScoped, errMsg)
+					fmt.Sprintf("template-%v", tIndex), isClusterScoped, errMsg)
 
 				reqLogger.Error(resultError, "Failed to decode the policy template", "templateIndex", tIndex)
 
@@ -356,7 +356,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			resultError = k8serrors.NewBadRequest(errMsg)
 
 			_ = r.emitTemplateError(ctx, instance, tIndex,
-				fmt.Sprintf("[template %v]", tIndex), isClusterScoped, errMsg)
+				fmt.Sprintf("template-%v", tIndex), isClusterScoped, errMsg)
 
 			reqLogger.Error(resultError, "Failed to process the policy template", "templateIndex", tIndex)
 

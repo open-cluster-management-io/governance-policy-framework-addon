@@ -1,0 +1,47 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: case22-correct
+  labels:
+    policy.open-cluster-management.io/cluster-name: managed
+    policy.open-cluster-management.io/cluster-namespace: managed
+    policy.open-cluster-management.io/root-policy: case22-correct
+spec:
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: checkfailednodes
+        spec:
+          object-templates-raw: |
+            {{- range $node := (lookup "v1" "Node"  "" "").items }}
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Node
+                metadata:
+                  name: test-node
+                status:
+                  conditions:
+                  - message: kubelet has sufficient memory available
+                    reason: KubeletHasSufficientMemory
+                    status: "False"
+                    type: MemoryPressure
+                  - message: kubelet has no disk pressure
+                    reason: KubeletHasNoDiskPressure
+                    status: "False"
+                    type: DiskPressure
+                  - message: kubelet has sufficient PID available
+                    reason: KubeletHasSufficientPID
+                    status: "False"
+                    type: PIDPressure
+                  - message: kubelet is posting ready status
+                    reason: KubeletReady
+                    status: "True"
+                    type: Ready
+            {{- end }}
+          remediationAction: inform
+          severity: low
+  remediationAction: inform
