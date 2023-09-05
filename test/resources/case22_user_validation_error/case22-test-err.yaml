@@ -1,0 +1,51 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: case22-err
+  labels:
+    policy.open-cluster-management.io/cluster-name: managed
+    policy.open-cluster-management.io/cluster-namespace: managed
+    policy.open-cluster-management.io/root-policy: case22-err
+  creationTimestamp: 2023-08-07T09:21:13Z
+  generation: 4
+  managedFields:
+  resourceVersion: "168475"
+  uid: d40e4a53-919a-4d5e-a23e-de32eb9ae710
+spec:
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        spec:
+          apiVersion: policy.open-cluster-management.io/v1
+          kind: ConfigurationPolicy
+          metadata:
+            name: checkfailednodes
+          severity: low
+          spec:
+            object-templates-raw: |
+              {{- /* loop over nodes*/ -}}
+              {{- range $node := (lookup "v1" "Node"  "").items }}
+              - complianceType: musthave
+                objectDefinition:
+                  apiVersion: v1
+                  kind: Node
+                  metadata:
+                    name: {{ $node }}
+                  status:
+                    conditions:
+                    - message: kubelet has sufficient memory available
+                      reason: KubeletHasSufficientMemory
+                      status: "False"
+                      type: MemoryPressure
+            remediationAction: inform
+            severity: high
+  remediationAction: inform
+status:
+  compliant: Compliant
+  placement:
+    - placement: testix-placement
+      placementBinding: testix-placement
+  status:
+    - clustername: local-cluster
+      clusternamespace: local-cluster
+      compliant: Compliant
