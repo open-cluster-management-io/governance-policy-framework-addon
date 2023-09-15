@@ -21,7 +21,6 @@ import (
 	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -49,7 +48,10 @@ const (
 	ControllerName string = "policy-template-sync"
 )
 
-var log = ctrl.Log.WithName(ControllerName)
+var (
+	log                     = ctrl.Log.WithName(ControllerName)
+	errGroupDiscoveryFailed *discovery.ErrGroupDiscoveryFailed
+)
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=*,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=templates.gatekeeper.sh,resources=constrainttemplates,verbs=get;list;watch;create;update;patch;delete
@@ -995,7 +997,7 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 					namespaced: false,
 				})
 			}
-		} else if meta.IsNoMatchError(err) {
+		} else if errors.As(err, &errGroupDiscoveryFailed) {
 			// If there's no v1 ConstraintTemplate, try the v1beta1 version
 			gkConstraintTemplateListv1beta1 := gktemplatesv1beta1.ConstraintTemplateList{}
 			err := r.List(ctx, &gkConstraintTemplateListv1beta1, &client.ListOptions{})
@@ -1026,7 +1028,7 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 					})
 				}
 				// Log and ignore other errors to allow cleanup to continue since Gatekeeper may not be installed
-			} else if meta.IsNoMatchError(err) {
+			} else if errors.As(err, &errGroupDiscoveryFailed) {
 				reqLogger.Info("The ConstraintTemplate CRD is not installed")
 				r.setCreatedGkConstraint(false)
 			} else {
@@ -1059,7 +1061,7 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 				})
 			}
 		}
-	} else if meta.IsNoMatchError(err) {
+	} else if errors.As(err, &errGroupDiscoveryFailed) {
 		crdsv1beta1 := extensionsv1beta1.CustomResourceDefinitionList{}
 		err := r.List(ctx, &crdsv1beta1, &crdQuery)
 		if err != nil {
@@ -1427,7 +1429,7 @@ func (r *PolicyReconciler) hasPolicyTemplateLabel(
 	err := r.Get(ctx, crdName, &crd)
 	if err == nil {
 		return crd.GetLabels()[utils.PolicyTypeLabel] == "template", nil
-	} else if meta.IsNoMatchError(err) {
+	} else if errors.As(err, &errGroupDiscoveryFailed) {
 		betaCrd := extensionsv1beta1.CustomResourceDefinition{}
 
 		err = r.Get(ctx, crdName, &betaCrd)
