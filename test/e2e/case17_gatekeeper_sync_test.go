@@ -34,6 +34,8 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		policyName                string        = caseNumber + "-gk-policy"
 		policyYaml                string        = yamlBasePath + policyName + ".yaml"
 		policyYamlExtra           string        = yamlBasePath + policyName + "-extra.yaml"
+		policyYamlNaming          string        = yamlBasePath + policyName + "-naming.yaml"
+		policyCommonNaming        string        = "case17resourcenaming"
 		policyName2               string        = policyName + "-2"
 		policyYaml2               string        = yamlBasePath + policyName2 + ".yaml"
 		gkAuditFrequency          time.Duration = time.Minute
@@ -47,6 +49,8 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		gkConstraintYaml2         string        = yamlBasePath + gkConstraintName2 + ".yaml"
 		gkConstraintNameExtra     string        = gkConstraintName + "-extra"
 		gkConstraintYamlExtra     string        = yamlBasePath + gkConstraintNameExtra + ".yaml"
+		gkConstraintTmpYamlNaming string        = yamlBasePath + gkConstraintTemplateName + "naming.yaml"
+		gkConstraintYamlNaming    string        = yamlBasePath + gkConstraintName + "-naming.yaml"
 	)
 	gvrConstraint := schema.GroupVersionResource{
 		Group:    gvConstraintGroup,
@@ -474,11 +478,57 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		}, defaultTimeoutSeconds, 1).Should(BeNil())
 	})
 
+	It("should add a Constraint and ConstraintTemplate with the same name when added to policy-templates", func() {
+		By("Adding a Constraint and ConstraintTemplate with the same names to the policy-templates array")
+		_, err := kubectlHub("apply", "-f", policyYamlNaming, "-n", clusterNamespaceOnHub)
+		Expect(err).ToNot(HaveOccurred())
+		gvrNamingConstraint := schema.GroupVersionResource{
+			Group:    gvConstraintGroup,
+			Version:  "v1beta1",
+			Resource: caseNumber + "resourcenaming",
+		}
+		By("Checking for the synced Constraint " + policyCommonNaming)
+		expectedConstraint := propagatorutils.ParseYaml(gkConstraintYamlNaming)
+		Eventually(func() interface{} {
+			trustedPlc := propagatorutils.GetWithTimeout(clientManagedDynamic, gvrNamingConstraint,
+				policyCommonNaming, "", true, defaultTimeoutSeconds)
+
+			return trustedPlc.Object["spec"]
+		}, defaultTimeoutSeconds, 1).Should(propagatorutils.SemanticEqual(expectedConstraint.Object["spec"]))
+		By("Checking for the synced ConstraintTemplate " + policyCommonNaming)
+		expectedConstraintTmpl := propagatorutils.ParseYaml(gkConstraintTmpYamlNaming)
+		Eventually(func() interface{} {
+			trustedPlc := propagatorutils.GetWithTimeout(clientManagedDynamic, gvrConstraintTemplate,
+				policyCommonNaming, "", true, defaultTimeoutSeconds)
+
+			return trustedPlc.Object["spec"]
+		}, defaultTimeoutSeconds, 1).Should(propagatorutils.SemanticEqual(expectedConstraintTmpl.Object["spec"]))
+		By("Checking the policy templates are created with different names")
+		Eventually(func(g Gomega) {
+			managedPolicyUnstructured := propagatorutils.GetWithTimeout(
+				clientManagedDynamic, gvrPolicy, policyName, clusterNamespace, true, defaultTimeoutSeconds,
+			)
+
+			managedPolicy := policyv1.Policy{}
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(
+				managedPolicyUnstructured.Object, &managedPolicy,
+			)
+			g.Expect(err).ToNot(HaveOccurred())
+
+			t1name := managedPolicy.Status.Details[0].TemplateMeta.Name
+			t2name := managedPolicy.Status.Details[1].TemplateMeta.Name
+			g.Expect(t1name == policyCommonNaming)
+			g.Expect(t2name == policyCommonNaming+"-case17resourcenaming")
+		}, gkAuditFrequency*3, 1).Should(Succeed())
+	})
+
 	It("should delete template policy on managed cluster", func() {
 		By("Deleting parent policies")
 		_, err := kubectlHub("delete", "-f", policyYaml, "-n", clusterNamespaceOnHub)
 		Expect(err).ShouldNot(HaveOccurred())
 		_, err = kubectlHub("delete", "-f", policyYaml2, "-n", clusterNamespaceOnHub)
+		Expect(err).ShouldNot(HaveOccurred())
+		_, err = kubectlHub("delete", "-f", policyYamlNaming, "-n", clusterNamespaceOnHub)
 		Expect(err).ShouldNot(HaveOccurred())
 		opt := metav1.ListOptions{}
 		propagatorutils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)

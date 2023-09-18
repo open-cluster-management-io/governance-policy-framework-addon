@@ -1,0 +1,17 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: Case17ResourceNaming
+metadata:
+  name: case17resourcenaming
+spec:
+  enforcementAction: warn
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["ConfigMap"]
+    scope: Namespaced
+    namespaces:
+      - case17-gk-test
+  parameters:
+    message: "All configmaps must have a 'my-gk-test' label"
+    labels:
+    - key: "my-gk-test"
