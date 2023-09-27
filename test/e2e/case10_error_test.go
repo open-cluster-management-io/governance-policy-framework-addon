@@ -11,7 +11,9 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
@@ -109,6 +111,35 @@ var _ = Describe("Test error handling", func() {
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
+	})
+	It("should generate creation err event", func() {
+		policyName := "case10-invalid-name-error"
+		statusMsg := "template-error; Failed to create policy template:"
+
+		hubApplyPolicy(policyName,
+			yamlBasePath+"invalid-name-error.yaml")
+
+		By("Checking for event with creation err on managed cluster in ns:" + clusterNamespace)
+		Eventually(
+			checkForEvent(policyName, statusMsg),
+			defaultTimeoutSeconds,
+			1,
+		).Should(BeTrue())
+		By("Checking if policy status is noncompliant")
+		hubPlc := utils.GetWithTimeout(
+			clientHubDynamic,
+			gvrPolicy,
+			policyName,
+			clusterNamespaceOnHub,
+			true,
+			defaultTimeoutSeconds)
+		var plc *policiesv1.Policy
+		err := runtime.DefaultUnstructuredConverter.FromUnstructured(hubPlc.Object, &plc)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(plc.Status.Details).To(HaveLen(1))
+		Expect(plc.Status.Details[0].History).To(HaveLen(1))
+		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case10_invalid-name"))
+		Expect(plc.Status.Details[0].History[0].Message).To(ContainSubstring(statusMsg))
 	})
 	It("should generate unsupported object err event", func() {
 		hubApplyPolicy("case10-unsupported-object",

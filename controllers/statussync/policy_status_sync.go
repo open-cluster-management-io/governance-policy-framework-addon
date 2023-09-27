@@ -184,7 +184,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	// filter events to current policy instance and build map
 	eventForPolicyMap := make(map[string]*[]historyEvent)
 	// panic if regexp invalid
-	rgx := regexp.MustCompile(`(?i)^policy:\s*(?:([a-z0-9.-]+)\s*\/)?([a-z0-9.-]+)`)
+	rgx := regexp.MustCompile(`(?i)^policy:\s*(?:([a-z0-9.-]+)\s*\/)?(.+)`)
 	for _, event := range eventList.Items {
 		// sample event.Reason -- reason: 'policy: calamari/policy-grc-rbactest-example'
 		reason := rgx.FindString(event.Reason)
