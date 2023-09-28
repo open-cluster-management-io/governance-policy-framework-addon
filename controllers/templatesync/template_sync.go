@@ -450,17 +450,16 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
-		// reject if not configuration policy and has template strings
+		// reject if not configuration policy and has template strings, and don't requeue
 		if gvk.Kind != "ConfigurationPolicy" {
 			// if not configuration policies, do a simple check for templates {{hub and reject
 			// only checking for hub and not {{ as they could be valid cases where they are valid chars.
 			if strings.Contains(string(policyT.ObjectDefinition.Raw), "{{hub ") {
 				errMsg := fmt.Sprintf("Templates are not supported for kind : %s", gvk.Kind)
-				resultError = k8serrors.NewBadRequest(errMsg)
 
 				_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
 
-				tLogger.Error(resultError, "Failed to process the policy template")
+				tLogger.Error(k8serrors.NewBadRequest(errMsg), "Failed to process the policy template")
 
 				policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
 
@@ -559,7 +558,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 						)
 					}
 
-					resultError = err
 					errMsg := fmt.Sprintf("Failed to create policy template: %s", err)
 
 					_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
@@ -571,6 +569,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 						policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
 					} else {
 						policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "create-error").Inc()
+
+						// Only requeue if the policy template is valid
+						resultError = err
 					}
 
 					continue
@@ -757,7 +758,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					return reconcile.Result{}, err
 				}
 
-				resultError = err
 				errMsg := fmt.Sprintf("Failed to update policy template %s: %s", tName, err)
 
 				_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
@@ -769,6 +769,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
 				} else {
 					policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
+
+					// Only requeue if the policy template is valid
+					resultError = err
 				}
 
 				continue
