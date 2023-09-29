@@ -207,6 +207,7 @@ spec:
     metadata:
       labels:
         app: governance-policy-framework-addon
+        name: governance-policy-framework-addon
     spec:
       containers:
       - args:
