@@ -126,20 +126,22 @@ var _ = Describe("Test error handling", func() {
 			1,
 		).Should(BeTrue())
 		By("Checking if policy status is noncompliant")
-		hubPlc := utils.GetWithTimeout(
-			clientHubDynamic,
-			gvrPolicy,
-			policyName,
-			clusterNamespaceOnHub,
-			true,
-			defaultTimeoutSeconds)
-		var plc *policiesv1.Policy
-		err := runtime.DefaultUnstructuredConverter.FromUnstructured(hubPlc.Object, &plc)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(plc.Status.Details).To(HaveLen(1))
-		Expect(plc.Status.Details[0].History).To(HaveLen(1))
-		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case10_invalid-name"))
-		Expect(plc.Status.Details[0].History[0].Message).To(ContainSubstring(statusMsg))
+		Eventually(func(g Gomega) {
+			hubPlc := utils.GetWithTimeout(
+				clientHubDynamic,
+				gvrPolicy,
+				policyName,
+				clusterNamespaceOnHub,
+				true,
+				defaultTimeoutSeconds)
+			var plc *policiesv1.Policy
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(hubPlc.Object, &plc)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(plc.Status.Details).To(HaveLen(1))
+			g.Expect(plc.Status.Details[0].History).To(HaveLen(1))
+			g.Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case10_invalid-name"))
+			g.Expect(plc.Status.Details[0].History[0].Message).To(ContainSubstring(statusMsg))
+		}, defaultTimeoutSeconds, 1).Should(Succeed())
 	})
 	It("should generate unsupported object err event", func() {
 		hubApplyPolicy("case10-unsupported-object",
