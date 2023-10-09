@@ -133,7 +133,7 @@ func TestHasDuplicateNames(t *testing.T) {
 
 	has := hasDupName(&policy)
 	if has {
-		t.Fatal("Duplicate names found in templates but not expected")
+		t.Fatal("Unexpected duplicate policy template names")
 	}
 
 	// add a gatekeeper constraint template with a duplicate name
@@ -161,8 +161,8 @@ func TestHasDuplicateNames(t *testing.T) {
 	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &y)
 
 	has = hasDupName(&policy)
-	if has {
-		t.Fatal("Duplicate names found in templates but not expected")
+	if !has {
+		t.Fatal("Duplicate names for templates not detected")
 	}
 
 	// add a gatekeeper constraint with a duplicate name
@@ -190,8 +190,8 @@ func TestHasDuplicateNames(t *testing.T) {
 	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &z)
 
 	has = hasDupName(&policy)
-	if has {
-		t.Fatal("Duplicate names found in templates but not expected")
+	if !has {
+		t.Fatal("Duplicate names for templates not detected")
 	}
 
 	// add a config policy with a duplicate name
