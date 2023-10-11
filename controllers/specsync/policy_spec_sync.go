@@ -17,6 +17,7 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -33,6 +34,7 @@ func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&policiesv1.Policy{}).
 		Named(ControllerName).
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
 		Complete(r)
 }
 
@@ -48,7 +50,8 @@ type PolicyReconciler struct {
 	ManagedRecorder record.EventRecorder
 	Scheme          *runtime.Scheme
 	// The namespace that the replicated policies should be synced to.
-	TargetNamespace string
+	TargetNamespace      string
+	ConcurrentReconciles int
 }
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=create;delete;get;list;patch;update;watch

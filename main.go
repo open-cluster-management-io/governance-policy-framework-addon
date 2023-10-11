@@ -196,6 +196,10 @@ func main() {
 		}
 	}
 
+	// Override default QPS (20) and Burst (30) to client configurations
+	managedCfg.QPS = tool.Options.ClientQPS
+	managedCfg.Burst = int(tool.Options.ClientBurst)
+
 	mgrOptionsBase := manager.Options{
 		LeaderElection: tool.Options.EnableLeaderElection,
 		// Disable the metrics endpoint
@@ -458,6 +462,7 @@ func getManager(
 		ManagedClient:         mgr.GetClient(),
 		ManagedRecorder:       mgr.GetEventRecorderFor(statussync.ControllerName),
 		Scheme:                mgr.GetScheme(),
+		ConcurrentReconciles:  int(tool.Options.EvaluationConcurrency),
 	}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "unable to create controller", "controller", "Policy")
 		os.Exit(1)
@@ -474,15 +479,16 @@ func getManager(
 	instanceName, _ := os.Hostname() // on an error, instanceName will be empty, which is ok
 
 	templateReconciler := &templatesync.PolicyReconciler{
-		Client:           mgr.GetClient(),
-		DynamicWatcher:   watcher,
-		Scheme:           mgr.GetScheme(),
-		Config:           mgr.GetConfig(),
-		Recorder:         mgr.GetEventRecorderFor(templatesync.ControllerName),
-		ClusterNamespace: tool.Options.ClusterNamespace,
-		Clientset:        kubernetes.NewForConfigOrDie(mgr.GetConfig()),
-		InstanceName:     instanceName,
-		DisableGkSync:    tool.Options.DisableGkSync,
+		Client:               mgr.GetClient(),
+		DynamicWatcher:       watcher,
+		Scheme:               mgr.GetScheme(),
+		Config:               mgr.GetConfig(),
+		Recorder:             mgr.GetEventRecorderFor(templatesync.ControllerName),
+		ClusterNamespace:     tool.Options.ClusterNamespace,
+		Clientset:            kubernetes.NewForConfigOrDie(mgr.GetConfig()),
+		InstanceName:         instanceName,
+		DisableGkSync:        tool.Options.DisableGkSync,
+		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
 	}
 
 	go func() {
@@ -561,21 +567,23 @@ func getHubManager(
 
 	// Setup all Controllers
 	if err = (&specsync.PolicyReconciler{
-		HubClient:       mgr.GetClient(),
-		ManagedClient:   managedClient,
-		ManagedRecorder: managedRecorder,
-		Scheme:          mgr.GetScheme(),
-		TargetNamespace: tool.Options.ClusterNamespace,
+		HubClient:            mgr.GetClient(),
+		ManagedClient:        managedClient,
+		ManagedRecorder:      managedRecorder,
+		Scheme:               mgr.GetScheme(),
+		TargetNamespace:      tool.Options.ClusterNamespace,
+		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
 	}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "Unable to create the controller", "controller", specsync.ControllerName)
 		os.Exit(1)
 	}
 
 	if err = (&secretsync.SecretReconciler{
-		Client:          mgr.GetClient(),
-		ManagedClient:   managedClient,
-		Scheme:          mgr.GetScheme(),
-		TargetNamespace: tool.Options.ClusterNamespace,
+		Client:               mgr.GetClient(),
+		ManagedClient:        managedClient,
+		Scheme:               mgr.GetScheme(),
+		TargetNamespace:      tool.Options.ClusterNamespace,
+		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
 	}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "Unable to create the controller", "controller", secretsync.ControllerName)
 		os.Exit(1)
@@ -679,9 +687,10 @@ func addGkControllerToManager(
 			ControllerName:   gatekeepersync.ControllerName,
 			InstanceName:     instanceName,
 		},
-		DynamicClient:      dynamicClient,
-		ConstraintsWatcher: constraintsWatcher,
-		Scheme:             mgr.GetScheme(),
+		DynamicClient:        dynamicClient,
+		ConstraintsWatcher:   constraintsWatcher,
+		Scheme:               mgr.GetScheme(),
+		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
 	}).SetupWithManager(mgr, constraintEvents); err != nil {
 		log.Error(err, "unable to create controller", "controller", gatekeepersync.ControllerName)
 		os.Exit(1)

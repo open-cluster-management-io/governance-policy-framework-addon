@@ -26,6 +26,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -46,6 +47,7 @@ func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(eventMapper),
 			builder.WithPredicates(eventPredicateFuncs),
 		).
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
 		Named(ControllerName).
 		Complete(r)
 }
@@ -63,6 +65,7 @@ type PolicyReconciler struct {
 	ManagedRecorder       record.EventRecorder
 	Scheme                *runtime.Scheme
 	ClusterNamespaceOnHub string
+	ConcurrentReconciles  int
 }
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=get;list;watch;create;update;patch;delete

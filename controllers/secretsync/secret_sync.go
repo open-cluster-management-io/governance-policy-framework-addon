@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -34,6 +35,7 @@ func (r *SecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Secret{}).
 		Named(ControllerName).
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
 		Complete(r)
 }
 
@@ -45,7 +47,8 @@ type SecretReconciler struct {
 	ManagedClient client.Client
 	Scheme        *runtime.Scheme
 	// The namespace that the secret should be synced to.
-	TargetNamespace string
+	TargetNamespace      string
+	ConcurrentReconciles int
 }
 
 // WARNING: In production, this should be namespaced to the actual managed cluster namespace.

@@ -25,8 +25,11 @@ type SyncerOptions struct {
 	MetricsAddr               string
 	// The namespace that the replicated policies should be synced to. This defaults to the same namespace as on the
 	// Hub.
-	ClusterNamespace string
-	DeploymentName   string
+	ClusterNamespace      string
+	DeploymentName        string
+	EvaluationConcurrency uint8
+	ClientQPS             float32
+	ClientBurst           uint
 }
 
 // Options default value
@@ -106,6 +109,40 @@ func ProcessFlags() {
 		"localhost:8383",
 		"The address the metrics endpoint binds to.",
 	)
+
+	flag.Uint8Var(
+		&Options.EvaluationConcurrency,
+		"evaluation-concurrency",
+		// Set a low default to not add too much load to the Kubernetes API server in resource constrained deployments.
+		2,
+		"The max number of concurrent reconciles",
+	)
+
+	flag.Float32Var(
+		&Options.ClientQPS,
+		"client-max-qps",
+		30, // 15 * concurrency is recommended
+		"The max queries per second that will be made against the kubernetes API server. "+
+			"Will scale with concurrency, if not explicitly set.",
+	)
+
+	flag.UintVar(
+		&Options.ClientBurst,
+		"client-burst",
+		45, // the controller-runtime defaults are 20:30 (qps:burst) - this matches that ratio
+		"The maximum burst before client requests will be throttled. "+
+			"Will scale with concurrency, if not explicitly set.",
+	)
+
+	if flag.Changed("evaluation-concurrency") {
+		if !flag.Changed("client-max-qps") {
+			Options.ClientQPS = float32(Options.EvaluationConcurrency) * 15
+		}
+
+		if !flag.Changed("client-burst") {
+			Options.ClientBurst = uint(Options.EvaluationConcurrency)*22 + 1
+		}
+	}
 
 	Options.DeploymentName = os.Getenv("DEPLOYMENT_NAME")
 	if Options.DeploymentName == "" {
