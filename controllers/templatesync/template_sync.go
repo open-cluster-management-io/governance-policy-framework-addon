@@ -36,6 +36,7 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -65,6 +66,7 @@ func (r *PolicyReconciler) Setup(mgr ctrl.Manager, depEvents *source.Channel) er
 		Named(ControllerName).
 		For(&policiesv1.Policy{}).
 		WithEventFilter(templatePredicates()).
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
 		WatchesRawSource(depEvents, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
@@ -77,15 +79,16 @@ type PolicyReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client.Client
-	DynamicWatcher      depclient.DynamicWatcher
-	Scheme              *runtime.Scheme
-	Config              *rest.Config
-	Recorder            record.EventRecorder
-	ClusterNamespace    string
-	Clientset           *kubernetes.Clientset
-	InstanceName        string
-	DisableGkSync       bool
-	createdGkConstraint *bool
+	DynamicWatcher       depclient.DynamicWatcher
+	Scheme               *runtime.Scheme
+	Config               *rest.Config
+	Recorder             record.EventRecorder
+	ClusterNamespace     string
+	Clientset            *kubernetes.Clientset
+	InstanceName         string
+	DisableGkSync        bool
+	createdGkConstraint  *bool
+	ConcurrentReconciles int
 }
 
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read

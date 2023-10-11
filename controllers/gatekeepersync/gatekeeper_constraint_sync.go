@@ -48,7 +48,7 @@ func (r *GatekeeperConstraintReconciler) SetupWithManager(mgr ctrl.Manager, cons
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&policyv1.Policy{}).
 		WithEventFilter(policyPredicates()).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 5}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
 		WatchesRawSource(constraintEvents, &handler.EnqueueRequestForObject{}).
 		Named(ControllerName).
 		Complete(r)
@@ -74,7 +74,8 @@ type GatekeeperConstraintReconciler struct {
 	ConstraintsWatcher depclient.DynamicWatcher
 	// A cache of sent messages to avoid repeating status events due to race conditions. Each value is a SHA1
 	// digest.
-	lastSentMessages sync.Map
+	lastSentMessages     sync.Map
+	ConcurrentReconciles int
 }
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=get;list;watch
