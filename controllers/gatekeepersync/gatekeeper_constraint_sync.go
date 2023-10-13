@@ -112,7 +112,7 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 	err := r.Get(ctx, request.NamespacedName, policy)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			log.V(1).Info("The Policy was deleted. Cleaning up watchers and status message cache.")
+			log.Info("The Policy was deleted. Cleaning up watchers and status message cache.")
 
 			r.lastSentMessages.Range(func(key, value any) bool {
 				keyTyped := key.(policyKindName)

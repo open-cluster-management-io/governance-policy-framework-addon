@@ -86,7 +86,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	)
 
 	if uninstall.DeploymentIsUninstalling {
-		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
+		reqLogger.Info("Skipping reconcile because the deployment is in uninstallation mode")
 
 		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
@@ -129,6 +129,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			managedInstance.SetOwnerReferences(nil)
 			managedInstance.SetResourceVersion("")
+
+			reqLogger.Info("Policy missing from managed cluster, creating it.")
 
 			return reconcile.Result{}, r.ManagedClient.Create(ctx, managedInstance)
 		}
@@ -245,7 +247,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				existingDpt = dpt
 				found = true
 
-				reqLogger.Info("Found existing status, retrieving it", "PolicyTemplate", tName)
+				reqLogger.V(1).Info("Found existing status, retrieving it", "PolicyTemplate", tName)
 
 				break
 			}
@@ -360,7 +362,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// append existingDpt to status
 		newStatus.Details = append(newStatus.Details, existingDpt)
 
-		reqLogger.Info("Status update complete", "PolicyTemplate", tName)
+		reqLogger.V(1).Info("Status update complete", "PolicyTemplate", tName)
 	}
 
 	instance.Status = newStatus
@@ -411,7 +413,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// Re-fetch the hub template in case it changed
 		err = r.HubClient.Get(ctx, types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}, hubPlc)
 		if err != nil {
-			log.Error(err, "Failed to refresh the cached policy. Will use existing policy.")
+			reqLogger.Error(err, "Failed to refresh the cached policy. Will use existing policy.")
 		}
 
 		if !equality.Semantic.DeepEqual(hubPlc.Status, instance.Status) {
