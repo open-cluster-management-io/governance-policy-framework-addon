@@ -222,7 +222,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	if uninstall.DeploymentIsUninstalling {
-		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
+		reqLogger.Info("Skipping reconcile because the deployment is in uninstallation mode")
 
 		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}

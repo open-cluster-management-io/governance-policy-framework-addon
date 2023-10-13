@@ -63,7 +63,7 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	)
 
 	if uninstall.DeploymentIsUninstalling {
-		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
+		reqLogger.Info("Skipping reconcile because the deployment is in uninstallation mode")
 
 		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
@@ -71,7 +71,7 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	reqLogger.Info("Reconciling Secret")
 	// The cache configuration of SelectorsByObject should prevent this from happening, but add this as a precaution.
 	if request.Name != SecretName {
-		log.Info("Got a reconciliation request for an unexpected Secret. This should have been filtered out.")
+		reqLogger.Info("Got a reconciliation request for an unexpected Secret. This should have been filtered out.")
 
 		return reconcile.Result{}, nil
 	}
@@ -81,12 +81,12 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	err := r.Get(ctx, request.NamespacedName, hubEncryptionSecret)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			log.Error(err, "Failed to get the Secret on the Hub. Requeueing the request.")
+			reqLogger.Error(err, "Failed to get the Secret on the Hub. Requeueing the request.")
 
 			return reconcile.Result{}, err
 		}
 
-		log.Info("The Secret is no longer on the Hub. Deleting the replicated Secret.")
+		reqLogger.Info("The Secret is no longer on the Hub. Deleting the replicated Secret.")
 
 		err := r.ManagedClient.Delete(
 			ctx,
@@ -98,10 +98,12 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			},
 		)
 		if err != nil && !errors.IsNotFound(err) {
-			log.Error(err, "Failed to delete the replicated Secret. Requeueing the request.")
+			reqLogger.Error(err, "Failed to delete the replicated Secret. Requeueing the request.")
 
 			return reconcile.Result{}, err
 		}
+
+		reqLogger.Info("Secret deleted, Reconciliation complete.")
 
 		return reconcile.Result{}, nil
 	}
@@ -113,10 +115,12 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			log.Error(err, "Failed to get the replicated Secret. Requeueing the request.")
+			reqLogger.Error(err, "Failed to get the replicated Secret. Requeueing the request.")
 
 			return reconcile.Result{}, err
 		}
+
+		reqLogger.Info("Creating the replicated secret")
 
 		// Don't completely copy the Hub secret since it isn't desired to have any annotations related to disaster
 		// recovery copied over.
@@ -130,24 +134,24 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		err := r.ManagedClient.Create(ctx, managedEncryptionSecret)
 		if err != nil {
-			log.Error(err, "Failed to replicate the Secret. Requeueing the request.")
+			reqLogger.Error(err, "Failed to replicate the Secret. Requeueing the request.")
 
 			return reconcile.Result{}, err
 		}
 
-		reqLogger.Info("Reconciliation complete")
+		reqLogger.Info("Secret replicated, Reconciliation complete")
 
 		return reconcile.Result{}, nil
 	}
 
 	if !equality.Semantic.DeepEqual(hubEncryptionSecret.Data, managedEncryptionSecret.Data) {
-		log.Info("Updating the replicated secret due to it not matching the source on the Hub")
+		reqLogger.Info("Updating the replicated secret due to it not matching the source on the Hub")
 
 		managedEncryptionSecret.Data = hubEncryptionSecret.Data
 
 		err := r.ManagedClient.Update(ctx, managedEncryptionSecret)
 		if err != nil {
-			log.Error(err, "Failed to update the replicated Secret. Requeueing the request.")
+			reqLogger.Error(err, "Failed to update the replicated Secret. Requeueing the request.")
 
 			return reconcile.Result{}, err
 		}

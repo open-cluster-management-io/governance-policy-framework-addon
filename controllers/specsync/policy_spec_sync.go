@@ -72,7 +72,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	)
 
 	if uninstall.DeploymentIsUninstalling {
-		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
+		reqLogger.Info("Skipping reconcile because the deployment is in uninstallation mode")
 
 		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
@@ -101,6 +101,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			if err != nil && !errors.IsNotFound(err) {
 				reqLogger.Error(err, "Failed to remove policy on managed cluster...")
+
+				return reconcile.Result{}, err
 			}
 
 			reqLogger.Info("Policy has been removed from managed cluster...Reconciliation complete.")

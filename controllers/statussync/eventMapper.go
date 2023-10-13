@@ -5,7 +5,6 @@ package statussync
 
 import (
 	"context"
-	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -17,13 +16,9 @@ func eventMapper(_ context.Context, obj client.Object) []reconcile.Request {
 	//nolint:forcetypeassert
 	event := obj.(*corev1.Event)
 
-	log.Info(
-		fmt.Sprintf(
-			"Reconcile Request for Event %s in namespace %s",
-			event.GetName(),
-			event.GetNamespace(),
-		),
-	)
+	log := log.WithValues("eventName", event.GetName(), "eventNamespace", event.GetNamespace())
+
+	log.V(2).Info("Reconcile Request")
 
 	var result []reconcile.Request
 
@@ -32,13 +27,8 @@ func eventMapper(_ context.Context, obj client.Object) []reconcile.Request {
 		Namespace: event.InvolvedObject.Namespace,
 	}}
 
-	log.Info(
-		fmt.Sprintf(
-			"Queue event for Policy %s in namespace %s",
-			event.InvolvedObject.Name,
-			event.InvolvedObject.Namespace,
-		),
-	)
+	log.V(2).Info("Queueing event", "involvedName", event.InvolvedObject.Name,
+		"involvedNamespace", event.InvolvedObject.Namespace)
 
 	return append(result, request)
 }
