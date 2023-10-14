@@ -370,6 +370,13 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
+		// if there's a duplicate name, append the kind since duplicates should only exist for different kinds
+		for _, tmpName := range templateNames {
+			if tmpName == tName {
+				tName = fmt.Sprintf("%s-%s", tName, strings.ToLower(object.GetObjectKind().GroupVersionKind().Kind))
+			}
+		}
+
 		templateNames = append(templateNames, tName)
 
 		tLogger := reqLogger.WithValues("template", tName)
