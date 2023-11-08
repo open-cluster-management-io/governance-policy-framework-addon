@@ -16,10 +16,10 @@ require (
 	k8s.io/api v0.27.7
 	k8s.io/apiextensions-apiserver v0.27.7
 	k8s.io/apimachinery v0.27.7
-	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/client-go v0.27.7
 	k8s.io/klog/v2 v2.100.1
 	open-cluster-management.io/addon-framework v0.8.0
-	open-cluster-management.io/config-policy-controller v0.12.0
+	open-cluster-management.io/config-policy-controller v0.12.1-0.20231026193151-d916208dded3
 	open-cluster-management.io/governance-policy-propagator v0.12.0
 	sigs.k8s.io/controller-runtime v0.15.2
 )
