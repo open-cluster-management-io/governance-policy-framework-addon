@@ -59,7 +59,11 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
 			g.Expect(err).ToNot(HaveOccurred())
-			if len(plc.Status.Details) < 1 {
+			if len(plc.Status.Details) < 2 {
+				return ""
+			}
+
+			if len(plc.Status.Details[1].History) < 1 {
 				return ""
 			}
 
