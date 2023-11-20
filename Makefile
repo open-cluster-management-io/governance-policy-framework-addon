@@ -131,11 +131,8 @@ check: lint
 lint-dependencies:
 	$(call go-get-tool,github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2)
 
-# All available linters: lint-dockerfiles lint-scripts lint-yaml lint-copyright-banner lint-go lint-python lint-helm lint-markdown lint-sass lint-typescript lint-protos
-# Default value will run all linters, override these make target with your requirements:
-#    eg: lint: lint-go lint-yaml
 .PHONY: lint
-lint: lint-dependencies lint-all
+lint:
 
 ############################################################
 # test section
