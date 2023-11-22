@@ -83,6 +83,7 @@ rules:
   - get
   - list
   - update
+  - watch
 - apiGroups:
   - policy.open-cluster-management.io
   resources:
@@ -102,6 +103,7 @@ rules:
   verbs:
   - create
   - delete
+  - deletecollection
   - get
   - list
   - patch

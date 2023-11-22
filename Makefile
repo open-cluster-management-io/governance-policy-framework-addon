@@ -38,13 +38,18 @@ endif
 
 # Handle KinD configuration
 KIND_NAME ?= test-managed
+KIND_HUB_NAME ?= test-hub
+KIND_CLUSTER_NAME ?= kind-$(KIND-NAME)
+KIND_HUB_CLUSTER_NAME ?= kind-$(KIND_HUB_NAME)
 KIND_NAMESPACE ?= open-cluster-management-agent-addon
 KIND_VERSION ?= latest
 MANAGED_CLUSTER_NAME ?= managed
+HUB_CLUSTER_NAME ?= hub
 HUB_CONFIG ?= $(PWD)/kubeconfig_hub
 HUB_CONFIG_INTERNAL ?= $(PWD)/kubeconfig_hub_internal
 MANAGED_CONFIG ?= $(PWD)/kubeconfig_managed
 deployOnHub ?= false
+CONTROLLER_NAME ?= $(shell cat COMPONENT_NAME 2> /dev/null)
 # Set the Kind version tag
 ifeq ($(KIND_VERSION), minimum)
 	KIND_ARGS = --image kindest/node:v1.19.16
@@ -62,7 +67,7 @@ export OSDK_FORCE_RUN_MODE ?= local
 
 # Image URL to use all building/pushing image targets;
 # Use your own docker registry and image name for dev/test by overridding the IMG and REGISTRY environment variable.
-IMG ?= $(shell cat COMPONENT_NAME 2> /dev/null)
+IMG ?= $(CONTROLLER_NAME)
 VERSION ?= $(shell cat COMPONENT_VERSION 2> /dev/null)
 REGISTRY ?= quay.io/open-cluster-management
 TAG ?= latest
@@ -97,9 +102,7 @@ clean:
 	-rm build/_output/bin/*
 	-rm coverage*.out
 	-rm report*.json
-	-rm kubeconfig_managed
-	-rm kubeconfig_hub
-	-rm kubeconfig_hub_internal
+	-rm kubeconfig_*
 	-rm -r vendor/
 
 ############################################################
@@ -195,6 +198,11 @@ build-images:
 	@docker build -t ${IMAGE_NAME_AND_VERSION} -f build/Dockerfile .
 	@docker tag ${IMAGE_NAME_AND_VERSION} $(REGISTRY)/$(IMG):$(TAG)
 
+.PHONY: deploy
+deploy: generate-operator-yaml
+	kubectl apply -f deploy/operator.yaml -n $(KIND_NAMESPACE) --kubeconfig=$(MANAGED_CONFIG)_e2e
+	
+
 ############################################################
 # Generate manifests
 ############################################################
@@ -227,59 +235,62 @@ kustomize: ## Download kustomize locally if necessary.
 GINKGO = $(LOCAL_BIN)/ginkgo
 
 .PHONY: kind-bootstrap-cluster
-kind-bootstrap-cluster: kind-create-cluster install-crds kind-deploy-controller install-resources
+kind-bootstrap-cluster: kind-bootstrap-cluster-dev kind-deploy-controller
 
 .PHONY: kind-bootstrap-cluster-dev
-kind-bootstrap-cluster-dev: kind-create-cluster install-crds install-resources
+kind-bootstrap-cluster-dev: kind-create-all-clusters install-crds kind-controller-all-kubeconfigs
 
 .PHONY: kind-deploy-controller
-kind-deploy-controller:
-	@echo installing $(IMG)
-	-kubectl create ns $(KIND_NAMESPACE) --kubeconfig=$(MANAGED_CONFIG)
-	-kubectl create secret -n $(KIND_NAMESPACE) generic hub-kubeconfig --from-file=kubeconfig=$(HUB_CONFIG_INTERNAL) --kubeconfig=$(MANAGED_CONFIG)
-	kubectl apply -f deploy/operator.yaml -n $(KIND_NAMESPACE) --kubeconfig=$(MANAGED_CONFIG)
+kind-deploy-controller: generate-operator-yaml install-resources deploy
+	-kubectl create secret -n $(KIND_NAMESPACE) generic hub-kubeconfig --from-file=kubeconfig=$(HUB_CONFIG_INTERNAL) --kubeconfig=$(MANAGED_CONFIG)_e2e
 
 .PHONY: kind-deploy-controller-dev
 kind-deploy-controller-dev: kind-deploy-controller
 	@echo Pushing image to KinD cluster
 	kind load docker-image $(REGISTRY)/$(IMG):$(TAG) --name $(KIND_NAME)
 	@echo "Patch deployment image"
-	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"args\":[\"--hub-cluster-configfile=/var/run/klusterlet/kubeconfig\", \"--cluster-namespace=$(MANAGED_CLUSTER_NAME)\", \"--enable-lease=true\", \"--log-level=2\", \"--disable-spec-sync=$(deployOnHub)\"]}]}}}}" --kubeconfig=$(MANAGED_CONFIG)
-	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"imagePullPolicy\":\"Never\"}]}}}}" --kubeconfig=$(MANAGED_CONFIG)
-	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"image\":\"$(REGISTRY)/$(IMG):$(TAG)\"}]}}}}" --kubeconfig=$(MANAGED_CONFIG)
-	kubectl rollout status -n $(KIND_NAMESPACE) deployment $(IMG) --timeout=180s --kubeconfig=$(MANAGED_CONFIG)
+	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"args\":[\"--hub-cluster-configfile=/var/run/klusterlet/kubeconfig\", \"--cluster-namespace=$(MANAGED_CLUSTER_NAME)\", \"--enable-lease=true\", \"--log-level=2\", \"--disable-spec-sync=$(deployOnHub)\"]}]}}}}" --kubeconfig=$(MANAGED_CONFIG)_e2e
+	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"imagePullPolicy\":\"Never\"}]}}}}" --kubeconfig=$(MANAGED_CONFIG)_e2e
+	kubectl patch deployment $(IMG) -n $(KIND_NAMESPACE) -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"$(IMG)\",\"image\":\"$(REGISTRY)/$(IMG):$(TAG)\"}]}}}}" --kubeconfig=$(MANAGED_CONFIG)_e2e
+	kubectl rollout status -n $(KIND_NAMESPACE) deployment $(IMG) --timeout=180s --kubeconfig=$(MANAGED_CONFIG)_e2e
 
-.PHONY: kind-create-cluster
-kind-create-cluster:
-	@echo "creating cluster"
-	kind create cluster --name test-hub $(KIND_ARGS)
-	kind get kubeconfig --name test-hub > $(HUB_CONFIG)
-	# needed for managed -> hub communication
-	kind get kubeconfig --name test-hub --internal > $(HUB_CONFIG_INTERNAL)
-	kind create cluster --name $(KIND_NAME) $(KIND_ARGS)
-	kind get kubeconfig --name $(KIND_NAME) > $(MANAGED_CONFIG)
+.PHONY: kind-create-all-clusters
+kind-create-all-clusters:
+	CLUSTER_NAME=$(MANAGED_CLUSTER_NAME) $(MAKE) kind-create-cluster
+	CLUSTER_NAME=$(HUB_CLUSTER_NAME) KIND_NAME=$(KIND_HUB_NAME) KIND_CLUSTER_NAME=$(KIND_HUB_CLUSTER_NAME) $(MAKE) kind-create-cluster
+
+.PHONY: kind-controller-all-kubeconfigs
+kind-controller-all-kubeconfigs:
+	CLUSTER_NAME=$(MANAGED_CLUSTER_NAME) $(MAKE) kind-controller-kubeconfig
+	CLUSTER_NAME=$(HUB_CLUSTER_NAME) KIND_NAME=$(KIND_HUB_NAME) KIND_CLUSTER_NAME=$(KIND_HUB_CLUSTER_NAME) $(MAKE) kind-controller-kubeconfig
+	yq e '.clusters[0].cluster.server = "https://$(KIND_HUB_NAME)-control-plane:6443"' $(HUB_CONFIG) > $(HUB_CONFIG_INTERNAL)
 
 .PHONY: kind-delete-cluster
 kind-delete-cluster:
-	kind delete cluster --name test-hub
+	kind delete cluster --name $(KIND_HUB_NAME)
 	kind delete cluster --name $(KIND_NAME)
 
 .PHONY: install-crds
 install-crds:
 	@echo installing crds
-	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/governance-policy-propagator/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_policies.yaml --kubeconfig=$(HUB_CONFIG)
-	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/governance-policy-propagator/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_policies.yaml --kubeconfig=$(MANAGED_CONFIG)
-	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/config-policy-controller/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_configurationpolicies.yaml --kubeconfig=$(MANAGED_CONFIG)
+	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/governance-policy-propagator/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_policies.yaml --kubeconfig=$(HUB_CONFIG)_e2e
+	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/governance-policy-propagator/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_policies.yaml --kubeconfig=$(MANAGED_CONFIG)_e2e
+	kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/config-policy-controller/$(BRANCH)/deploy/crds/policy.open-cluster-management.io_configurationpolicies.yaml --kubeconfig=$(MANAGED_CONFIG)_e2e
 
 .PHONY: install-resources
 install-resources:
 	@echo creating namespace on hub
-	-kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(HUB_CONFIG)
+	-kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(HUB_CONFIG)_e2e
 	@echo creating namespace on managed
-	-kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(MANAGED_CONFIG)
+	-kubectl create ns $(MANAGED_CLUSTER_NAME) --kubeconfig=$(MANAGED_CONFIG)_e2e
+	@echo Deploying roles and service account
+	-kubectl create ns $(KIND_NAMESPACE) --kubeconfig=$(MANAGED_CONFIG)_e2e
+	-kubectl apply -k deploy/rbac --kubeconfig=$(MANAGED_CONFIG)_e2e
+	-kubectl create ns $(KIND_NAMESPACE) --kubeconfig=$(HUB_CONFIG)_e2e
+	-kubectl apply -k deploy/hubpermissions --kubeconfig=$(HUB_CONFIG)_e2e
 	@if [ "$(KIND_VERSION)" != "minimum" ]; then \
 		echo installing Gatekeeper on the managed cluster; \
-		kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/v3.11.0/deploy/gatekeeper.yaml  --kubeconfig=$(MANAGED_CONFIG); \
+		kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/v3.11.0/deploy/gatekeeper.yaml  --kubeconfig=$(MANAGED_CONFIG)_e2e; \
 	fi
 
 .PHONY: e2e-dependencies
@@ -310,7 +321,7 @@ e2e-test-uninstall-coverage: e2e-run-instrumented scale-down-deployment e2e-test
 
 .PHONY: scale-down-deployment
 scale-down-deployment:
-	kubectl scale deployment $(IMG) -n $(KIND_NAMESPACE) --replicas=0 --kubeconfig=$(MANAGED_CONFIG)
+	kubectl scale deployment $(IMG) -n $(KIND_NAMESPACE) --replicas=0 --kubeconfig=$(MANAGED_CONFIG)_e2e
 
 .PHONY: e2e-build-instrumented
 e2e-build-instrumented:

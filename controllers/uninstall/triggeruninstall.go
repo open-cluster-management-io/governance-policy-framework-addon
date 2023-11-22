@@ -32,6 +32,8 @@ var triggerLog = ctrl.Log.WithName("trigger-uninstall")
 
 const AnnotationKey = "policy.open-cluster-management.io/uninstalling"
 
+//+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=deletecollection;
+
 // Trigger adds the uninstallation annotation to the Deployment, then deletes all the policies.
 // It will return nil only when all the policies are gone.
 // It takes command line arguments to configure itself.
