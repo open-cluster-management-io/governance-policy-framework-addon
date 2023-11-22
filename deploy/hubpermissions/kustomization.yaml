@@ -1,0 +1,4 @@
+namespace: open-cluster-management-agent-addon
+
+resources:
+  - ../rbac
