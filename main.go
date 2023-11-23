@@ -287,7 +287,7 @@ func main() {
 	}
 
 	log.Info("Adding controllers to managers")
-	addControllers(mgrCtx, hubMgr, mgr)
+	addControllers(mgrCtx, hubCfg, hubMgr, mgr)
 
 	log.Info("Starting the controller managers")
 
@@ -700,9 +700,40 @@ func getFreeLocalAddr() (string, error) {
 }
 
 // addControllers sets up all controllers with their respective managers
-func addControllers(ctx context.Context, hubMgr manager.Manager, managedMgr manager.Manager) {
+func addControllers(ctx context.Context, hubCfg *rest.Config, hubMgr manager.Manager, managedMgr manager.Manager) {
 	// Set up all controllers for manager on managed cluster
-	var kubeClientHub kubernetes.Interface = kubernetes.NewForConfigOrDie(hubMgr.GetConfig())
+	var hubClient client.Client
+
+	if hubMgr == nil {
+		hubCache, err := cache.New(
+			hubCfg, cache.Options{Namespaces: []string{tool.Options.ClusterNamespaceOnHub}, Scheme: scheme},
+		)
+		if err != nil {
+			log.Error(err, "Failed to generate a cache to the hub cluster")
+			os.Exit(1)
+		}
+
+		go func() {
+			err := hubCache.Start(ctx)
+			if err != nil {
+				log.Error(err, "Failed to start the cache to the hub cluster")
+				os.Exit(1)
+			}
+		}()
+
+		hubClient, err = client.New(
+			hubCfg, client.Options{Scheme: scheme, Cache: &client.CacheOptions{Reader: hubCache}},
+		)
+
+		if err != nil {
+			log.Error(err, "Failed to generate a client to the hub cluster")
+			os.Exit(1)
+		}
+	} else {
+		hubClient = hubMgr.GetClient()
+	}
+
+	var kubeClientHub kubernetes.Interface = kubernetes.NewForConfigOrDie(hubCfg)
 
 	eventBroadcasterHub := record.NewBroadcaster()
 
@@ -714,7 +745,7 @@ func addControllers(ctx context.Context, hubMgr manager.Manager, managedMgr mana
 
 	if err := (&statussync.PolicyReconciler{
 		ClusterNamespaceOnHub: tool.Options.ClusterNamespaceOnHub,
-		HubClient:             hubMgr.GetClient(),
+		HubClient:             hubClient,
 		HubRecorder:           hubRecorder,
 		ManagedClient:         managedMgr.GetClient(),
 		ManagedRecorder:       managedMgr.GetEventRecorderFor(statussync.ControllerName),
@@ -764,6 +795,10 @@ func addControllers(ctx context.Context, hubMgr manager.Manager, managedMgr mana
 	}
 
 	// Set up all controllers for manager on hub cluster
+	if tool.Options.DisableSpecSync {
+		return
+	}
+
 	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(managedMgr.GetConfig())
 
 	eventBroadcaster := record.NewBroadcaster()
@@ -775,7 +810,7 @@ func addControllers(ctx context.Context, hubMgr manager.Manager, managedMgr mana
 	managedRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: specsync.ControllerName})
 
 	if err = (&specsync.PolicyReconciler{
-		HubClient:            hubMgr.GetClient(),
+		HubClient:            hubClient,
 		ManagedClient:        managedMgr.GetClient(),
 		ManagedRecorder:      managedRecorder,
 		Scheme:               hubMgr.GetScheme(),
@@ -787,7 +822,7 @@ func addControllers(ctx context.Context, hubMgr manager.Manager, managedMgr mana
 	}
 
 	if err = (&secretsync.SecretReconciler{
-		Client:               hubMgr.GetClient(),
+		Client:               hubClient,
 		ManagedClient:        managedMgr.GetClient(),
 		Scheme:               hubMgr.GetScheme(),
 		TargetNamespace:      tool.Options.ClusterNamespace,
