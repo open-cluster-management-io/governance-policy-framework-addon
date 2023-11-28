@@ -53,6 +53,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/gatekeepersync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/secretsync"
@@ -203,8 +204,10 @@ func main() {
 	mgrOptionsBase := manager.Options{
 		LeaderElection: tool.Options.EnableLeaderElection,
 		// Disable the metrics endpoint
-		MetricsBindAddress: tool.Options.MetricsAddr,
-		Scheme:             scheme,
+		Metrics: server.Options{
+			BindAddress: tool.Options.MetricsAddr,
+		},
+		Scheme: scheme,
 		// Override the EventBroadcaster so that the spam filter will not ignore events for the policy but with
 		// different messages if a large amount of events for that policy are sent in a short time.
 		EventBroadcaster: record.NewBroadcasterWithCorrelatorOptions(
@@ -415,8 +418,13 @@ func getManager(
 					return guttedEvent, nil
 				},
 			},
+			&v1.Secret{}: {
+				Field: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+			},
 		},
-		Namespaces: []string{tool.Options.ClusterNamespace},
+		DefaultNamespaces: map[string]cache.Config{
+			tool.Options.ClusterNamespace: {},
+		},
 	}
 
 	mgr, err := ctrl.NewManager(managedCfg, options)
@@ -473,12 +481,14 @@ func getHubManager(
 				Field: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
 			},
 		},
-		Namespaces: []string{tool.Options.ClusterNamespaceOnHub},
+		DefaultNamespaces: map[string]cache.Config{
+			tool.Options.ClusterNamespaceOnHub: {},
+		},
 	}
 
 	// Disable the metrics endpoint for this manager. Note that since they both use the global
 	// metrics registry, metrics for this manager are still exposed by the other manager.
-	options.MetricsBindAddress = "0"
+	options.Metrics.BindAddress = "0"
 
 	// Create a new manager to provide shared dependencies and start components
 	mgr, err := ctrl.NewManager(hubCfg, options)
@@ -705,8 +715,18 @@ func addControllers(ctx context.Context, hubCfg *rest.Config, hubMgr manager.Man
 	var hubClient client.Client
 
 	if hubMgr == nil {
-		hubCache, err := cache.New(
-			hubCfg, cache.Options{Namespaces: []string{tool.Options.ClusterNamespaceOnHub}, Scheme: scheme},
+		hubCache, err := cache.New(hubCfg,
+			cache.Options{
+				ByObject: map[client.Object]cache.ByObject{
+					&v1.Secret{}: {
+						Field: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+					},
+				},
+				DefaultNamespaces: map[string]cache.Config{
+					tool.Options.ClusterNamespaceOnHub: {},
+				},
+				Scheme: scheme,
+			},
 		)
 		if err != nil {
 			log.Error(err, "Failed to generate a cache to the hub cluster")
@@ -736,7 +756,6 @@ func addControllers(ctx context.Context, hubCfg *rest.Config, hubMgr manager.Man
 	var kubeClientHub kubernetes.Interface = kubernetes.NewForConfigOrDie(hubCfg)
 
 	eventBroadcasterHub := record.NewBroadcaster()
-
 	eventBroadcasterHub.StartRecordingToSink(
 		&corev1.EventSinkImpl{Interface: kubeClientHub.CoreV1().Events(tool.Options.ClusterNamespaceOnHub)},
 	)
@@ -802,7 +821,6 @@ func addControllers(ctx context.Context, hubCfg *rest.Config, hubMgr manager.Man
 	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(managedMgr.GetConfig())
 
 	eventBroadcaster := record.NewBroadcaster()
-
 	eventBroadcaster.StartRecordingToSink(
 		&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(tool.Options.ClusterNamespace)},
 	)
