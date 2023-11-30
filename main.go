@@ -398,28 +398,36 @@ func getManager(
 				Field: fields.SelectorFromSet(fields.Set{"metadata.name": gatekeepersync.GatekeeperWebhookName}),
 			},
 			&v1.Event{}: {
-				Field: eventFilter,
-				Transform: func(obj interface{}) (interface{}, error) {
-					event := obj.(*v1.Event)
-					// Only cache fields that are utilized by the controllers.
-					guttedEvent := &v1.Event{
-						InvolvedObject: event.InvolvedObject,
-						TypeMeta:       event.TypeMeta,
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      event.ObjectMeta.Name,
-							Namespace: event.ObjectMeta.Namespace,
-						},
-						LastTimestamp: event.LastTimestamp,
-						Message:       event.Message,
-						Reason:        event.Reason,
-						EventTime:     event.EventTime,
-					}
+				Namespaces: map[string]cache.Config{
+					tool.Options.ClusterNamespace: {
+						FieldSelector: eventFilter,
+						Transform: func(obj interface{}) (interface{}, error) {
+							event := obj.(*v1.Event)
+							// Only cache fields that are utilized by the controllers.
+							guttedEvent := &v1.Event{
+								InvolvedObject: event.InvolvedObject,
+								TypeMeta:       event.TypeMeta,
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      event.ObjectMeta.Name,
+									Namespace: event.ObjectMeta.Namespace,
+								},
+								LastTimestamp: event.LastTimestamp,
+								Message:       event.Message,
+								Reason:        event.Reason,
+								EventTime:     event.EventTime,
+							}
 
-					return guttedEvent, nil
+							return guttedEvent, nil
+						},
+					},
 				},
 			},
 			&v1.Secret{}: {
-				Field: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+				Namespaces: map[string]cache.Config{
+					tool.Options.ClusterNamespace: {
+						FieldSelector: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+					},
+				},
 			},
 		},
 		DefaultNamespaces: map[string]cache.Config{
@@ -478,7 +486,11 @@ func getHubManager(
 	options.Cache = cache.Options{
 		ByObject: map[client.Object]cache.ByObject{
 			&v1.Secret{}: {
-				Field: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+				Namespaces: map[string]cache.Config{
+					tool.Options.ClusterNamespaceOnHub: {
+						FieldSelector: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+					},
+				},
 			},
 		},
 		DefaultNamespaces: map[string]cache.Config{
@@ -719,7 +731,13 @@ func addControllers(ctx context.Context, hubCfg *rest.Config, hubMgr manager.Man
 			cache.Options{
 				ByObject: map[client.Object]cache.ByObject{
 					&v1.Secret{}: {
-						Field: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+						Namespaces: map[string]cache.Config{
+							tool.Options.ClusterNamespaceOnHub: {
+								FieldSelector: fields.SelectorFromSet(
+									fields.Set{"metadata.name": secretsync.SecretName},
+								),
+							},
+						},
 					},
 				},
 				DefaultNamespaces: map[string]cache.Config{
