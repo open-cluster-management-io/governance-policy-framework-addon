@@ -180,20 +180,24 @@ func main() {
 
 		tool.Options.ManagedConfigFilePathName, found = os.LookupEnv("MANAGED_CONFIG")
 		if found {
-			log.Info("Found ENV MANAGED_CONFIG, initializing using", "tool.Options.ManagedConfigFilePathName",
-				tool.Options.ManagedConfigFilePathName)
+			log.Info(
+				"Found ENV MANAGED_CONFIG, initializing using",
+				"tool.Options.ManagedConfigFilePathName", tool.Options.ManagedConfigFilePathName,
+			)
+		}
+	}
 
-			managedCfg, err = clientcmd.BuildConfigFromFlags("", tool.Options.ManagedConfigFilePathName)
-			if err != nil {
-				log.Error(err, "Failed to build managed cluster config")
-				os.Exit(1)
-			}
-		} else {
-			managedCfg, err = config.GetConfig()
-			if err != nil {
-				log.Error(err, "Failed to build managed cluster config")
-				os.Exit(1)
-			}
+	if tool.Options.ManagedConfigFilePathName == "" {
+		managedCfg, err = config.GetConfig()
+		if err != nil {
+			log.Error(err, "Failed to build managed cluster config")
+			os.Exit(1)
+		}
+	} else {
+		managedCfg, err = clientcmd.BuildConfigFromFlags("", tool.Options.ManagedConfigFilePathName)
+		if err != nil {
+			log.Error(err, "Failed to build managed cluster config")
+			os.Exit(1)
 		}
 	}
 
