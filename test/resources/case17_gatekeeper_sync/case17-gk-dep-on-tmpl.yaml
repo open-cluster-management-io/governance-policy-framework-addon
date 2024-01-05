@@ -1,0 +1,32 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: case17-gk-dep-on-tmpl
+spec:
+  remediationAction: inform
+  disabled: false
+  dependencies:
+    - apiVersion: templates.gatekeeper.sh/v1
+      kind: ConstraintTemplate
+      name: case17constrainttemplate
+      namespace: ""
+      compliance: Compliant
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: case17-gk-dep-on-tmpl
+        spec:
+          remediationAction: inform
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: nginx-pod-e2e
+                  namespace: default
+                spec:
+                  containers:
+                    - name: nginx

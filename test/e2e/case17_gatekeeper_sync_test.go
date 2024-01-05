@@ -495,4 +495,213 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 			"", false, defaultTimeoutSeconds,
 		)
 	})
+
+	Describe("Test policy ordering with gatekeeper objects", func() {
+		const (
+			waitForTemplateName   = "case17-gk-dep-on-tmpl"
+			waitForTemplateYaml   = yamlBasePath + waitForTemplateName + ".yaml"
+			waitForConstraintName = "case17-gk-dep-on-constraint"
+			waitForConstraintYaml = yamlBasePath + waitForConstraintName + ".yaml"
+		)
+
+		BeforeAll(func(ctx context.Context) {
+			By("Deleting any ConfigMaps in the test namespace, to prevent any initial violations")
+			err := clientManaged.CoreV1().ConfigMaps(configMapNamespace).DeleteCollection(
+				ctx, metav1.DeleteOptions{}, metav1.ListOptions{},
+			)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		AfterAll(func() {
+			for _, pName := range []string{waitForTemplateName, waitForConstraintName} {
+				By("Deleting policy " + pName + " on the hub in ns:" + clusterNamespaceOnHub)
+				err := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub).Delete(
+					context.TODO(), pName, metav1.DeleteOptions{},
+				)
+				if !k8serrors.IsNotFound(err) {
+					Expect(err).ToNot(HaveOccurred())
+				}
+
+				By("Cleaning up the events for the policy " + pName)
+				_, err = kubectlManaged(
+					"delete",
+					"events",
+					"-n",
+					clusterNamespace,
+					"--field-selector=involvedObject.name="+pName,
+					"--ignore-not-found",
+				)
+				Expect(err).ToNot(HaveOccurred())
+			}
+		})
+
+		It("should not progress until the ConstraintTemplate is created", func() {
+			By("Creating policy " + waitForTemplateName + " on the hub in ns:" + clusterNamespaceOnHub)
+			_, err := kubectlHub("apply", "-f", waitForTemplateYaml, "-n", clusterNamespaceOnHub)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(propagatorutils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				waitForTemplateName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds,
+			)).NotTo(BeNil())
+
+			By("Checking that the configuration policy is not found, because it should be pending")
+			Consistently(func() interface{} {
+				return propagatorutils.GetWithTimeout(
+					clientManagedDynamic,
+					gvrConfigurationPolicy,
+					waitForTemplateName,
+					clusterNamespace,
+					false,
+					defaultTimeoutSeconds)
+			}, 10, 1).Should(BeNil())
+
+			By("Creating the policy with the ConstraintTemplate")
+			_, err = kubectlHub("apply", "-f", policyYaml, "-n", clusterNamespaceOnHub)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(propagatorutils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				policyName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds,
+			)).NotTo(BeNil())
+
+			By("Checking that the configuration policy can now be found")
+			Expect(propagatorutils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrConfigurationPolicy,
+				waitForTemplateName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds,
+			)).NotTo(BeNil())
+		})
+
+		It("should progress initially when the constraint has no violations", func() {
+			By("Verifying that the policy status of the constraint is compliant")
+			Eventually(func(g Gomega) {
+				plc := propagatorutils.GetWithTimeout(
+					clientManagedDynamic,
+					gvrPolicy,
+					policyName,
+					clusterNamespace,
+					true,
+					defaultTimeoutSeconds,
+				)
+
+				compliance, found, err := unstructured.NestedString(plc.Object, "status", "compliant")
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(found).To(BeTrue())
+				g.Expect(compliance).To(Equal("Compliant"))
+			}, gkAuditFrequency*3, 1).Should(Succeed())
+
+			By("Creating policy " + waitForConstraintName + " on the hub in ns:" + clusterNamespaceOnHub)
+			_, err := kubectlHub("apply", "-f", waitForConstraintYaml, "-n", clusterNamespaceOnHub)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(propagatorutils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				waitForConstraintName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds,
+			)).NotTo(BeNil())
+
+			By("Checking that the configuration policy is found; the policy is not pending")
+			Expect(propagatorutils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrConfigurationPolicy,
+				waitForConstraintName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds,
+			)).NotTo(BeNil())
+		})
+
+		It("should become Pending when there are violations on the constraint", func() {
+			By("Adding a ConfigMap that violates the constraint")
+			configMap := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ConfigMap",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      configMapName,
+					Namespace: configMapNamespace,
+				},
+			}
+
+			_, err := clientManaged.CoreV1().ConfigMaps(configMapNamespace).Create(
+				context.TODO(), configMap, metav1.CreateOptions{},
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Waiting for policy status of the constraint to be noncompliant")
+			Eventually(func(g Gomega) {
+				plc := propagatorutils.GetWithTimeout(
+					clientManagedDynamic,
+					gvrPolicy,
+					policyName,
+					clusterNamespace,
+					true,
+					defaultTimeoutSeconds,
+				)
+
+				compliance, found, err := unstructured.NestedString(plc.Object, "status", "compliant")
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(found).To(BeTrue())
+				g.Expect(compliance).To(Equal("NonCompliant"))
+			}, gkAuditFrequency*3, 1).Should(Succeed())
+
+			By("Checking that the configuration policy is not found, because it should be pending")
+			Expect(propagatorutils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrConfigurationPolicy,
+				waitForConstraintName,
+				clusterNamespace,
+				false,
+				defaultTimeoutSeconds,
+			)).To(BeNil())
+		})
+
+		It("should progress again when the violations are addressed", func() {
+			By("Deleting the ConfigMap causing the violation")
+			err := clientManaged.CoreV1().ConfigMaps(configMapNamespace).Delete(
+				context.TODO(), configMapName, metav1.DeleteOptions{},
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Waiting for policy status of the constraint to be compliant")
+			Eventually(func(g Gomega) {
+				plc := propagatorutils.GetWithTimeout(
+					clientManagedDynamic,
+					gvrPolicy,
+					policyName,
+					clusterNamespace,
+					true,
+					defaultTimeoutSeconds,
+				)
+
+				compliance, found, err := unstructured.NestedString(plc.Object, "status", "compliant")
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(found).To(BeTrue())
+				g.Expect(compliance).To(Equal("Compliant"))
+			}, gkAuditFrequency*3, 1).Should(Succeed())
+
+			By("Checking that the configuration policy is found; the policy is no longer pending")
+			Expect(propagatorutils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrConfigurationPolicy,
+				waitForConstraintName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds,
+			)).NotTo(BeNil())
+		})
+	})
 })
