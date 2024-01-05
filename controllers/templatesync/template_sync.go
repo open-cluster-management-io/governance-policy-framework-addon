@@ -1146,13 +1146,7 @@ func (r *PolicyReconciler) processDependencies(
 	var dependencyFailures []depclient.ObjectIdentifier
 
 	for dep := range templateDeps {
-		depGvk := schema.GroupVersionKind{
-			Group:   dep.Group,
-			Version: dep.Version,
-			Kind:    dep.Kind,
-		}
-
-		rsrc, _, err := utils.GVRFromGVK(discoveryClient, depGvk)
+		rsrc, namespaced, err := utils.GVRFromGVK(discoveryClient, dep.GroupVersionKind())
 		if err != nil {
 			tLogger.Error(err, "Could not find an API mapping for the dependency", "object", dep)
 
@@ -1161,24 +1155,57 @@ func (r *PolicyReconciler) processDependencies(
 			continue
 		}
 
-		// set up namespace for replicated policy dependencies
-		ns := dep.Namespace
-		if ns == "" {
-			ns = r.ClusterNamespace
-		}
+		var res dynamic.ResourceInterface
 
-		// query object and compare compliance status to desired
-		res := dClient.Resource(rsrc).Namespace(ns)
+		if namespaced {
+			ns := dep.Namespace
+			if ns == "" && dep.Group == policiesv1.GroupVersion.Group {
+				// ocm policies should always be in the cluster namespace
+				ns = r.ClusterNamespace
+			}
+
+			res = dClient.Resource(rsrc).Namespace(ns)
+		} else {
+			res = dClient.Resource(rsrc)
+		}
 
 		depObj, err := res.Get(ctx, dep.Name, metav1.GetOptions{})
 		if err != nil {
+			if dep.Group == utils.GvkConstraintTemplate.Group && templateDeps[dep] != "Compliant" {
+				continue // in this (strange) case, the policy wants the ConstraintTemplate to not be found
+			}
+
 			tLogger.Info("Failed to get dependency object", "object", dep)
 
 			dependencyFailures = append(dependencyFailures, dep)
-		} else {
+
+			continue
+		}
+
+		switch dep.Group {
+		case utils.GvkConstraintTemplate.Group:
+			if templateDeps[dep] != "Compliant" {
+				// The ConstraintTemplate was found, but the policy wants it to not be found
+				tLogger.Info("Compliance mismatch for dependency object", "object", dep)
+
+				dependencyFailures = append(dependencyFailures, dep)
+			}
+		case utils.GConstraint:
+			violations, found, err := unstructured.NestedInt64(depObj.Object, "status", "totalViolations")
+			if err != nil || !found {
+				// Note that not finding the field is *not* considered "Compliant"
+				tLogger.Info("Failed to get compliance for dependency object", "object", dep, "error", err)
+
+				dependencyFailures = append(dependencyFailures, dep)
+			} else if (violations == 0) != (templateDeps[dep] == "Compliant") {
+				tLogger.Info("Compliance mismatch for dependency object", "object", dep)
+
+				dependencyFailures = append(dependencyFailures, dep)
+			}
+		default:
 			depCompliance, found, err := unstructured.NestedString(depObj.Object, "status", "compliant")
 			if err != nil || !found {
-				tLogger.Info("Failed to get compliance for dependency object", "object", dep)
+				tLogger.Info("Failed to get compliance for dependency object", "object", dep, "error", err)
 
 				dependencyFailures = append(dependencyFailures, dep)
 			} else if depCompliance != templateDeps[dep] {
@@ -1523,13 +1550,10 @@ func finalizerCleanup(
 			continue
 		}
 
-		// Instantiate a dynamic client
-		res := dClient.Resource(rsrc)
-
 		// Delete clusterwide objects
 		if !namespaced {
 			// Delete object, ignoring not found errors
-			err := res.Delete(ctx, tName, metav1.DeleteOptions{})
+			err := dClient.Resource(rsrc).Delete(ctx, tName, metav1.DeleteOptions{})
 			if err != nil && !k8serrors.IsNotFound(err) {
 				policySystemErrorsCounter.WithLabelValues(pol.Name, tName, "delete-error").Inc()
 
