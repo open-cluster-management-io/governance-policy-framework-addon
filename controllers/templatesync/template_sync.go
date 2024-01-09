@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -1135,22 +1136,30 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 	return errorList.Aggregate()
 }
 
-// processDependencies iterates through all dependencies of a template and returns an array of any that are not met
+const (
+	DepFailNoAPIMapping    = "Could not find an API mapping for the dependency"
+	DepFailObjNotFound     = "Dependency object not found"
+	DepFailGet             = "Failed to get the dependency object"
+	DepFailCompNotFound    = "Failed to find complianceState on the dependency object"
+	DepFailWrongCompliance = "Compliance mismatch on the dependency object"
+)
+
+// processDependencies iterates through all dependencies of a template and returns an map of
+// unmet dependencies to the reason that dependency was not satisfied.
 func (r *PolicyReconciler) processDependencies(
 	ctx context.Context,
 	dClient dynamic.Interface,
 	discoveryClient discovery.DiscoveryInterface,
 	templateDeps map[depclient.ObjectIdentifier]string,
 	tLogger logr.Logger,
-) []depclient.ObjectIdentifier {
-	var dependencyFailures []depclient.ObjectIdentifier
+) map[depclient.ObjectIdentifier]string {
+	dependencyFailures := make(map[depclient.ObjectIdentifier]string)
 
 	for dep := range templateDeps {
 		rsrc, namespaced, err := utils.GVRFromGVK(discoveryClient, dep.GroupVersionKind())
 		if err != nil {
-			tLogger.Error(err, "Could not find an API mapping for the dependency", "object", dep)
-
-			dependencyFailures = append(dependencyFailures, dep)
+			dependencyFailures[dep] = DepFailNoAPIMapping
+			tLogger.Error(err, dependencyFailures[dep], "object", dep)
 
 			continue
 		}
@@ -1170,14 +1179,22 @@ func (r *PolicyReconciler) processDependencies(
 		}
 
 		depObj, err := res.Get(ctx, dep.Name, metav1.GetOptions{})
-		if err != nil {
+		if k8serrors.IsNotFound(err) {
 			if dep.Group == utils.GvkConstraintTemplate.Group && templateDeps[dep] != "Compliant" {
-				continue // in this (strange) case, the policy wants the ConstraintTemplate to not be found
+				tLogger.V(1).Info("ConstraintTemplate 'NonCompliant' dependency satisfied", "object", dep)
+
+				continue
 			}
 
-			tLogger.Info("Failed to get dependency object", "object", dep)
+			dependencyFailures[dep] = DepFailObjNotFound
 
-			dependencyFailures = append(dependencyFailures, dep)
+			tLogger.V(1).Info("Dependency not satisfied", "reason", DepFailObjNotFound, "object", dep)
+
+			continue
+		} else if err != nil {
+			dependencyFailures[dep] = DepFailGet
+
+			tLogger.Error(err, DepFailGet, "object", dep)
 
 			continue
 		}
@@ -1186,33 +1203,29 @@ func (r *PolicyReconciler) processDependencies(
 		case utils.GvkConstraintTemplate.Group:
 			if templateDeps[dep] != "Compliant" {
 				// The ConstraintTemplate was found, but the policy wants it to not be found
-				tLogger.Info("Compliance mismatch for dependency object", "object", dep)
-
-				dependencyFailures = append(dependencyFailures, dep)
+				dependencyFailures[dep] = DepFailWrongCompliance
 			}
 		case utils.GConstraint:
 			violations, found, err := unstructured.NestedInt64(depObj.Object, "status", "totalViolations")
 			if err != nil || !found {
 				// Note that not finding the field is *not* considered "Compliant"
-				tLogger.Info("Failed to get compliance for dependency object", "object", dep, "error", err)
-
-				dependencyFailures = append(dependencyFailures, dep)
+				dependencyFailures[dep] = DepFailCompNotFound
 			} else if (violations == 0) != (templateDeps[dep] == "Compliant") {
-				tLogger.Info("Compliance mismatch for dependency object", "object", dep)
-
-				dependencyFailures = append(dependencyFailures, dep)
+				dependencyFailures[dep] = DepFailWrongCompliance
 			}
 		default:
 			depCompliance, found, err := unstructured.NestedString(depObj.Object, "status", "compliant")
 			if err != nil || !found {
-				tLogger.Info("Failed to get compliance for dependency object", "object", dep, "error", err)
-
-				dependencyFailures = append(dependencyFailures, dep)
+				dependencyFailures[dep] = DepFailCompNotFound
 			} else if depCompliance != templateDeps[dep] {
-				tLogger.Info("Compliance mismatch for dependency object", "object", dep)
-
-				dependencyFailures = append(dependencyFailures, dep)
+				dependencyFailures[dep] = DepFailWrongCompliance
 			}
+		}
+
+		if reason, failed := dependencyFailures[dep]; failed {
+			tLogger.V(1).Info("Dependency not satisfied", "reason", reason, "object", dep)
+		} else {
+			tLogger.V(1).Info("Dependency satisfied", "object", dep)
 		}
 	}
 
@@ -1221,11 +1234,13 @@ func (r *PolicyReconciler) processDependencies(
 
 // generatePendingMsg formats the list of failed dependencies into a readable error.
 // Example: `Dependencies were not satisfied: 1 is still pending (FooPolicy foo)`
-func generatePendingMsg(dependencyFailures []depclient.ObjectIdentifier) string {
-	names := make([]string, len(dependencyFailures))
-	for i, dep := range dependencyFailures {
-		names[i] = fmt.Sprintf("%s %s", dep.Kind, dep.Name)
+func generatePendingMsg(dependencyFailures map[depclient.ObjectIdentifier]string) string {
+	names := make([]string, 0, len(dependencyFailures))
+	for dep := range dependencyFailures {
+		names = append(names, fmt.Sprintf("%s %s", dep.Kind, dep.Name))
 	}
+
+	sort.Strings(names)
 
 	nameStr := strings.Join(names, ", ")
 
