@@ -109,10 +109,10 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	managedEncryptionSecret := &corev1.Secret{}
+
 	err = r.ManagedClient.Get(
 		ctx, types.NamespacedName{Namespace: r.TargetNamespace, Name: request.Name}, managedEncryptionSecret,
 	)
-
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			reqLogger.Error(err, "Failed to get the replicated Secret. Requeueing the request.")

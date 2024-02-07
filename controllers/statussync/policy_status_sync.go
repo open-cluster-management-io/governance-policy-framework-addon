@@ -102,10 +102,10 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			// The replicated policy on the managed cluster was deleted.
 			// check if it was deleted by user by checking if it still exists on hub
 			hubInstance := &policiesv1.Policy{}
+
 			err = r.HubClient.Get(
 				ctx, types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}, hubInstance,
 			)
-
 			if err != nil {
 				if errors.IsNotFound(err) {
 					// confirmed deleted on hub, doing nothing
@@ -139,10 +139,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		return reconcile.Result{}, err
 	}
+
 	// get hub policy
 	hubPlc := &policiesv1.Policy{}
-	err = r.HubClient.Get(ctx, types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}, hubPlc)
 
+	err = r.HubClient.Get(ctx, types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}, hubPlc)
 	if err != nil {
 		// hub policy not found, it has been deleted
 		if errors.IsNotFound(err) {
@@ -178,8 +179,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	// plc matches hub plc, then get events
 	eventList := &corev1.EventList{}
-	err = r.ManagedClient.List(ctx, eventList, client.InNamespace(instance.GetNamespace()))
 
+	err = r.ManagedClient.List(ctx, eventList, client.InNamespace(instance.GetNamespace()))
 	if err != nil {
 		// there is an error to list events, requeue
 		reqLogger.Error(err, "Error listing events, will requeue the request")
@@ -395,7 +396,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		reqLogger.Info("status mismatch on managed, update it")
 
 		err = r.ManagedClient.Status().Update(ctx, instance)
-
 		if err != nil {
 			reqLogger.Error(err, "Failed to get update policy status on managed")
 
@@ -420,8 +420,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			reqLogger.Info("status not in sync, update the hub")
 
 			hubPlc.Status = instance.Status
-			err = r.HubClient.Status().Update(ctx, hubPlc)
 
+			err = r.HubClient.Status().Update(ctx, hubPlc)
 			if err != nil {
 				reqLogger.Error(err, "Failed to update policy status on hub")
 

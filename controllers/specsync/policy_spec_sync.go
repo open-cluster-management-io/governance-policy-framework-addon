@@ -116,8 +116,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	managedPlc := &policiesv1.Policy{}
-	err = r.ManagedClient.Get(ctx, types.NamespacedName{Namespace: r.TargetNamespace, Name: request.Name}, managedPlc)
 
+	err = r.ManagedClient.Get(ctx, types.NamespacedName{Namespace: r.TargetNamespace, Name: request.Name}, managedPlc)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// not found on managed cluster, create it
@@ -132,8 +132,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			managedPlc.SetOwnerReferences(nil)
 			managedPlc.SetResourceVersion("")
-			err = r.ManagedClient.Create(ctx, managedPlc)
 
+			err = r.ManagedClient.Create(ctx, managedPlc)
 			if err != nil {
 				reqLogger.Error(err, "Failed to create policy on managed...")
 
