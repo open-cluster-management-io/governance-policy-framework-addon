@@ -484,10 +484,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 
 		res = dClient.Resource(rsrc).Namespace(resourceNs)
-
 		tObjectUnstructured := &unstructured.Unstructured{}
-		err = json.Unmarshal(policyT.ObjectDefinition.Raw, tObjectUnstructured)
 
+		err = json.Unmarshal(policyT.ObjectDefinition.Raw, tObjectUnstructured)
 		if err != nil {
 			resultError = err
 			errMsg := fmt.Sprintf("Failed to unmarshal the policy template: %s", err)

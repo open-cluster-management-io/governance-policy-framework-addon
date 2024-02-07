@@ -766,7 +766,6 @@ func addControllers(ctx context.Context, hubCfg *rest.Config, hubMgr manager.Man
 		hubClient, err = client.New(
 			hubCfg, client.Options{Scheme: scheme, Cache: &client.CacheOptions{Reader: hubCache}},
 		)
-
 		if err != nil {
 			log.Error(err, "Failed to generate a client to the hub cluster")
 			os.Exit(1)
