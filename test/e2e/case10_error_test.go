@@ -315,7 +315,7 @@ var _ = Describe("Test error handling", func() {
 		By("Creating the ConfigurationPolicy on the managed cluster directly")
 		_, err := kubectlManaged(
 			"apply",
-			"--filename=../resources/case10_template_sync_error_test/working-policy-configpol.yaml",
+			"--filename="+yamlBasePath+"working-policy-configpol.yaml",
 			"--namespace="+clusterNamespace,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
@@ -353,6 +353,27 @@ var _ = Describe("Test error handling", func() {
 			1,
 		).Should(BeTrue())
 	})
+	It("should only generate one event for a missing kind", func() {
+		policyName := "case10-missing-kind"
+		hubApplyPolicy(policyName,
+			yamlBasePath+"missing-kind.yaml")
+
+		By("Checking for the error event and ensuring it only occurs once")
+		Eventually(
+			checkForEvent(
+				policyName, "Object 'Kind' is missing in",
+			),
+			defaultTimeoutSeconds,
+			1,
+		).Should(BeTrue())
+		Consistently(
+			getMatchingEvents(
+				policyName, "Object 'Kind' is missing in",
+			),
+			defaultTimeoutSeconds,
+			1,
+		).Should(HaveLen(2))
+	})
 })
 
 // Checks for an event on the managed cluster
@@ -379,5 +400,34 @@ func checkForEvent(policyName, msgSubStr string) func() bool {
 		}
 
 		return false
+	}
+}
+
+// Checks for an event on the managed cluster
+func getMatchingEvents(policyName, msgSubStr string) func() []string {
+	return func() []string {
+		eventInterface := clientManagedDynamic.Resource(gvrEvent).Namespace(clusterNamespace)
+
+		eventList, err := eventInterface.List(context.TODO(), metav1.ListOptions{
+			FieldSelector: "involvedObject.name=" + policyName,
+		})
+		if err != nil {
+			return []string{}
+		}
+
+		matchingEvents := []string{}
+
+		for _, event := range eventList.Items {
+			msg, found, err := unstructured.NestedString(event.Object, "message")
+			if !found || err != nil {
+				continue
+			}
+
+			if strings.Contains(msg, msgSubStr) {
+				matchingEvents = append(matchingEvents, msg)
+			}
+		}
+
+		return matchingEvents
 	}
 }

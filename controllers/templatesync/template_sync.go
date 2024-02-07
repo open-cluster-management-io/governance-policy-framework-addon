@@ -280,7 +280,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// Gather raw object definition from the policy template
 		object, gvk, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
-			resultError = err
+			// If it's missing the Kind, don't requeue since that requires an update to the Policy
+			if !runtime.IsMissingKind(err) {
+				resultError = err
+			}
+
 			errMsg := fmt.Sprintf("Failed to decode policy template with err: %s", err)
 
 			_ = r.emitTemplateError(ctx, instance, tIndex, fmt.Sprintf("template-%v", tIndex), false, errMsg)
