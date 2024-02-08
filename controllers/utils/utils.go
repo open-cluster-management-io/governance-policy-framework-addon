@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
@@ -31,13 +34,71 @@ var (
 )
 
 const (
-	GConstraint               = "constraints.gatekeeper.sh"
-	PolicyFmtStr              = "policy: %s/%s"
-	PolicyClusterScopedFmtStr = "policy: %s"
-	ClusterwideFinalizer      = common.APIGroup + "/cleanup-cluster-scoped-policies"
-	ParentPolicyLabel         = common.APIGroup + "/policy"
-	PolicyTypeLabel           = common.APIGroup + "/policy-type"
+	GConstraint                      = "constraints.gatekeeper.sh"
+	PolicyFmtStr                     = "policy: %s/%s"
+	PolicyClusterScopedFmtStr        = "policy: %s"
+	ClusterwideFinalizer             = common.APIGroup + "/cleanup-cluster-scoped-policies"
+	ParentPolicyLabel                = common.APIGroup + "/policy"
+	PolicyTypeLabel                  = common.APIGroup + "/policy-type"
+	PolicyDBIDAnnotation      string = "policy.open-cluster-management.io/policy-compliance-db-id"
+	ParentDBIDAnnotation      string = "policy.open-cluster-management.io/parent-policy-compliance-db-id"
 )
+
+type ComplianceAPIEventCluster struct {
+	Name      string `json:"name"`
+	ClusterID string `json:"cluster_id"` //nolint:tagliatelle
+}
+
+type ComplianceAPIEventPolicyID struct {
+	ID int32 `json:"id"`
+}
+
+type ComplianceAPIEvent struct {
+	Compliance policiesv1.ComplianceState `json:"compliance"`
+	Message    string                     `json:"message"`
+	Timestamp  string                     `json:"timestamp"`
+	ReportedBy string                     `json:"reported_by"` //nolint:tagliatelle
+}
+
+type ComplianceAPIEventRequest struct {
+	UID          types.UID                   `json:"-"`
+	Cluster      ComplianceAPIEventCluster   `json:"cluster"`
+	Policy       ComplianceAPIEventPolicyID  `json:"policy"`
+	ParentPolicy *ComplianceAPIEventPolicyID `json:"parent_policy,omitempty"` //nolint:tagliatelle
+	Event        ComplianceAPIEvent          `json:"event"`
+}
+
+func GenerateDisabledEvent(
+	parentPolicy *policiesv1.Policy, template *unstructured.Unstructured, msg string,
+) (ComplianceAPIEventRequest, error) {
+	ce := ComplianceAPIEventRequest{}
+
+	tmplAnnotations := template.GetAnnotations()
+
+	pID, err := strconv.ParseInt(tmplAnnotations[PolicyDBIDAnnotation], 10, 32)
+	if err != nil {
+		return ce, fmt.Errorf("the policy had an invalid policy ID: %s", tmplAnnotations[PolicyDBIDAnnotation])
+	}
+
+	ce.Policy = ComplianceAPIEventPolicyID{ID: int32(pID)}
+
+	if parentPolicy.Annotations[ParentDBIDAnnotation] != "" {
+		// The parent policy ID is optional so continue even if it's invalid
+		ppID, err := strconv.ParseInt(parentPolicy.Annotations[ParentDBIDAnnotation], 10, 32)
+		if err == nil {
+			ce.ParentPolicy = &ComplianceAPIEventPolicyID{ID: int32(ppID)}
+		}
+	}
+
+	ce.Event = ComplianceAPIEvent{
+		Compliance: "Disabled",
+		Message:    msg,
+		Timestamp:  time.Now().Format(time.RFC3339Nano),
+		ReportedBy: "governance-policy-framework",
+	}
+
+	return ce, nil
+}
 
 // EquivalentReplicatedPolicies compares replicated policies. Returns true if they match. (Comparing
 // labels is skipped here in part because in hosted mode the cluster-namespace label likely will not

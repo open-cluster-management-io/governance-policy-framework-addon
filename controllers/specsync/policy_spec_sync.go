@@ -10,9 +10,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/workqueue"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -52,6 +54,9 @@ type PolicyReconciler struct {
 	// The namespace that the replicated policies should be synced to.
 	TargetNamespace      string
 	ConcurrentReconciles int
+	// EventsQueue is a queue that accepts ComplianceAPIEventRequest to then be recorded in the compliance events
+	// API by StartComplianceEventsSyncer. If the compliance events API is disabled, this will be nil.
+	EventsQueue workqueue.RateLimitingInterface
 }
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=create;delete;get;list;patch;update;watch
@@ -88,6 +93,23 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			// replicated policy on hub was deleted, remove policy on managed cluster
 			reqLogger.Info("Policy was deleted, removing on managed cluster...")
 
+			managedPolicy := &policiesv1.Policy{}
+			if r.EventsQueue != nil {
+				err := r.ManagedClient.Get(
+					ctx, types.NamespacedName{Namespace: r.TargetNamespace, Name: request.Name}, managedPolicy,
+				)
+				if errors.IsNotFound(err) {
+					// The policy is already deleted on the managed cluster so there is nothing to delete
+					return reconcile.Result{}, nil
+				}
+
+				if err != nil {
+					reqLogger.Error(err, "Failed to get the replicated policy on the managed cluster")
+
+					return reconcile.Result{}, err
+				}
+			}
+
 			err = r.ManagedClient.Delete(ctx, &policiesv1.Policy{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       policiesv1.Kind,
@@ -103,6 +125,32 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				reqLogger.Error(err, "Failed to remove policy on managed cluster...")
 
 				return reconcile.Result{}, err
+			}
+
+			if r.EventsQueue != nil {
+				for _, tmplEntry := range managedPolicy.Spec.PolicyTemplates {
+					tmpl := &unstructured.Unstructured{}
+
+					err := tmpl.UnmarshalJSON(tmplEntry.ObjectDefinition.Raw)
+					if err != nil {
+						continue
+					}
+
+					if tmpl.GetAnnotations()[utils.PolicyDBIDAnnotation] == "" {
+						continue
+					}
+
+					ce, err := utils.GenerateDisabledEvent(
+						managedPolicy,
+						tmpl,
+						"The policy was removed because the parent policy no longer applies to this cluster",
+					)
+					if err != nil {
+						log.Error(err, "Failed to generate a disabled compliance API event")
+					} else {
+						r.EventsQueue.Add(ce)
+					}
+				}
 			}
 
 			reqLogger.Info("Policy has been removed from managed cluster...Reconciliation complete.")

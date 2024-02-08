@@ -43,6 +43,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"open-cluster-management.io/addon-framework/pkg/lease"
 	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
@@ -294,7 +295,17 @@ func main() {
 	}
 
 	log.Info("Adding controllers to managers")
-	addControllers(mgrCtx, hubCfg, hubMgr, mgr)
+
+	var queue workqueue.RateLimitingInterface
+
+	if tool.Options.ComplianceAPIURL != "" {
+		queue = workqueue.NewRateLimitingQueueWithConfig(
+			workqueue.DefaultControllerRateLimiter(),
+			workqueue.RateLimitingQueueConfig{Name: "compliance-api-events"},
+		)
+	}
+
+	addControllers(mgrCtx, hubCfg, hubMgr, mgr, queue)
 
 	log.Info("Starting the controller managers")
 
@@ -312,6 +323,23 @@ func main() {
 		}
 	}()
 
+	if tool.Options.ComplianceAPIURL != "" {
+		wg.Add(1)
+
+		go func() {
+			err := statussync.StartComplianceEventsSyncer(
+				mgrCtx, tool.Options.ClusterNamespace, hubCfg, managedCfg, tool.Options.ComplianceAPIURL, queue,
+			)
+			if err != nil {
+				log.Error(err, "Failed to start the compliance events API syncer")
+
+				mgrCtxCancel()
+			}
+
+			wg.Done()
+		}()
+	}
+
 	var errorExit bool
 
 	wg.Add(1)
@@ -324,6 +352,10 @@ func main() {
 			mgrCtxCancel()
 
 			errorExit = true
+		}
+
+		if queue != nil {
+			queue.ShutDownWithDrain()
 		}
 
 		wg.Done()
@@ -414,11 +446,29 @@ func getManager(
 								ObjectMeta: metav1.ObjectMeta{
 									Name:      event.ObjectMeta.Name,
 									Namespace: event.ObjectMeta.Namespace,
+									UID:       event.ObjectMeta.UID,
 								},
 								LastTimestamp: event.LastTimestamp,
 								Message:       event.Message,
 								Reason:        event.Reason,
 								EventTime:     event.EventTime,
+							}
+
+							eventAnnotations := map[string]string{}
+							parentID := event.Annotations[utils.ParentDBIDAnnotation]
+
+							if parentID != "" {
+								eventAnnotations[utils.ParentDBIDAnnotation] = parentID
+							}
+
+							policyID := event.Annotations[utils.PolicyDBIDAnnotation]
+
+							if policyID != "" {
+								eventAnnotations[utils.PolicyDBIDAnnotation] = policyID
+							}
+
+							if len(eventAnnotations) > 0 {
+								guttedEvent.Annotations = eventAnnotations
 							}
 
 							return guttedEvent, nil
@@ -726,7 +776,13 @@ func getFreeLocalAddr() (string, error) {
 }
 
 // addControllers sets up all controllers with their respective managers
-func addControllers(ctx context.Context, hubCfg *rest.Config, hubMgr manager.Manager, managedMgr manager.Manager) {
+func addControllers(
+	ctx context.Context,
+	hubCfg *rest.Config,
+	hubMgr manager.Manager,
+	managedMgr manager.Manager,
+	queue workqueue.RateLimitingInterface,
+) {
 	// Set up all controllers for manager on managed cluster
 	var hubClient client.Client
 
@@ -791,6 +847,7 @@ func addControllers(ctx context.Context, hubCfg *rest.Config, hubMgr manager.Man
 		ManagedRecorder:       managedMgr.GetEventRecorderFor(statussync.ControllerName),
 		Scheme:                managedMgr.GetScheme(),
 		ConcurrentReconciles:  int(tool.Options.EvaluationConcurrency),
+		EventsQueue:           queue,
 	}).SetupWithManager(managedMgr); err != nil {
 		log.Error(err, "unable to create controller", "controller", "Policy")
 		os.Exit(1)
@@ -817,6 +874,7 @@ func addControllers(ctx context.Context, hubCfg *rest.Config, hubMgr manager.Man
 		InstanceName:         instanceName,
 		DisableGkSync:        tool.Options.DisableGkSync,
 		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
+		EventsQueue:          queue,
 	}
 
 	go func() {
@@ -855,6 +913,7 @@ func addControllers(ctx context.Context, hubCfg *rest.Config, hubMgr manager.Man
 		Scheme:               hubMgr.GetScheme(),
 		TargetNamespace:      tool.Options.ClusterNamespace,
 		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
+		EventsQueue:          queue,
 	}).SetupWithManager(hubMgr); err != nil {
 		log.Error(err, "Unable to create the controller", "controller", specsync.ControllerName)
 		os.Exit(1)

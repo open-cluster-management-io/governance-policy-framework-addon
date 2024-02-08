@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/workqueue"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -91,6 +92,9 @@ type PolicyReconciler struct {
 	DisableGkSync        bool
 	createdGkConstraint  *bool
 	ConcurrentReconciles int
+	// EventsQueue is a queue that accepts ComplianceAPIEventRequest to then be recorded in the compliance events
+	// API by StartComplianceEventsSyncer. If the compliance events API is disabled, this will be nil.
+	EventsQueue workqueue.RateLimitingInterface
 }
 
 // Reconcile reads that state of the cluster for a Policy object and makes changes based on the state read
@@ -502,6 +506,19 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "unmarshal-error").Inc()
 
 			continue
+		}
+
+		// For convenience, set the parent policy database ID if set. Then controllers can just use this value directly
+		// when sending compliance events.
+		if instance.Annotations[utils.ParentDBIDAnnotation] != "" {
+			templateAnnotations := tObjectUnstructured.GetAnnotations()
+			if templateAnnotations == nil {
+				templateAnnotations = map[string]string{}
+			}
+
+			templateAnnotations[utils.ParentDBIDAnnotation] = instance.Annotations[utils.ParentDBIDAnnotation]
+
+			tObjectUnstructured.SetAnnotations(templateAnnotations)
 		}
 
 		// Collect list of dependent policies
@@ -1132,6 +1149,19 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 				if err != nil {
 					errorList = append(errorList,
 						fmt.Errorf("error deleting %s object %s: %w", gvrScoped.gvr.String(), tmpl.GetName(), err))
+				} else {
+					tmplAnnotations := tmpl.GetAnnotations()
+
+					if r.EventsQueue != nil && tmplAnnotations[utils.PolicyDBIDAnnotation] != "" {
+						ce, err := utils.GenerateDisabledEvent(
+							&instance, &tmpl, "The policy was removed from the parent policy",
+						)
+						if err != nil {
+							log.Error(err, "Failed to generate a disabled compliance API event")
+						} else {
+							r.EventsQueue.Add(ce)
+						}
+					}
 				}
 			}
 		}
