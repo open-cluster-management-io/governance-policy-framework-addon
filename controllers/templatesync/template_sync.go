@@ -1016,6 +1016,8 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 			}
 			// Iterate over the ConstraintTemplates to gather the Constraints on the cluster
 			for _, gkCT := range gkConstraintTemplateListv1.Items {
+				gkCT := gkCT
+
 				tmplGVRs = append(tmplGVRs, gvrScoped{
 					gvr: schema.GroupVersionResource{
 						Group:    utils.GConstraint,
@@ -1046,6 +1048,8 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 				}
 				// Iterate over the ConstraintTemplates to gather the Constraints on the cluster
 				for _, gkCT := range gkConstraintTemplateListv1beta1.Items {
+					gkCT := gkCT
+
 					tmplGVRs = append(tmplGVRs, gvrScoped{
 						gvr: schema.GroupVersionResource{
 							Group:    utils.GConstraint,
@@ -1078,6 +1082,8 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 	err := r.List(ctx, &crdsv1, &crdQuery)
 	if err == nil {
 		for _, crd := range crdsv1.Items {
+			crd := crd
+
 			if len(crd.Spec.Versions) > 0 {
 				tmplGVRs = append(tmplGVRs, gvrScoped{
 					gvr: schema.GroupVersionResource{
@@ -1096,6 +1102,8 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 			return fmt.Errorf("error listing v1beta1 CRDs with query %+v: %w", crdQuery, err)
 		}
 		for _, crd := range crdsv1beta1.Items {
+			crd := crd
+
 			if len(crd.Spec.Versions) > 0 {
 				tmplGVRs = append(tmplGVRs, gvrScoped{
 					gvr: schema.GroupVersionResource{
@@ -1112,6 +1120,8 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 	}
 
 	for _, gvrScoped := range tmplGVRs {
+		gvrScoped := gvrScoped
+
 		// Instantiate a dynamic client for the GVR
 		resourceNs := ""
 		if gvrScoped.namespaced {
@@ -1133,6 +1143,8 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 		}
 
 		for _, tmpl := range children.Items {
+			tmpl := tmpl
+
 			// delete all templates with policy label that aren't still in the policy
 			found := false
 
