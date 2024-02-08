@@ -1,0 +1,35 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: case23
+  labels:
+    policy.open-cluster-management.io/cluster-name: managed
+    policy.open-cluster-management.io/cluster-namespace: managed
+    policy.open-cluster-management.io/root-policy: case23
+  annotations:
+    policy.open-cluster-management.io/parent-policy-compliance-db-id: "1"
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: case23
+          annotations:
+            policy.open-cluster-management.io/policy-compliance-db-id: "3"
+        spec:
+          remediationAction: inform
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: nginx-pod-e2e
+                  namespace: default
+                spec:
+                  containers:
+                    - name: nginx
+

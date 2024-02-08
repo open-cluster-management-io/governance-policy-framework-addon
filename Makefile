@@ -27,6 +27,8 @@ GOOS = $(shell go env GOOS)
 TESTARGS_DEFAULT := -v
 export TESTARGS ?= $(TESTARGS_DEFAULT)
 
+COMPLIANCE_API_URL ?= http://127.0.0.1:8385
+
 # Get the branch of the PR target or Push in Github Action
 ifeq ($(GITHUB_EVENT_NAME), pull_request) # pull request
 	BRANCH := $(GITHUB_BASE_REF)
@@ -50,10 +52,11 @@ HUB_CONFIG_INTERNAL ?= $(PWD)/kubeconfig_hub_internal
 MANAGED_CONFIG ?= $(PWD)/kubeconfig_managed
 deployOnHub ?= false
 CONTROLLER_NAME ?= $(shell cat COMPONENT_NAME 2> /dev/null)
+E2E_FILTER = --label-filter="!compliance-events-api"
 # Set the Kind version tag
 ifeq ($(KIND_VERSION), minimum)
 	KIND_ARGS = --image kindest/node:v1.19.16
-	E2E_FILTER = --label-filter="!skip-minimum"
+	E2E_FILTER = --label-filter="!skip-minimum && !compliance-events-api"
 else ifneq ($(KIND_VERSION), latest)
 	KIND_ARGS = --image kindest/node:$(KIND_VERSION)
 else
@@ -219,10 +222,10 @@ install-resources:
 
 .PHONY: e2e-test
 e2e-test: e2e-dependencies
-	$(GINKGO) -v --fail-fast $(E2E_TEST_ARGS) test/e2e
+	$(GINKGO) -v --fail-fast $(E2E_TEST_ARGS) $(E2E_FILTER) test/e2e
 
 .PHONY: e2e-test-coverage
-e2e-test-coverage: E2E_TEST_ARGS = --json-report=report_e2e.json --output-dir=. $(E2E_FILTER)
+e2e-test-coverage: E2E_TEST_ARGS = --json-report=report_e2e.json --output-dir=.
 e2e-test-coverage: e2e-run-instrumented e2e-test e2e-stop-instrumented
 
 .PHONY: e2e-test-coverage-foreground
@@ -238,6 +241,16 @@ e2e-test-uninistall:
 .PHONY: e2e-test-uninstall-coverage
 e2e-test-uninstall-coverage: COVERAGE_E2E_OUT = coverage_e2e_uninstall_controller.out
 e2e-test-uninstall-coverage: e2e-run-instrumented scale-down-deployment e2e-test-uninistall e2e-stop-instrumented
+
+.PHONY: e2e-test-compliance-events-api
+e2e-test-compliance-events-api:
+	COMPLIANCE_API_URL=$(COMPLIANCE_API_URL) $(GINKGO) -v --fail-fast $(E2E_TEST_ARGS) --label-filter="compliance-events-api" test/e2e
+
+.PHONY: e2e-test-coverage-compliance-events-api
+e2e-test-coverage-compliance-events-api:
+	COVERAGE_E2E_OUT=coverage_e2e_compliance_events_api.out COMPLIANCE_API_URL=$(COMPLIANCE_API_URL) $(MAKE) e2e-run-instrumented
+	$(MAKE) e2e-test-compliance-events-api
+	$(MAKE) e2e-stop-instrumented
 
 .PHONY: scale-down-deployment
 scale-down-deployment:

@@ -28,12 +28,15 @@ func TestRunMain(t *testing.T) {
 	disableGkStr := os.Getenv("DISABLE_GK_SYNC")
 	disableGk := disableGkStr == "true"
 
+	complianceAPIURL := os.Getenv("COMPLIANCE_API_URL")
+
 	os.Args = append(
 		os.Args,
 		"--leader-elect=false",
 		fmt.Sprintf("--disable-gatekeeper-sync=%t", disableGk),
 		fmt.Sprintf("--cluster-namespace=%s", clusterNs),
 		fmt.Sprintf("--cluster-namespace-on-hub=%s", clusterNsHub),
+		fmt.Sprintf("--compliance-api-url=%s", complianceAPIURL),
 	)
 
 	main()

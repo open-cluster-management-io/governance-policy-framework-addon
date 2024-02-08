@@ -66,6 +66,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - cluster.open-cluster-management.io
+  resourceNames:
+  - id.k8s.io
+  resources:
+  - clusterclaims
+  verbs:
+  - get
+- apiGroups:
   - constraints.gatekeeper.sh
   resources:
   - '*'

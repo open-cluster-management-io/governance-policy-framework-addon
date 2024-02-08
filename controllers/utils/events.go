@@ -73,6 +73,21 @@ func (c *ComplianceEventSender) SendEvent(
 			UID:        instance.GetUID(),
 			APIVersion: gvk.GroupVersion().String(),
 		}
+
+		eventAnnotations := map[string]string{}
+
+		instanceAnnotations := instance.GetAnnotations()
+		if instanceAnnotations[ParentDBIDAnnotation] != "" {
+			eventAnnotations[ParentDBIDAnnotation] = instanceAnnotations[ParentDBIDAnnotation]
+		}
+
+		if instanceAnnotations[PolicyDBIDAnnotation] != "" {
+			eventAnnotations[PolicyDBIDAnnotation] = instanceAnnotations[PolicyDBIDAnnotation]
+		}
+
+		if len(eventAnnotations) > 0 {
+			event.Annotations = eventAnnotations
+		}
 	}
 
 	if compliance == policyv1.Compliant {

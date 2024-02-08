@@ -4,8 +4,14 @@
 package statussync
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"regexp"
 	"sort"
@@ -19,8 +25,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/workqueue"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,7 +46,14 @@ import (
 
 const ControllerName string = "policy-status-sync"
 
-var log = ctrl.Log.WithName(ControllerName)
+var (
+	clusterClaimGVR = schema.GroupVersionResource{
+		Group:    "cluster.open-cluster-management.io",
+		Version:  "v1alpha1",
+		Resource: "clusterclaims",
+	}
+	log = ctrl.Log.WithName(ControllerName)
+)
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -66,11 +83,15 @@ type PolicyReconciler struct {
 	Scheme                *runtime.Scheme
 	ClusterNamespaceOnHub string
 	ConcurrentReconciles  int
+	// EventsQueue is a queue that accepts ComplianceAPIEventRequest to then be recorded in the compliance events
+	// API by StartComplianceEventsSyncer. If the compliance events API is disabled, this will be nil.
+	EventsQueue workqueue.RateLimitingInterface
 }
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/finalizers,verbs=update
+//+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,resourceNames=id.k8s.io,verbs=get
 //+kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 // This is required for the status lease for the addon framework
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list
@@ -191,7 +212,10 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	eventForPolicyMap := make(map[string]*[]historyEvent)
 	// panic if regexp invalid
 	rgx := regexp.MustCompile(`(?i)^policy:\s*(?:([a-z0-9.-]+)\s*\/)?(.+)`)
+
 	for _, event := range eventList.Items {
+		// This reassignment is required so that the proper event is stored in eventHistory.
+		event := event
 		// sample event.Reason -- reason: 'policy: calamari/policy-grc-rbactest-example'
 		reason := rgx.FindString(event.Reason)
 		if event.InvolvedObject.Kind == policiesv1.Kind && event.InvolvedObject.APIVersion == policiesv1APIVersion &&
@@ -205,6 +229,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					EventName: event.GetName(),
 				},
 				eventTime: *event.EventTime.DeepCopy(),
+				event:     &event,
 			}
 
 			if eventForPolicyMap[templateName] == nil {
@@ -266,6 +291,38 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		history := []historyEvent{}
 		if eventForPolicyMap[tName] != nil {
 			history = *eventForPolicyMap[tName]
+		}
+
+		// Queue up all new status events to record on the compliance API
+		if r.EventsQueue != nil {
+			for _, ch := range history {
+				// Ignore events from controllers that don't provide the compliance API metadata or if the feature
+				// is disabled.
+				if ch.event.Annotations[utils.PolicyDBIDAnnotation] == "" {
+					continue
+				}
+
+				isNew := true
+
+				for _, ech := range existingDpt.History {
+					if ch.EventName == ech.EventName {
+						isNew = false
+
+						break
+					}
+				}
+
+				if isNew {
+					ce, err := ceRequestFromEvent(ch.event)
+					if err != nil {
+						log.Error(err, "Failed to format the event to record in the compliance API")
+
+						continue
+					}
+
+					r.EventsQueue.Add(ce)
+				}
+			}
 		}
 
 		for _, ech := range existingDpt.History {
@@ -349,15 +406,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		// set compliancy at different level
 		if len(existingDpt.History) > 0 {
-			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(
-				strings.TrimPrefix(existingDpt.History[0].Message, "(combined from similar events):"))), "compliant") {
-				existingDpt.ComplianceState = policiesv1.Compliant
-			} else if strings.HasPrefix(strings.ToLower(strings.TrimSpace(
-				strings.TrimPrefix(existingDpt.History[0].Message, "(combined from similar events):"))), "pending") {
-				existingDpt.ComplianceState = policiesv1.Pending
-			} else {
-				existingDpt.ComplianceState = policiesv1.NonCompliant
-			}
+			existingDpt.ComplianceState = parseComplianceFromMessage(existingDpt.History[0].Message)
 		}
 
 		// append existingDpt to status
@@ -441,7 +490,239 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	return reconcile.Result{}, nil
 }
 
+func parseComplianceFromMessage(message string) policiesv1.ComplianceState {
+	cleanMsg := strings.ToLower(
+		strings.TrimSpace(
+			strings.TrimPrefix(message, "(combined from similar events):"),
+		),
+	)
+
+	if strings.HasPrefix(cleanMsg, "compliant") {
+		return policiesv1.Compliant
+	} else if strings.HasPrefix(cleanMsg, "pending") {
+		return policiesv1.Pending
+	}
+
+	return policiesv1.NonCompliant
+}
+
+// ceRequestFromEvent converts a Kubernetes event relating to a policy controller's compliance event to a
+// struct representing a POST request to compliance events API. An error is returned if the event can't be converted.
+func ceRequestFromEvent(event *corev1.Event) (utils.ComplianceAPIEventRequest, error) {
+	ce := utils.ComplianceAPIEventRequest{UID: event.UID}
+
+	pID, err := strconv.ParseInt(event.Annotations[utils.PolicyDBIDAnnotation], 10, 32)
+	if err != nil {
+		log.Error(err, "The event had an invalid policy ID", "policyID", event.Annotations[utils.PolicyDBIDAnnotation])
+
+		return ce, fmt.Errorf("the event had an invalid policy ID: %s", event.Annotations[utils.PolicyDBIDAnnotation])
+	}
+
+	ce.Policy = utils.ComplianceAPIEventPolicyID{ID: int32(pID)}
+
+	if event.Annotations[utils.ParentDBIDAnnotation] != "" {
+		// The parent policy ID is optional so continue even if it's invalid
+		ppID, err := strconv.ParseInt(event.Annotations[utils.ParentDBIDAnnotation], 10, 32)
+		if err == nil {
+			ce.ParentPolicy = &utils.ComplianceAPIEventPolicyID{ID: int32(ppID)}
+		}
+	}
+
+	compliance := parseComplianceFromMessage(event.Message)
+
+	ce.Event = utils.ComplianceAPIEvent{
+		Compliance: compliance,
+		Message:    strings.TrimLeft(event.Message[len(compliance):], " ;"),
+		Timestamp:  event.LastTimestamp.Format(time.RFC3339Nano),
+		ReportedBy: "governance-policy-framework",
+	}
+
+	return ce, nil
+}
+
+// StartComplianceEventsSyncer will monitor the events queue and record compliance events on the compliance events
+// API. It uses either certificate or token authentication to authenticate with the compliance events API using the
+// configuration in hubCfg. Note that apiURL is the base URL to the API. It should not contain the path to the
+// POST API endpoint.
+func StartComplianceEventsSyncer(
+	ctx context.Context,
+	clusterName string,
+	hubCfg *rest.Config,
+	managedCfg *rest.Config,
+	apiURL string,
+	events workqueue.RateLimitingInterface,
+) error {
+	managedClient, err := dynamic.NewForConfig(managedCfg)
+	if err != nil {
+		return err
+	}
+
+	var clusterID string
+
+	idClusterClaim, err := managedClient.Resource(clusterClaimGVR).Get(ctx, "id.k8s.io", metav1.GetOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+
+	if err == nil {
+		clusterID, _, _ = unstructured.NestedString(idClusterClaim.Object, "spec", "value")
+	}
+
+	if clusterID == "" {
+		log.Info("The id.k8s.io cluster claim is not set. Using the cluster ID of unknown.")
+
+		clusterID = "unknown"
+	}
+
+	processedEvents := map[types.UID]bool{}
+
+	caCertPool, err := x509.SystemCertPool()
+	if err != nil {
+		log.Error(err, "Failed to detect the default system CAs")
+
+		caCertPool = x509.NewCertPool()
+	}
+
+	// Append the Kubernete API Server CA in case the Service is exposed directly as opposed to using something like the
+	// OpenShift router.
+	if hubCfg.CAData != nil {
+		caCertPool.AppendCertsFromPEM(hubCfg.CAData)
+	}
+
+	httpClient := &http.Client{Timeout: 60 * time.Second}
+
+	var usesCertAuth bool
+
+	if hubCfg.CertData != nil && hubCfg.KeyData != nil {
+		log.Info("Using certificate authentication with the compliance API server")
+
+		cert, err := tls.X509KeyPair(hubCfg.CertData, hubCfg.KeyData)
+		if err != nil {
+			log.Error(err, "Failed to load the hub kubeconfig for certificate authentication on the compliance API")
+
+			return err
+		}
+
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion:   tls.VersionTLS12,
+				Certificates: []tls.Certificate{cert},
+				RootCAs:      caCertPool,
+			},
+		}
+
+		usesCertAuth = true
+	} else {
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+				RootCAs:    caCertPool,
+			},
+		}
+	}
+
+	for {
+		ceUntyped, shutdown := events.Get()
+		if shutdown {
+			return nil
+		}
+
+		ce, ok := ceUntyped.(utils.ComplianceAPIEventRequest)
+		if !ok {
+			events.Forget(ceUntyped)
+			events.Done(ceUntyped)
+
+			continue
+		}
+
+		if ce.UID != "" && processedEvents[ce.UID] {
+			events.Forget(ceUntyped)
+			events.Done(ceUntyped)
+
+			continue
+		}
+
+		ce.Cluster = utils.ComplianceAPIEventCluster{
+			Name:      clusterName,
+			ClusterID: clusterID,
+		}
+
+		requestJSON, err := json.Marshal(ce)
+		if err != nil {
+			log.Error(err, "Failed to record the event with the compliance API due to an invalid format")
+
+			events.Forget(ceUntyped)
+			events.Done(ceUntyped)
+
+			continue
+		}
+
+		httpRequest, err := http.NewRequestWithContext(
+			ctx, http.MethodPost, apiURL+"/api/v1/compliance-events", bytes.NewBuffer(requestJSON),
+		)
+		if err != nil {
+			log.Error(err, "Failed to record the event with the compliance API")
+
+			events.AddRateLimited(ceUntyped)
+			events.Done(ceUntyped)
+
+			continue
+		}
+
+		httpRequest.Header.Set("Content-Type", "application/json")
+
+		if !usesCertAuth && hubCfg.BearerToken != "" {
+			httpRequest.Header.Set("Authorization", "Bearer "+hubCfg.BearerToken)
+		}
+
+		httpResponse, err := httpClient.Do(httpRequest)
+		if err != nil {
+			log.Info("Failed to record the compliance event with the compliance API. Will requeue in 10 seconds.")
+
+			events.AddAfter(ceUntyped, 10*time.Second)
+			events.Done(ceUntyped)
+
+			continue
+		}
+
+		// A conflict indicates the compliance event already exists
+		if httpResponse.StatusCode != http.StatusCreated && httpResponse.StatusCode != http.StatusConflict {
+			var message string
+
+			body, err := io.ReadAll(httpResponse.Body)
+			if err == nil {
+				rv := map[string]interface{}{}
+
+				err := json.Unmarshal(body, &rv)
+				if err == nil {
+					message, _ = rv["message"].(string)
+				}
+			}
+
+			log.Info(
+				"Failed to record the compliance event with the compliance API. Will requeue.",
+				"statusCode", httpResponse.StatusCode,
+				"message", message,
+			)
+
+			events.AddRateLimited(ceUntyped)
+			events.Done(ceUntyped)
+
+			continue
+		}
+
+		// The compliance event has been recorded
+		events.Forget(ceUntyped)
+		events.Done(ceUntyped)
+
+		if ce.UID != "" {
+			processedEvents[ce.UID] = true
+		}
+	}
+}
+
 type historyEvent struct {
 	policiesv1.ComplianceHistory
 	eventTime metav1.MicroTime
+	event     *corev1.Event
 }

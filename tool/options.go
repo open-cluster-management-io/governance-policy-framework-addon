@@ -30,6 +30,7 @@ type SyncerOptions struct {
 	EvaluationConcurrency uint8
 	ClientQPS             float32
 	ClientBurst           uint
+	ComplianceAPIURL      string
 }
 
 // Options default value
@@ -132,6 +133,13 @@ func ProcessFlags() {
 		45, // the controller-runtime defaults are 20:30 (qps:burst) - this matches that ratio
 		"The maximum burst before client requests will be throttled. "+
 			"Will scale with concurrency, if not explicitly set.",
+	)
+
+	flag.StringVar(
+		&Options.ComplianceAPIURL,
+		"compliance-api-url",
+		"",
+		"The base URL to the Compliance Events API. If not set, compliance events will not be recorded on the API.",
 	)
 
 	if flag.Changed("evaluation-concurrency") {
