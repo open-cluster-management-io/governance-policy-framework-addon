@@ -33,13 +33,13 @@ jobs:
     name: KinD tests
     steps:
     - name: Checkout Governance Policy Framework Addon
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         path: governance-policy-framework-addon
         fetch-depth: 0 # Fetch all history for all tags and branches
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v5
       with:
         go-version-file: governance-policy-framework-addon/go.mod
 
