@@ -113,6 +113,14 @@ rules:
 - apiGroups:
   - ""
   resourceNames:
+  - open-cluster-management-compliance-history-api-recorder
+  resources:
+  - secrets
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resourceNames:
   - policy-encryption-key
   resources:
   - secrets

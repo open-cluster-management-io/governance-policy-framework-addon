@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -44,7 +45,10 @@ import (
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 )
 
-const ControllerName string = "policy-status-sync"
+const (
+	ControllerName         string = "policy-status-sync"
+	hubComplianceAPISAName string = "open-cluster-management-compliance-history-api-recorder"
+)
 
 var (
 	clusterClaimGVR = schema.GroupVersionResource{
@@ -93,6 +97,7 @@ type PolicyReconciler struct {
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/finalizers,verbs=update
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=clusterclaims,resourceNames=id.k8s.io,verbs=get
 //+kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get,resourceNames="open-cluster-management-compliance-history-api-recorder"
 // This is required for the status lease for the addon framework
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list
 
@@ -552,6 +557,12 @@ func StartComplianceEventsSyncer(
 	apiURL string,
 	events workqueue.RateLimitingInterface,
 ) error {
+	var hubToken string
+
+	if hubCfg.BearerToken != "" {
+		hubToken = hubCfg.BearerToken
+	}
+
 	managedClient, err := dynamic.NewForConfig(managedCfg)
 	if err != nil {
 		return err
@@ -583,42 +594,26 @@ func StartComplianceEventsSyncer(
 		caCertPool = x509.NewCertPool()
 	}
 
-	// Append the Kubernete API Server CA in case the Service is exposed directly as opposed to using something like the
-	// OpenShift router.
+	// Append the Kubernete API Server CAs in case the Hub cluster's ingress CA is not trusted by the system pool.
 	if hubCfg.CAData != nil {
-		caCertPool.AppendCertsFromPEM(hubCfg.CAData)
+		_ = caCertPool.AppendCertsFromPEM(hubCfg.CAData)
+	} else if hubCfg.CAFile != "" {
+		caData, err := os.ReadFile(hubCfg.CAFile)
+		if err == nil {
+			log.Info("The hub kubeconfig CA file can't be read. Ignoring it.", "path", hubCfg.CAFile)
+		}
+
+		_ = caCertPool.AppendCertsFromPEM(caData)
 	}
 
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-
-	var usesCertAuth bool
-
-	if hubCfg.CertData != nil && hubCfg.KeyData != nil {
-		log.Info("Using certificate authentication with the compliance API server")
-
-		cert, err := tls.X509KeyPair(hubCfg.CertData, hubCfg.KeyData)
-		if err != nil {
-			log.Error(err, "Failed to load the hub kubeconfig for certificate authentication on the compliance API")
-
-			return err
-		}
-
-		httpClient.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion:   tls.VersionTLS12,
-				Certificates: []tls.Certificate{cert},
-				RootCAs:      caCertPool,
-			},
-		}
-
-		usesCertAuth = true
-	} else {
-		httpClient.Transport = &http.Transport{
+	httpClient := &http.Client{
+		Timeout: 60 * time.Second,
+		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				MinVersion: tls.VersionTLS12,
 				RootCAs:    caCertPool,
 			},
-		}
+		},
 	}
 
 	for {
@@ -671,9 +666,31 @@ func StartComplianceEventsSyncer(
 
 		httpRequest.Header.Set("Content-Type", "application/json")
 
-		if !usesCertAuth && hubCfg.BearerToken != "" {
-			httpRequest.Header.Set("Authorization", "Bearer "+hubCfg.BearerToken)
+		if hubToken == "" {
+			var err error
+
+			hubToken, err = getHubComplianceAPIToken(ctx, hubCfg, clusterName)
+			if err != nil || hubToken == "" {
+				var msg string
+
+				if err != nil {
+					msg = err.Error()
+				} else {
+					msg = "the token was not set on the secret"
+				}
+
+				log.Info(
+					"Failed to get the compliance API hub token. Will requeue in 10 seconds.", "error", msg,
+				)
+
+				events.AddAfter(ceUntyped, 10*time.Second)
+				events.Done(ceUntyped)
+
+				continue
+			}
 		}
+
+		httpRequest.Header.Set("Authorization", "Bearer "+hubToken)
 
 		httpResponse, err := httpClient.Do(httpRequest)
 		if err != nil {
@@ -705,6 +722,11 @@ func StartComplianceEventsSyncer(
 				"message", message,
 			)
 
+			if httpResponse.StatusCode == http.StatusUnauthorized || httpResponse.StatusCode == http.StatusForbidden {
+				// Wipe out the hubToken so that the token is fetched again on the next try.
+				hubToken = ""
+			}
+
 			events.AddRateLimited(ceUntyped)
 			events.Done(ceUntyped)
 
@@ -719,6 +741,24 @@ func StartComplianceEventsSyncer(
 			processedEvents[ce.UID] = true
 		}
 	}
+}
+
+// getHubComplianceAPIToken retrieves the token associated with the service account with compliance history API
+// recording permssions in the cluster namespace.
+func getHubComplianceAPIToken(ctx context.Context, hubCfg *rest.Config, clusterNamespace string) (string, error) {
+	client, err := kubernetes.NewForConfig(hubCfg)
+	if err != nil {
+		return "", err
+	}
+
+	saTokenSecret, err := client.CoreV1().Secrets(clusterNamespace).Get(
+		ctx, hubComplianceAPISAName, metav1.GetOptions{},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return string(saTokenSecret.Data["token"]), nil
 }
 
 type historyEvent struct {
