@@ -4,7 +4,6 @@ package e2e
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -15,8 +14,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/clientcmd"
-	certutil "k8s.io/client-go/util/cert"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/complianceeventsapi"
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
@@ -71,12 +68,6 @@ var _ = Describe("Compliance API recording", Ordered, Label("compliance-events-a
 	BeforeAll(func(ctx context.Context) {
 		mux := http.NewServeMux()
 
-		hubConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfigHub)
-		Expect(err).ToNot(HaveOccurred())
-
-		caCertPool, err := certutil.NewPoolFromBytes(hubConfig.CAData)
-		Expect(err).ToNot(HaveOccurred())
-
 		complianceAPIURL := os.Getenv("COMPLIANCE_API_URL")
 		Expect(complianceAPIURL).ToNot(BeEmpty())
 
@@ -84,9 +75,8 @@ var _ = Describe("Compliance API recording", Ordered, Label("compliance-events-a
 		Expect(err).ToNot(HaveOccurred())
 
 		server = &http.Server{
-			Addr:      parsedURL.Host,
-			Handler:   mux,
-			TLSConfig: &tls.Config{ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: caCertPool},
+			Addr:    parsedURL.Host,
+			Handler: mux,
 		}
 
 		mux.HandleFunc("/api/v1/compliance-events", func(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +84,13 @@ var _ = Describe("Compliance API recording", Ordered, Label("compliance-events-a
 			if r.Method != http.MethodPost {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				_, _ = w.Write([]byte(`{"message": "Invalid method"}`))
+
+				return
+			}
+
+			if r.Header.Get("Authorization") == "" {
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"message": "No token sent"}`))
 
 				return
 			}
