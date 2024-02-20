@@ -737,6 +737,8 @@ func StartComplianceEventsSyncer(
 		events.Forget(ceUntyped)
 		events.Done(ceUntyped)
 
+		log.Info("Recorded a compliance event with the compliance history API", "eventUID", ce.UID)
+
 		if ce.UID != "" {
 			processedEvents[ce.UID] = true
 		}
