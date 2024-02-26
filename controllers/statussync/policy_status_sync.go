@@ -716,6 +716,19 @@ func StartComplianceEventsSyncer(
 				}
 			}
 
+			// If it's a bad request, then the database experienced data loss and the database ID is no longer valid.
+			if httpResponse.StatusCode == http.StatusBadRequest {
+				log.V(0).Info(
+					"Failed to record the compliance event with the compliance API. Will not requeue.",
+					"statusCode", httpResponse.StatusCode,
+					"message", message,
+				)
+				events.Forget(ceUntyped)
+				events.Done(ceUntyped)
+
+				continue
+			}
+
 			log.Info(
 				"Failed to record the compliance event with the compliance API. Will requeue.",
 				"statusCode", httpResponse.StatusCode,
