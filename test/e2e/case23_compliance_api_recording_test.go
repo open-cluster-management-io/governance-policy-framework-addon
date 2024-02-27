@@ -154,11 +154,8 @@ var _ = Describe("Compliance API recording", Ordered, Label("compliance-events-a
 	})
 
 	AfterAll(func(ctx context.Context) {
-		err := server.Shutdown(ctx)
-		Expect(err).ToNot(HaveOccurred())
-
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
-		_, err = kubectlHub("delete", "-f", yamlPath, "-n", clusterNamespaceOnHub, "--ignore-not-found")
+		_, err := kubectlHub("delete", "-f", yamlPath, "-n", clusterNamespaceOnHub, "--ignore-not-found")
 		Expect(err).ToNot(HaveOccurred())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
@@ -167,6 +164,10 @@ var _ = Describe("Compliance API recording", Ordered, Label("compliance-events-a
 		By("clean up all events")
 		_, err = kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
 		Expect(err).ShouldNot(HaveOccurred())
+
+		// Shutdown after all clean up is done in case there were some events queued up by the controllers.
+		err = server.Shutdown(ctx)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
