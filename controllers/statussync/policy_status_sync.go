@@ -709,7 +709,10 @@ func StartComplianceEventsSyncer(
 
 		httpResponse, err := httpClient.Do(httpRequest)
 		if err != nil {
-			log.Info("Failed to record the compliance event with the compliance API. Will requeue in 10 seconds.")
+			log.Info(
+				"Failed to record the compliance event with the compliance API. Will requeue in 10 seconds.",
+				"error", err.Error(),
+			)
 
 			events.AddAfter(ceUntyped, 10*time.Second)
 			events.Done(ceUntyped)
