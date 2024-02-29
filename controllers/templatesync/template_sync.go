@@ -1441,7 +1441,27 @@ func (r *PolicyReconciler) emitTemplateEvent(
 		UID:        pol.UID,
 	}
 
-	return sender.SendEvent(ctx, nil, ownerref, policyComplianceReason, msg, compliance)
+	var instance client.Object
+
+	instanceUnstructured := &unstructured.Unstructured{}
+
+	err := instanceUnstructured.UnmarshalJSON(pol.Spec.PolicyTemplates[tIndex].ObjectDefinition.Raw)
+	if err == nil {
+		if pol.Annotations[utils.ParentDBIDAnnotation] != "" {
+			annotations := instanceUnstructured.GetAnnotations()
+			if annotations == nil {
+				annotations = map[string]string{}
+			}
+
+			annotations[utils.ParentDBIDAnnotation] = pol.Annotations[utils.ParentDBIDAnnotation]
+
+			instanceUnstructured.SetAnnotations(annotations)
+		}
+
+		instance = instanceUnstructured
+	}
+
+	return sender.SendEvent(ctx, instance, ownerref, policyComplianceReason, msg, compliance)
 }
 
 // handleSyncSuccess performs common actions that should be run whenever a template is in sync,

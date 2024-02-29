@@ -61,6 +61,7 @@ func generateEvent(ctx context.Context, plcName string, cfgPlcName string, msg s
 var _ = Describe("Compliance API recording", Ordered, Label("compliance-events-api"), func() {
 	const yamlPath = "../resources/case23_compliance_api_recording/policy.yaml"
 	const yamlPath2 = "../resources/case23_compliance_api_recording/policy2.yaml"
+	const yamlPath3 = "../resources/case23_compliance_api_recording/policy3.yaml"
 	var server *http.Server
 	lock := sync.RWMutex{}
 	requests := []*complianceeventsapi.ComplianceEvent{}
@@ -154,9 +155,13 @@ var _ = Describe("Compliance API recording", Ordered, Label("compliance-events-a
 	})
 
 	AfterAll(func(ctx context.Context) {
-		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		By("Deleting a policy on hub cluster in ns: " + clusterNamespaceOnHub)
 		_, err := kubectlHub("delete", "-f", yamlPath, "-n", clusterNamespaceOnHub, "--ignore-not-found")
 		Expect(err).ToNot(HaveOccurred())
+
+		_, err = kubectlHub("delete", "-f", yamlPath3, "-n", clusterNamespaceOnHub, "--ignore-not-found")
+		Expect(err).ToNot(HaveOccurred())
+
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
@@ -256,6 +261,31 @@ var _ = Describe("Compliance API recording", Ordered, Label("compliance-events-a
 				))
 				g.Expect(requests[0].ParentPolicy.KeyID).To(BeEquivalentTo(1))
 				g.Expect(requests[0].Policy.KeyID).To(BeEquivalentTo(4))
+			},
+			defaultTimeoutSeconds,
+			1,
+		).Should(Succeed())
+	})
+
+	It("Forwards a template error compliance event with an invalid policy template", func(ctx context.Context) {
+		By("Creating the parent policy")
+		_, err := kubectlHub("apply", "-f", yamlPath3, "-n", clusterNamespaceOnHub)
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Waiting for the compliance API request to come in")
+		Eventually(
+			func(g Gomega) {
+				lock.RLock()
+				defer lock.RUnlock()
+
+				g.Expect(requests).ToNot(BeEmpty())
+
+				g.Expect(requests[0].Event.Compliance).To(Equal("NonCompliant"))
+				g.Expect(requests[0].Event.Message).To(ContainSubstring(
+					"spec may only contain one of object-templates and object-templates-raw",
+				))
+				g.Expect(requests[0].ParentPolicy.KeyID).To(BeEquivalentTo(2))
+				g.Expect(requests[0].Policy.KeyID).To(BeEquivalentTo(5))
 			},
 			defaultTimeoutSeconds,
 			1,
