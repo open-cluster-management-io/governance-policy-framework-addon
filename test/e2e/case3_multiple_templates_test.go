@@ -38,7 +38,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 	})
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {
-			_, err := utils.KubectlWithOutput("-n", clusterNamespace, "get", "events")
+			_, err := kubectlManaged("-n", clusterNamespace, "get", "events")
 
 			Expect(err).ToNot(HaveOccurred())
 		}

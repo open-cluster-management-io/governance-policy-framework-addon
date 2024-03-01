@@ -4,9 +4,6 @@
 package e2e
 
 import (
-	"errors"
-	"os/exec"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,11 +23,8 @@ var _ = Describe("Test template sync", func() {
 	})
 	AfterEach(func() {
 		By("Deleting a policy on the hub in ns:" + clusterNamespaceOnHub)
-		_, err := kubectlHub("delete", "-f", case9PolicyYaml, "-n", clusterNamespaceOnHub)
-		var e *exec.ExitError
-		if !errors.As(err, &e) {
-			Expect(err).ShouldNot(HaveOccurred())
-		}
+		_, err := kubectlHub("delete", "-f", case9PolicyYaml, "-n", clusterNamespaceOnHub, "--ignore-not-found")
+		Expect(err).ShouldNot(HaveOccurred())
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 	})

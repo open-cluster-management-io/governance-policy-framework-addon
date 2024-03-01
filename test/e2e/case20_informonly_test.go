@@ -4,9 +4,6 @@
 package e2e
 
 import (
-	"errors"
-	"os/exec"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"open-cluster-management.io/config-policy-controller/test/utils"
@@ -41,22 +38,15 @@ var _ = Describe("Test 'InformOnly' ConfigurationPolicies", Ordered, func() {
 		By("Deleting all policies on the hub in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("delete", "-f", case20PolicyYaml, "-n", clusterNamespaceOnHub,
 			"--ignore-not-found")
-		var e *exec.ExitError
-		if !errors.As(err, &e) {
-			Expect(err).ShouldNot(HaveOccurred())
-		}
+		Expect(err).ShouldNot(HaveOccurred())
 
 		_, err = kubectlHub("delete", "-f", case20PolicyNoRemediationYaml, "-n", clusterNamespaceOnHub,
 			"--ignore-not-found")
-		if !errors.As(err, &e) {
-			Expect(err).ShouldNot(HaveOccurred())
-		}
+		Expect(err).ShouldNot(HaveOccurred())
 
 		_, err = kubectlHub("delete", "-f", case20PlcTemplateNoRemediationYaml, "-n", clusterNamespaceOnHub,
 			"--ignore-not-found")
-		if !errors.As(err, &e) {
-			Expect(err).ShouldNot(HaveOccurred())
-		}
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 
 	Describe("Override remediationAction in spec", func() {

@@ -59,14 +59,14 @@ func case11Event(ctx context.Context,
 }
 
 func case11cleanup() {
-	out, err := utils.KubectlWithOutput(
-		"delete", "-f", case11PolicyYaml, "-n", clusterNamespaceOnHub, case11hubconfig)
+	out, err := kubectlHub(
+		"delete", "-f", case11PolicyYaml, "-n", clusterNamespaceOnHub)
 	if err != nil {
 		Expect(out).Should(ContainSubstring("NotFound"))
 	}
 
-	out, err = utils.KubectlWithOutput(
-		"delete", "-f", case11PolicyYaml, "-n", clusterNamespace, case11managedconfig)
+	out, err = kubectlManaged(
+		"delete", "-f", case11PolicyYaml, "-n", clusterNamespace)
 	if err != nil {
 		Expect(out).Should(ContainSubstring("NotFound"))
 	}
@@ -81,8 +81,8 @@ func case11cleanup() {
 	}
 
 	for _, evname := range eventsToDelete {
-		out, err = utils.KubectlWithOutput(
-			"delete", "event", evname, "-n", clusterNamespace, case11managedconfig)
+		out, err = kubectlManaged(
+			"delete", "event", evname, "-n", clusterNamespace)
 		if err != nil {
 			Expect(out).Should(ContainSubstring("NotFound"))
 		}
@@ -93,8 +93,8 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 	It("Creates the policy and one event, and shows compliant", func(ctx SpecContext) {
 		hubApplyPolicy(case11PolicyName, case11PolicyYaml)
 
-		_, err := utils.KubectlWithOutput(
-			"apply", "-f", case11PolicyYaml, "-n", clusterNamespace, case11managedconfig,
+		_, err := kubectlManaged(
+			"apply", "-f", case11PolicyYaml, "-n", clusterNamespace,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 
@@ -155,8 +155,8 @@ var _ = Describe("Test event sorting by eventtime when timestamps collide", Orde
 	It("Creates the policy and one event, and shows compliant", func(ctx SpecContext) {
 		hubApplyPolicy(case11PolicyName, case11PolicyYaml)
 
-		_, err := utils.KubectlWithOutput(
-			"apply", "-f", case11PolicyYaml, "-n", clusterNamespace, case11managedconfig,
+		_, err := kubectlManaged(
+			"apply", "-f", case11PolicyYaml, "-n", clusterNamespace,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 
