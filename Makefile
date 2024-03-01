@@ -142,7 +142,7 @@ deploy: generate-operator-yaml
 
 .PHONY: manifests
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=governance-policy-framework-addon paths="./..." output:rbac:artifacts:config=deploy/rbac
+	$(CONTROLLER_GEN) crd rbac:roleName=governance-policy-framework-addon paths="./..." output:rbac:artifacts:config=deploy/rbac
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -223,10 +223,6 @@ e2e-test: e2e-dependencies
 e2e-test-coverage: E2E_TEST_ARGS = --json-report=report_e2e.json --output-dir=.
 e2e-test-coverage: e2e-run-instrumented e2e-test e2e-stop-instrumented
 
-.PHONY: e2e-test-coverage-foreground
-e2e-test-coverage-foreground: LOG_REDIRECT = 
-e2e-test-coverage-foreground: e2e-test-coverage
-
 .PHONY: e2e-test-uninistall
 e2e-test-uninistall:
 	$(GINKGO) -v --fail-fast --json-report=report_e2e_uninstall.json --output-dir=. --label-filter='uninstall' \
@@ -258,7 +254,9 @@ e2e-build-instrumented:
 .PHONY: e2e-run-instrumented
 LOG_REDIRECT ?= &>build/_output/controller.log
 e2e-run-instrumented: e2e-build-instrumented
-	HUB_CONFIG=$(HUB_CONFIG) MANAGED_CONFIG=$(MANAGED_CONFIG) MANAGED_CLUSTER_NAME=$(MANAGED_CLUSTER_NAME) ./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=$(COVERAGE_E2E_OUT) $(LOG_REDIRECT) &
+	HUB_CONFIG=$(HUB_CONFIG) MANAGED_CONFIG=$(MANAGED_CONFIG) MANAGED_CLUSTER_NAME=$(MANAGED_CLUSTER_NAME) \
+		./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=$(COVERAGE_E2E_OUT) 2>&1 \
+		| tee ./build/_output/controller.log &
 
 .PHONY: e2e-stop-instrumented
 e2e-stop-instrumented:
