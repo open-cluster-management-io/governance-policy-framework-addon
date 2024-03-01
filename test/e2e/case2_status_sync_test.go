@@ -72,7 +72,7 @@ var _ = Describe("Test status sync", func() {
 		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
 	})
 	It("Should set status to NonCompliant", func() {
-		By("Generating an compliant event on the policy")
+		By("Generating a noncompliant event on the policy")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
@@ -102,7 +102,7 @@ var _ = Describe("Test status sync", func() {
 		err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
 		Expect(err).ToNot(HaveOccurred())
 		Expect((plc.Status.Details)).To(HaveLen(1))
-		Expect((plc.Status.Details[0].History)).To(HaveLen(2))
+		Expect((plc.Status.Details[0].History)).To(HaveLen(1))
 		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case2-test-policy-configurationpolicy"))
 		By("Checking if hub policy status is in sync")
 		Eventually(func() interface{} {
@@ -148,7 +148,7 @@ var _ = Describe("Test status sync", func() {
 		err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
 		Expect(err).ToNot(HaveOccurred())
 		Expect((plc.Status.Details)).To(HaveLen(1))
-		Expect((plc.Status.Details[0].History)).To(HaveLen(3))
+		Expect((plc.Status.Details[0].History)).To(HaveLen(1))
 		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case2-test-policy-configurationpolicy"))
 		By("Checking if hub policy status is in sync")
 		Eventually(func() interface{} {

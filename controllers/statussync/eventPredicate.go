@@ -18,7 +18,6 @@ var eventPredicateFuncs = predicate.Funcs{
 		if !eventObjNewOK {
 			return false
 		}
-		// eventObjOld := e.ObjectOld.(*corev1.Event)
 		if eventObjNew.InvolvedObject.Kind == policiesv1.Kind &&
 			eventObjNew.InvolvedObject.APIVersion == policiesv1APIVersion {
 			return true
