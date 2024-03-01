@@ -15,19 +15,7 @@ import (
 )
 
 const (
-	case11PolicyYaml    string = "../resources/case11_ts_collision/case11-policy.yaml"
-	case11PolicyName    string = "default.case11-test-policy"
-	case11Event1        string = "default.case11-test-policy.171a96193d32cf17"
-	case11Event2        string = "default.case11-test-policy.171a96193dea32f4"
-	case11Event3        string = "default.case11-test-policy.171a96193dea32f8"
-	case11Event4        string = "default.case11-test-policy.four.171a96193d32cf17"
-	case11Event5        string = "default.case11-test-policy.five.171a96193d32cf17"
-	case11Event6        string = "default.case11-test-policy.six.171a96193d32cf17"
-	case11hubconfig     string = "--kubeconfig=../../kubeconfig_hub"
-	case11managedconfig string = "--kubeconfig=../../kubeconfig_managed"
-)
-
-func case11Event(name, namespace, message, evtype string, evtime time.Time, includeMS bool) error {
+func case11Event(ctx context.Context,
 	event := &corev1.Event{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
@@ -62,7 +50,7 @@ func case11Event(name, namespace, message, evtype string, evtime time.Time, incl
 	}
 
 	_, err := clientManaged.CoreV1().Events(namespace).Create(
-		context.TODO(),
+		ctx,
 		event,
 		metav1.CreateOptions{},
 	)
@@ -102,7 +90,7 @@ func case11cleanup() {
 }
 
 var _ = Describe("Test event sorting by name when timestamps collide", Ordered, func() {
-	It("Creates the policy and one event, and shows compliant", func() {
+	It("Creates the policy and one event, and shows compliant", func(ctx SpecContext) {
 		hubApplyPolicy(case11PolicyName, case11PolicyYaml)
 
 		_, err := utils.KubectlWithOutput(
@@ -111,6 +99,7 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 		Expect(err).ShouldNot(HaveOccurred())
 
 		Expect(case11Event(
+			ctx,
 			case11Event1,
 			clusterNamespace,
 			"Compliant; notification - this is the oldest event",
@@ -125,8 +114,9 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 			Should(Equal("Compliant"))
 	})
 
-	It("Creates a second event with the same timestamp, and shows noncompliant", func() {
+	It("Creates a second event with the same timestamp, and shows noncompliant", func(ctx SpecContext) {
 		Expect(case11Event(
+			ctx,
 			case11Event2,
 			clusterNamespace,
 			"NonCompliant; violation - a problem sandwich",
@@ -141,8 +131,9 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 			Should(Equal("NonCompliant"))
 	})
 
-	It("Creates a third with the same timestamp, and shows compliant", func() {
+	It("Creates a third with the same timestamp, and shows compliant", func(ctx SpecContext) {
 		Expect(case11Event(
+			ctx,
 			case11Event3,
 			clusterNamespace,
 			"Compliant; notification - this should be the most recent",
@@ -161,7 +152,7 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 })
 
 var _ = Describe("Test event sorting by eventtime when timestamps collide", Ordered, func() {
-	It("Creates the policy and one event, and shows compliant", func() {
+	It("Creates the policy and one event, and shows compliant", func(ctx SpecContext) {
 		hubApplyPolicy(case11PolicyName, case11PolicyYaml)
 
 		_, err := utils.KubectlWithOutput(
@@ -170,6 +161,7 @@ var _ = Describe("Test event sorting by eventtime when timestamps collide", Orde
 		Expect(err).ShouldNot(HaveOccurred())
 
 		Expect(case11Event(
+			ctx,
 			case11Event4,
 			clusterNamespace,
 			"Compliant; notification - this is the oldest event",
@@ -184,8 +176,9 @@ var _ = Describe("Test event sorting by eventtime when timestamps collide", Orde
 			Should(Equal("Compliant"))
 	})
 
-	It("Creates a second event with the same timestamp, and shows noncompliant", func() {
+	It("Creates a second event with the same timestamp, and shows noncompliant", func(ctx SpecContext) {
 		Expect(case11Event(
+			ctx,
 			case11Event5,
 			clusterNamespace,
 			"NonCompliant; violation - a problem sandwich",
@@ -200,8 +193,9 @@ var _ = Describe("Test event sorting by eventtime when timestamps collide", Orde
 			Should(Equal("NonCompliant"))
 	})
 
-	It("Creates a third with the same timestamp, and shows compliant", func() {
+	It("Creates a third with the same timestamp, and shows compliant", func(ctx SpecContext) {
 		Expect(case11Event(
+			ctx,
 			case11Event6,
 			clusterNamespace,
 			"Compliant; notification - this should be the most recent",

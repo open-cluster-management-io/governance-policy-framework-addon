@@ -4,8 +4,6 @@
 package e2e
 
 import (
-	"context"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -65,7 +63,7 @@ var _ = Describe("Test mutation recovery", func() {
 			return managedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(hubPlc.Object["spec"]))
 	})
-	It("Should recover policy on managed if spec.policyTemplates being modified", func() {
+	It("Should recover policy on managed if spec.policyTemplates being modified", func(ctx SpecContext) {
 		By("Patching " + case1PolicyYaml + " on managed with spec.policyTemplate = {}")
 		Eventually(
 			func() interface{} {
@@ -74,7 +72,7 @@ var _ = Describe("Test mutation recovery", func() {
 				)
 				managedPlc.Object["spec"].(map[string]interface{})["policy-templates"] = []*policiesv1.PolicyTemplate{}
 				_, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(clusterNamespace).Update(
-					context.TODO(), managedPlc, metav1.UpdateOptions{},
+					ctx, managedPlc, metav1.UpdateOptions{},
 				)
 
 				return err
@@ -133,7 +131,7 @@ var _ = Describe("Test mutation recovery", func() {
 			return managedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(hubPlc.Object["spec"]))
 	})
-	It("Should recover status if policy status being modified", func() {
+	It("Should recover status if policy status being modified", func(ctx SpecContext) {
 		By("Generating an compliant event on the policy")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
@@ -160,7 +158,7 @@ var _ = Describe("Test mutation recovery", func() {
 				managedPlc.Object["status"].(map[string]interface{})["compliant"] = "NonCompliant"
 				nsPolicy := clientManagedDynamic.Resource(gvrPolicy).Namespace(clusterNamespace)
 				var err error
-				managedPlc, err = nsPolicy.UpdateStatus(context.TODO(), managedPlc, metav1.UpdateOptions{})
+				managedPlc, err = nsPolicy.UpdateStatus(ctx, managedPlc, metav1.UpdateOptions{})
 
 				return err
 			},
