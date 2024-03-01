@@ -224,8 +224,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		event := event
 		// sample event.Reason -- reason: 'policy: calamari/policy-grc-rbactest-example'
 		reason := rgx.FindString(event.Reason)
-		if event.InvolvedObject.Kind == policiesv1.Kind && event.InvolvedObject.APIVersion == policiesv1APIVersion &&
-			event.InvolvedObject.Name == instance.GetName() && reason != "" {
+		// Only handle events that match the UID of the current Policy
+		if event.InvolvedObject.UID == instance.UID && reason != "" {
 			templateName := rgx.FindStringSubmatch(event.Reason)[2]
 			eventHistory := historyEvent{
 				ComplianceHistory: policiesv1.ComplianceHistory{
