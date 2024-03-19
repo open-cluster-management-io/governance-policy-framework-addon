@@ -278,7 +278,7 @@ func main() {
 	mainCtx := ctrl.SetupSignalHandler()
 	mgrCtx, mgrCtxCancel := context.WithCancel(mainCtx)
 
-	mgr := getManager(mgrCtx, mgrOptionsBase, mgrHealthAddr, managedCfg)
+	mgr := getManager(mgrCtx, mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg)
 
 	var hubMgr manager.Manager
 
@@ -416,7 +416,7 @@ func main() {
 
 // getManager return a controller Manager object that watches on the managed cluster and has the controllers registered.
 func getManager(
-	mgrCtx context.Context, options manager.Options, healthAddr string, managedCfg *rest.Config,
+	mgrCtx context.Context, options manager.Options, healthAddr string, hubCfg *rest.Config, managedCfg *rest.Config,
 ) manager.Manager {
 	crdLabelSelector := labels.SelectorFromSet(map[string]string{utils.PolicyTypeLabel: "template"})
 
@@ -495,10 +495,14 @@ func getManager(
 		os.Exit(1)
 	}
 
+	configFiles := []string{tool.Options.HubConfigFilePathName}
+
+	if hubCfg.TLSClientConfig.CertFile != "" {
+		configFiles = append(configFiles, hubCfg.TLSClientConfig.CertFile)
+	}
+
 	// use config check
-	configChecker, err := addonutils.NewConfigChecker(
-		"governance-policy-framework-addon", tool.Options.HubConfigFilePathName,
-	)
+	configChecker, err := addonutils.NewConfigChecker("governance-policy-framework-addon", configFiles...)
 	if err != nil {
 		log.Error(err, "unable to setup a configChecker")
 		os.Exit(1)
@@ -563,10 +567,14 @@ func getHubManager(
 		os.Exit(1)
 	}
 
+	configFiles := []string{tool.Options.HubConfigFilePathName}
+
+	if hubCfg.TLSClientConfig.CertFile != "" {
+		configFiles = append(configFiles, hubCfg.TLSClientConfig.CertFile)
+	}
+
 	// use config check
-	configChecker, err := addonutils.NewConfigChecker(
-		"governance-policy-framework-addon2", tool.Options.HubConfigFilePathName,
-	)
+	configChecker, err := addonutils.NewConfigChecker("governance-policy-framework-addon2", configFiles...)
 	if err != nil {
 		log.Error(err, "unable to setup a configChecker")
 		os.Exit(1)
