@@ -98,7 +98,7 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
-	log.Info("Reconciling a Policy with one or more Gatekeeper constraints")
+	log.V(1).Info("Reconciling a Policy with one or more Gatekeeper constraints")
 
 	policyObjID := depclient.ObjectIdentifier{
 		Group:     policyv1.GroupVersion.Group,
@@ -410,6 +410,14 @@ func (r *GatekeeperConstraintReconciler) sendComplianceEvent(
 		if err != nil {
 			return err
 		}
+
+		log.Info(
+			"Sent a compliance message for the Gatekeeper constraint",
+			"policy", refreshedPolicy.Name,
+			"constraintKind", constraint.GetKind(),
+			"constraintName", constraint.GetName(),
+			"msg", msg,
+		)
 
 		r.lastSentMessages.Store(kn, msgSHA1)
 	} else {

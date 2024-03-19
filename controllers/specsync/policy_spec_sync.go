@@ -82,7 +82,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
-	reqLogger.Info("Reconciling Policy...")
+	reqLogger.V(1).Info("Reconciling Policy...")
 
 	// Fetch the Policy instance
 	instance := &policiesv1.Policy{}
@@ -216,7 +216,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				r.TargetNamespace))
 	}
 
-	reqLogger.Info("Reconciliation complete.")
+	reqLogger.V(2).Info("Reconciliation complete.")
 
 	return reconcile.Result{}, nil
 }

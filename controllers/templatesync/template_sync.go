@@ -104,7 +104,7 @@ type PolicyReconciler struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling the Policy")
+	reqLogger.V(1).Info("Reconciling the Policy")
 
 	// Fetch the Policy instance
 	instance := &policiesv1.Policy{}
@@ -843,7 +843,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
 			}
 
-			tLogger.Info("Existing object matches the policy template")
+			tLogger.V(1).Info("Existing object matches the policy template")
 		}
 
 		if isClusterScoped {
@@ -913,7 +913,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 	}
 
-	reqLogger.Info("Completed the reconciliation")
+	reqLogger.V(2).Info("Completed the reconciliation")
 
 	return reconcile.Result{}, resultError
 }
