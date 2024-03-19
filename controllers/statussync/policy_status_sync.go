@@ -118,7 +118,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
-	reqLogger.Info("Reconciling the policy")
+	reqLogger.V(1).Info("Reconciling the policy")
 
 	// Fetch the Policy instance
 	instance := &policiesv1.Policy{}
@@ -454,7 +454,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", instance.GetName(),
 				instance.GetNamespace()))
 	} else {
-		reqLogger.Info("status match on managed, nothing to update")
+		reqLogger.V(1).Info("status match on managed, nothing to update")
 	}
 
 	if os.Getenv("ON_MULTICLUSTERHUB") != "true" {
@@ -480,11 +480,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				fmt.Sprintf("Policy %s status was updated to %s in cluster namespace %s", hubPlc.GetName(),
 					hubPlc.Status.ComplianceState, hubPlc.GetNamespace()))
 		} else {
-			reqLogger.Info("status match on hub, nothing to update")
+			reqLogger.V(1).Info("status match on hub, nothing to update")
 		}
 	}
 
-	reqLogger.Info("Reconciling complete")
+	reqLogger.V(2).Info("Reconciling complete")
 
 	return reconcile.Result{}, nil
 }
