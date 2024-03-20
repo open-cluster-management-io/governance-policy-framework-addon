@@ -20,8 +20,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
@@ -32,12 +34,17 @@ const ControllerName string = "policy-spec-sync"
 var log = logf.Log.WithName(ControllerName)
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource *source.Channel) error {
+	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&policiesv1.Policy{}).
 		Named(ControllerName).
-		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
-		Complete(r)
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles})
+
+	if additionalSource != nil {
+		builder = builder.WatchesRawSource(additionalSource, &handler.EnqueueRequestForObject{})
+	}
+
+	return builder.Complete(r)
 }
 
 // blank assignment to verify that ReconcilePolicy implements reconcile.Reconciler
