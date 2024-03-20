@@ -641,6 +641,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			// a different error getting template object from cluster
 			resultError = err
+
+			if errors.Is(err, context.Canceled) {
+				return reconcile.Result{}, fmt.Errorf("failed to get the object in the policy template: %w", err)
+			}
+
 			errMsg := fmt.Sprintf("Failed to get the object in the policy template: %s", err)
 
 			_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
