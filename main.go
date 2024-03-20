@@ -52,9 +52,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/gatekeepersync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/secretsync"
@@ -793,6 +795,8 @@ func addControllers(
 ) {
 	// Set up all controllers for manager on managed cluster
 	var hubClient client.Client
+	var specSyncRequests chan event.GenericEvent
+	var specSyncRequestsSource *source.Channel
 
 	if hubMgr == nil {
 		hubCache, err := cache.New(hubCfg,
@@ -835,6 +839,14 @@ func addControllers(
 			os.Exit(1)
 		}
 	} else {
+		bufferSize := 100
+
+		specSyncRequests = make(chan event.GenericEvent, bufferSize)
+		specSyncRequestsSource = &source.Channel{
+			Source:         specSyncRequests,
+			DestBufferSize: bufferSize,
+		}
+
 		hubClient = hubMgr.GetClient()
 	}
 
@@ -856,6 +868,7 @@ func addControllers(
 		Scheme:                managedMgr.GetScheme(),
 		ConcurrentReconciles:  int(tool.Options.EvaluationConcurrency),
 		EventsQueue:           queue,
+		SpecSyncRequests:      specSyncRequests,
 	}).SetupWithManager(managedMgr); err != nil {
 		log.Error(err, "unable to create controller", "controller", "Policy")
 		os.Exit(1)
@@ -922,7 +935,7 @@ func addControllers(
 		TargetNamespace:      tool.Options.ClusterNamespace,
 		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
 		EventsQueue:          queue,
-	}).SetupWithManager(hubMgr); err != nil {
+	}).SetupWithManager(hubMgr, specSyncRequestsSource); err != nil {
 		log.Error(err, "Unable to create the controller", "controller", specsync.ControllerName)
 		os.Exit(1)
 	}
