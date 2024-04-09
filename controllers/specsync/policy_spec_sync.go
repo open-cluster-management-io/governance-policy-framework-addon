@@ -134,7 +134,10 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				return reconcile.Result{}, err
 			}
 
-			if r.EventsQueue != nil {
+			// Only record disabled compliance events if the deletion timestamp is nil. The reason is that if there
+			// is a finalizer that prevents immediate deletion and there is another reconcile, the disabled events
+			// shouldn't be recorded again.
+			if r.EventsQueue != nil && managedPolicy.GetDeletionTimestamp() == nil {
 				for _, tmplEntry := range managedPolicy.Spec.PolicyTemplates {
 					tmpl := &unstructured.Unstructured{}
 
