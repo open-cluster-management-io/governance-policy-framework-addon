@@ -33,7 +33,9 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	apiWatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -41,8 +43,10 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
+	apiCache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/watch"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"open-cluster-management.io/addon-framework/pkg/lease"
@@ -70,10 +74,12 @@ import (
 )
 
 var (
-	eventsScheme = k8sruntime.NewScheme()
-	log          = ctrl.Log.WithName("setup")
-	scheme       = k8sruntime.NewScheme()
-	eventFilter  fields.Selector
+	eventsScheme        = k8sruntime.NewScheme()
+	log                 = ctrl.Log.WithName("setup")
+	scheme              = k8sruntime.NewScheme()
+	eventFilter         fields.Selector
+	healthAddresses     = map[string]bool{}
+	healthAddressesLock = sync.RWMutex{}
 )
 
 func printVersion() {
@@ -275,12 +281,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	healthAddresses := []string{mgrHealthAddr}
+	healthAddressesLock.Lock()
+	healthAddresses[mgrHealthAddr] = true
 
 	mainCtx := ctrl.SetupSignalHandler()
 	mgrCtx, mgrCtxCancel := context.WithCancel(mainCtx)
 
-	mgr := getManager(mgrCtx, mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg)
+	mgr := getManager(mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg)
 
 	var hubMgr manager.Manager
 
@@ -291,9 +298,36 @@ func main() {
 			os.Exit(1)
 		}
 
-		healthAddresses = append(healthAddresses, hubMgrHealthAddr)
+		healthAddresses[hubMgrHealthAddr] = true
 
 		hubMgr = getHubManager(mgrOptionsBase, hubMgrHealthAddr, hubCfg, managedCfg)
+	}
+
+	healthAddressesLock.Unlock()
+
+	var wg sync.WaitGroup
+
+	// Add Gatekeeper controller if enabled
+	if !tool.Options.DisableGkSync {
+		discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(managedCfg)
+
+		serverVersion, err := discoveryClient.ServerVersion()
+		if err != nil {
+			log.Error(err, "unable to detect the managed cluster's Kubernetes version")
+			os.Exit(1)
+		}
+
+		// Gatekeeper is not supported on such old versions of Kubernetes, so just always disable it in this case. In
+		// particular, CRD v1 is not available before Kubernetes v1.16.0.
+		if semver.Compare(serverVersion.GitVersion, "v1.16.0") >= 0 {
+			dynamicClient := dynamic.NewForConfigOrDie(managedCfg)
+
+			go manageGatekeeperSyncManager(mgrCtx, &wg, managedCfg, dynamicClient, mgrOptionsBase)
+		} else {
+			log.Info("The Gatekeeper integration is disabled due to the Kubernetes version being less than 1.16.0")
+		}
+	} else {
+		log.Info("The Gatekeeper integration is set to disabled")
 	}
 
 	log.Info("Adding controllers to managers")
@@ -311,12 +345,10 @@ func main() {
 
 	log.Info("Starting the controller managers")
 
-	var wg sync.WaitGroup
-
 	wg.Add(1)
 
 	go func() {
-		err := startHealthProxy(mgrCtx, &wg, healthAddresses...)
+		err := startHealthProxy(mgrCtx, &wg)
 		if err != nil {
 			log.Error(err, "failed to start the health endpoint proxy")
 
@@ -418,7 +450,7 @@ func main() {
 
 // getManager return a controller Manager object that watches on the managed cluster and has the controllers registered.
 func getManager(
-	mgrCtx context.Context, options manager.Options, healthAddr string, hubCfg *rest.Config, managedCfg *rest.Config,
+	options manager.Options, healthAddr string, hubCfg *rest.Config, managedCfg *rest.Config,
 ) manager.Manager {
 	crdLabelSelector := labels.SelectorFromSet(map[string]string{utils.PolicyTypeLabel: "template"})
 
@@ -431,9 +463,6 @@ func getManager(
 			},
 			&extensionsv1beta1.CustomResourceDefinition{}: {
 				Label: crdLabelSelector,
-			},
-			&admissionregistration.ValidatingWebhookConfiguration{}: {
-				Field: fields.SelectorFromSet(fields.Set{"metadata.name": gatekeepersync.GatekeeperWebhookName}),
 			},
 			&v1.Event{}: {
 				Namespaces: map[string]cache.Config{
@@ -510,17 +539,8 @@ func getManager(
 		os.Exit(1)
 	}
 
-	healthCheck := configChecker.Check
-
-	// Add Gatekeeper controller if enabled
-	if !tool.Options.DisableGkSync {
-		healthCheck = addGkControllerToManager(mgrCtx, mgr, managedCfg, configChecker.Check)
-	} else {
-		log.Info("The Gatekeeper integration is set to disabled")
-	}
-
 	//+kubebuilder:scaffold:builder
-	if err := mgr.AddHealthzCheck("healthz", healthCheck); err != nil {
+	if err := mgr.AddHealthzCheck("healthz", configChecker.Check); err != nil {
 		log.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
@@ -596,103 +616,30 @@ func getHubManager(
 	return mgr
 }
 
-// addGkControllerToManager will configure the input manager with the gatekeeper-constraint-status-sync controller if
-// Gatekeeper is installed and the Kubernetes cluster is v1.16.0+. The returned health checker will wrap the input
-// health checkers but also return unhealthy if the Gatekeeper installation status chanages.
-func addGkControllerToManager(
-	mgrCtx context.Context, mgr manager.Manager, managedCfg *rest.Config, healthCheck healthz.Checker,
-) healthz.Checker {
-	discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(managedCfg)
-
-	serverVersion, err := discoveryClient.ServerVersion()
-	if err != nil {
-		log.Error(err, "unable to detect the managed cluster's Kubernetes version")
-		os.Exit(1)
-	}
-
-	// Gatekeeper is not supported on such old versions of Kubernetes, so just always disable it in this case. In
-	// particular, CRD v1 is not available before Kubernetes v1.16.0.
-	if semver.Compare(serverVersion.GitVersion, "v1.16.0") < 0 {
-		return healthCheck
-	}
-
-	dynamicClient := dynamic.NewForConfigOrDie(managedCfg)
-
-	gkHealthCheck, gatekeeperInstalled, err := gatekeepersync.GatekeeperInstallationChecker(
-		mgrCtx, dynamicClient, healthCheck,
-	)
-	if err != nil {
-		log.Error(err, "unable to determine if Gatekeeper is installed")
-		os.Exit(1)
-	}
-
-	// Only run the controller if Gatekeeper is installed
-	if !gatekeeperInstalled {
-		log.Info(
-			"Gatekeeper is not installed so the gatekeepersync controller will be disabled. If running in a " +
-				"cluster, the health endpoint will become unhealthy if Gatekeeper is installed to trigger a " +
-				"restart.",
-		)
-
-		return gkHealthCheck
-	}
-
-	log.Info(
-		"Starting the controller since a Gatekeeper installation was detected",
-		"controller", gatekeepersync.ControllerName,
-	)
-
-	clientset := kubernetes.NewForConfigOrDie(mgr.GetConfig())
-	instanceName, _ := os.Hostname() // on an error, instanceName will be empty, which is ok
-
-	constraintsReconciler, constraintEvents := depclient.NewControllerRuntimeSource()
-
-	constraintsWatcher, err := depclient.New(managedCfg, constraintsReconciler, nil)
-	if err != nil {
-		log.Error(err, "Unable to create constraints watcher")
-		os.Exit(1)
-	}
-
-	go func() {
-		err := constraintsWatcher.Start(mgrCtx)
-		if err != nil {
-			panic(err)
-		}
-	}()
-
-	// Wait until the constraints watcher has started.
-	<-constraintsWatcher.Started()
-
-	if err = (&gatekeepersync.GatekeeperConstraintReconciler{
-		Client: mgr.GetClient(),
-		ComplianceEventSender: utils.ComplianceEventSender{
-			ClusterNamespace: tool.Options.ClusterNamespace,
-			ClientSet:        clientset,
-			ControllerName:   gatekeepersync.ControllerName,
-			InstanceName:     instanceName,
-		},
-		DynamicClient:        dynamicClient,
-		ConstraintsWatcher:   constraintsWatcher,
-		Scheme:               mgr.GetScheme(),
-		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
-	}).SetupWithManager(mgr, constraintEvents); err != nil {
-		log.Error(err, "unable to create controller", "controller", gatekeepersync.ControllerName)
-		os.Exit(1)
-	}
-
-	return gkHealthCheck
-}
-
-// startHealthProxy responds to /healthz and /readyz HTTP requests and combines the status together of the input
-// addresses representing the managers. The HTTP server gracefully shutsdown when the input context is closed.
+// startHealthProxy responds to /healthz and /readyz HTTP requests and combines the status together of the
+// healthAddresses map representing the managers. The HTTP server gracefully shutsdown when the input context is closed.
 // The wg.Done() is only called after the HTTP server fails to start or after graceful shutdown of the HTTP server.
-func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...string) error {
+func startHealthProxy(ctx context.Context, wg *sync.WaitGroup) error {
 	log := ctrl.Log.WithName("healthproxy")
+
+	httpClient := http.Client{
+		Timeout: 5 * time.Second,
+	}
 
 	for _, endpoint := range []string{"/healthz", "/readyz"} {
 		endpoint := endpoint
 
 		http.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
+			healthAddressesLock.RLock()
+			addresses := make([]string, 0, len(healthAddresses))
+
+			// Populate a separate slice to avoid holding the lock too long.
+			for address := range healthAddresses {
+				addresses = append(addresses, address)
+			}
+
+			healthAddressesLock.RUnlock()
+
 			for _, address := range addresses {
 				req, err := http.NewRequestWithContext(
 					ctx, http.MethodGet, fmt.Sprintf("http://%s%s", address, endpoint), nil,
@@ -703,7 +650,7 @@ func startHealthProxy(ctx context.Context, wg *sync.WaitGroup, addresses ...stri
 					return
 				}
 
-				resp, err := http.DefaultClient.Do(req)
+				resp, err := httpClient.Do(req)
 				if err != nil {
 					http.Error(w, fmt.Sprintf("manager: %s", err.Error()), http.StatusInternalServerError)
 
@@ -950,4 +897,246 @@ func addControllers(
 		log.Error(err, "Unable to create the controller", "controller", secretsync.ControllerName)
 		os.Exit(1)
 	}
+}
+
+// manageGatekeeperSyncManager ensures the gatekeeper-constraint-status-sync controller is running based on Gatekeeper's
+// installation status. The controller will be off when Gatekeeper is not installed. This is blocking until ctx
+// is closed and continuously retries to start the manager if the manager shuts down unexpectedly.
+func manageGatekeeperSyncManager(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	managedCfg *rest.Config,
+	dynamicClient dynamic.Interface,
+	mgrOptions manager.Options,
+) {
+	fieldSelector := fmt.Sprintf("metadata.name=constrainttemplates.%s", utils.GvkConstraintTemplate.Group)
+	timeout := int64(30)
+	crdGVR := schema.GroupVersionResource{
+		Group:    "apiextensions.k8s.io",
+		Version:  "v1",
+		Resource: "customresourcedefinitions",
+	}
+
+	var mgrCtx context.Context
+	var mgrCtxCancel context.CancelFunc
+	var watcher *watch.RetryWatcher
+	var mgrRunning bool
+	var gatekeeperInstalled bool
+
+	for {
+		if watcher == nil {
+			listResult, err := dynamicClient.Resource(crdGVR).List(
+				ctx, metav1.ListOptions{FieldSelector: fieldSelector, TimeoutSeconds: &timeout},
+			)
+			if err != nil {
+				log.Error(err, "Failed to list the CRDs to check for the Gatekeeper installation. Will retry.")
+
+				time.Sleep(time.Second)
+
+				continue
+			}
+
+			resourceVersion := listResult.GetResourceVersion()
+
+			watchFunc := func(options metav1.ListOptions) (apiWatch.Interface, error) {
+				options.FieldSelector = fieldSelector
+
+				return dynamicClient.Resource(crdGVR).Watch(ctx, options)
+			}
+
+			watcher, err = watch.NewRetryWatcher(resourceVersion, &apiCache.ListWatch{WatchFunc: watchFunc})
+			if err != nil {
+				log.Error(err, "Failed to watch the CRDs to check for the Gatekeeper installation. Will retry.")
+
+				time.Sleep(time.Second)
+
+				continue
+			}
+
+			gatekeeperInstalled = len(listResult.Items) > 0
+		}
+
+		if gatekeeperInstalled && !mgrRunning {
+			mgrRunning = true
+
+			wg.Add(1)
+
+			mgrCtx, mgrCtxCancel = context.WithCancel(ctx)
+
+			// Keep retrying to start the Gatekeeper sync manager until mgrCtx closes.
+			go func(ctx context.Context) {
+				for {
+					select {
+					case <-ctx.Done():
+						wg.Done()
+
+						return
+					default:
+						log.Info(
+							"Gatekeeper is installed. Starting the gatekeeper-constraint-status-sync controller.",
+						)
+
+						err := runGatekeeperSyncManager(ctx, managedCfg, dynamicClient, mgrOptions)
+						// The error is logged in runGatekeeperSyncManager since it has more context.
+						if err != nil {
+							time.Sleep(time.Second)
+						}
+					}
+				}
+			}(mgrCtx)
+		}
+
+		if !gatekeeperInstalled && mgrRunning {
+			log.Info("Gatekeeper was uninstalled. Stopping the gatekeeper-constraint-status-sync controller.")
+
+			mgrRunning = false
+
+			mgrCtxCancel()
+		}
+
+		select {
+		case <-ctx.Done():
+			// Stop the retry watcher if the parent context is canceled. It likely already is stopped, but this is not
+			// documented behavior.
+			watcher.Stop()
+
+			// Satisfy the lostcancel linter but if this code is reached, then we know mgrCtx is cancelled since the
+			// parent context (ctx) is cancelled.
+			if mgrCtxCancel != nil {
+				mgrCtxCancel()
+			}
+
+			return
+		case <-watcher.Done():
+			// Restart the watcher on the next loop since the context wasn't closed which indicates it was not stopped
+			// on purpose.
+			watcher = nil
+		case result := <-watcher.ResultChan():
+			// If the CRD is added, then Gatekeeper is installed.
+			if result.Type == apiWatch.Added {
+				gatekeeperInstalled = true
+			} else if result.Type == apiWatch.Deleted {
+				gatekeeperInstalled = false
+			}
+		}
+	}
+}
+
+func runGatekeeperSyncManager(
+	ctx context.Context, managedCfg *rest.Config, dynamicClient dynamic.Interface, mgrOptions manager.Options,
+) error {
+	healthAddress, err := getFreeLocalAddr()
+	if err != nil {
+		log.Error(err, "Unable to get a health address for the Gatekeeper constraint status sync manager")
+
+		return err
+	}
+
+	// Disable the metrics endpoint for this manager. Note that since they both use the global
+	// metrics registry, metrics for this manager are still exposed by the other manager.
+	mgrOptions.Metrics.BindAddress = "0"
+	mgrOptions.LeaderElectionID = "governance-policy-framework-addon3.open-cluster-management.io"
+	mgrOptions.Cache = cache.Options{
+		ByObject: map[client.Object]cache.ByObject{
+			&admissionregistration.ValidatingWebhookConfiguration{}: {
+				Field: fields.SelectorFromSet(fields.Set{"metadata.name": gatekeepersync.GatekeeperWebhookName}),
+			},
+		},
+		DefaultNamespaces: map[string]cache.Config{
+			tool.Options.ClusterNamespace: {},
+		},
+	}
+	mgrOptions.HealthProbeBindAddress = healthAddress
+
+	// When ctx is still open, then start the manager.
+	mgr, err := ctrl.NewManager(managedCfg, mgrOptions)
+	if err != nil {
+		log.Error(err, "Unable to start the Gatekeeper constraint status sync manager")
+
+		return err
+	}
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		log.Error(err, "Unable to set up health check on the Gatekeeper constraint status sync manager")
+
+		return err
+	}
+
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		log.Error(err, "Unable to set up ready check on the Gatekeeper constraint status sync manager")
+
+		return err
+	}
+
+	clientset := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+	instanceName, _ := os.Hostname() // on an error, instanceName will be empty, which is ok
+
+	constraintsReconciler, constraintEvents := depclient.NewControllerRuntimeSource()
+
+	constraintsWatcher, err := depclient.New(managedCfg, constraintsReconciler, nil)
+	if err != nil {
+		log.Error(err, "Unable to create the constraints watcher")
+
+		return err
+	}
+
+	// Create a separate context for the dynamic watcher to be able to cancel that separately in case
+	// starting the manager needs to be retried.
+	dynamicWatcherCtx, dynamicWatchCancel := context.WithCancel(ctx)
+	defer dynamicWatchCancel()
+
+	go func() {
+		err := constraintsWatcher.Start(dynamicWatcherCtx)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	// Wait until the constraints watcher has started.
+	<-constraintsWatcher.Started()
+
+	if err = (&gatekeepersync.GatekeeperConstraintReconciler{
+		Client: mgr.GetClient(),
+		ComplianceEventSender: utils.ComplianceEventSender{
+			ClusterNamespace: tool.Options.ClusterNamespace,
+			ClientSet:        clientset,
+			ControllerName:   gatekeepersync.ControllerName,
+			InstanceName:     instanceName,
+		},
+		DynamicClient:        dynamicClient,
+		ConstraintsWatcher:   constraintsWatcher,
+		Scheme:               mgr.GetScheme(),
+		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
+	}).SetupWithManager(mgr, constraintEvents); err != nil {
+		log.Error(err, "Unable to create controller", "controller", gatekeepersync.ControllerName)
+
+		// Stop the dynamic watcher since the manager will get recreated.
+		dynamicWatchCancel()
+
+		return err
+	}
+
+	// Add the health bind address to be considered by the health proxy.
+	healthAddressesLock.Lock()
+	healthAddresses[healthAddress] = true
+	healthAddressesLock.Unlock()
+
+	// This blocks until the manager stops.
+	err = mgr.Start(ctx)
+
+	// Remove the health bind address after the manager stops.
+	healthAddressesLock.Lock()
+	delete(healthAddresses, healthAddress)
+	healthAddressesLock.Unlock()
+
+	if err != nil {
+		log.Error(err, "Unable to start the Gatekeeper constraint status sync manager")
+
+		// Stop the dynamic watcher since the manager will get recreated.
+		dynamicWatchCancel()
+
+		return err
+	}
+
+	return nil
 }
