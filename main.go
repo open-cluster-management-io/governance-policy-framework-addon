@@ -62,6 +62,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/complianceeventssync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/gatekeepersync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/secretsync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/specsync"
@@ -334,11 +335,29 @@ func main() {
 
 	var queue workqueue.RateLimitingInterface
 
+	var dynamicClient *dynamic.DynamicClient
+
+	var policyListResourceVersion string
+
 	if tool.Options.ComplianceAPIURL != "" {
 		queue = workqueue.NewRateLimitingQueueWithConfig(
 			workqueue.DefaultControllerRateLimiter(),
 			workqueue.RateLimitingQueueConfig{Name: "compliance-api-events"},
 		)
+
+		dynamicClient = dynamic.NewForConfigOrDie(managedCfg)
+
+		gvr := complianceeventssync.GVRPolicy
+
+		listResult, err := dynamicClient.Resource(gvr).Namespace(tool.Options.ClusterNamespace).List(
+			mgrCtx, metav1.ListOptions{},
+		)
+		if err != nil {
+			log.Error(err, "Failed to list the policies for recording disabled events")
+			os.Exit(1)
+		}
+
+		policyListResourceVersion = listResult.GetResourceVersion()
 	}
 
 	addControllers(mgrCtx, hubCfg, hubMgr, mgr, queue)
@@ -362,7 +381,7 @@ func main() {
 
 		go func() {
 			err := statussync.StartComplianceEventsSyncer(
-				mgrCtx, tool.Options.ClusterNamespace, hubCfg, managedCfg, tool.Options.ComplianceAPIURL, queue,
+				mgrCtx, tool.Options.ClusterNamespace, hubCfg, dynamicClient, tool.Options.ComplianceAPIURL, queue,
 			)
 			if err != nil {
 				log.Error(err, "Failed to start the compliance events API syncer")
@@ -370,6 +389,15 @@ func main() {
 				mgrCtxCancel()
 			}
 
+			wg.Done()
+		}()
+
+		wg.Add(1)
+
+		go func() {
+			complianceeventssync.DisabledEventsRecorder(
+				mgrCtx, dynamicClient, tool.Options.ClusterNamespace, queue, policyListResourceVersion,
+			)
 			wg.Done()
 		}()
 	}
@@ -881,7 +909,6 @@ func addControllers(
 		Scheme:               hubMgr.GetScheme(),
 		TargetNamespace:      tool.Options.ClusterNamespace,
 		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
-		EventsQueue:          queue,
 	}).SetupWithManager(hubMgr, specSyncRequestsSource); err != nil {
 		log.Error(err, "Unable to create the controller", "controller", specsync.ControllerName)
 		os.Exit(1)

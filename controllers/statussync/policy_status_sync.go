@@ -568,7 +568,7 @@ func StartComplianceEventsSyncer(
 	ctx context.Context,
 	clusterName string,
 	hubCfg *rest.Config,
-	managedCfg *rest.Config,
+	managedClient *dynamic.DynamicClient,
 	apiURL string,
 	events workqueue.RateLimitingInterface,
 ) error {
@@ -576,11 +576,6 @@ func StartComplianceEventsSyncer(
 
 	if hubCfg.BearerToken != "" {
 		hubToken = hubCfg.BearerToken
-	}
-
-	managedClient, err := dynamic.NewForConfig(managedCfg)
-	if err != nil {
-		return err
 	}
 
 	var clusterID string
