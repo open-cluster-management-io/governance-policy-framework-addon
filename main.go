@@ -1003,7 +1003,7 @@ func manageGatekeeperSyncManager(
 							"Gatekeeper is installed. Starting the gatekeeper-constraint-status-sync controller.",
 						)
 
-						err := runGatekeeperSyncManager(ctx, managedCfg, dynamicClient, mgrOptions)
+						err := runGatekeeperSyncManager(ctx, managedCfg, mgrOptions)
 						// The error is logged in runGatekeeperSyncManager since it has more context.
 						if err != nil {
 							time.Sleep(time.Second)
@@ -1049,9 +1049,7 @@ func manageGatekeeperSyncManager(
 	}
 }
 
-func runGatekeeperSyncManager(
-	ctx context.Context, managedCfg *rest.Config, dynamicClient dynamic.Interface, mgrOptions manager.Options,
-) error {
+func runGatekeeperSyncManager(ctx context.Context, managedCfg *rest.Config, mgrOptions manager.Options) error {
 	healthAddress, err := getFreeLocalAddr()
 	if err != nil {
 		log.Error(err, "Unable to get a health address for the Gatekeeper constraint status sync manager")
@@ -1100,7 +1098,14 @@ func runGatekeeperSyncManager(
 
 	constraintsReconciler, constraintEvents := depclient.NewControllerRuntimeSource()
 
-	constraintsWatcher, err := depclient.New(managedCfg, constraintsReconciler, nil)
+	constraintsWatcher, err := depclient.New(
+		managedCfg,
+		constraintsReconciler,
+		&depclient.Options{
+			DisableInitialReconcile: true,
+			EnableCache:             true,
+		},
+	)
 	if err != nil {
 		log.Error(err, "Unable to create the constraints watcher")
 
@@ -1130,7 +1135,6 @@ func runGatekeeperSyncManager(
 			ControllerName:   gatekeepersync.ControllerName,
 			InstanceName:     instanceName,
 		},
-		DynamicClient:        dynamicClient,
 		ConstraintsWatcher:   constraintsWatcher,
 		Scheme:               mgr.GetScheme(),
 		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
