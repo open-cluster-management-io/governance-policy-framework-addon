@@ -285,16 +285,16 @@ e2e-debug:
 	@echo local controller log:
 	-cat build/_output/controller.log
 	@echo pods on hub cluster
-	-kubectl get pods -A --kubeconfig=$(HUB_CONFIG)
-	-kubectl get pods -A -o yaml --kubeconfig=$(HUB_CONFIG)
+	-kubectl get pods -A --kubeconfig=$(HUB_CONFIG)_e2e
+	-kubectl get pods -A -o yaml --kubeconfig=$(HUB_CONFIG)_e2e
 	@echo pods on managed cluster
-	-kubectl get pods -A --kubeconfig=$(MANAGED_CONFIG)
-	-kubectl get pods -A -o yaml --kubeconfig=$(MANAGED_CONFIG)
+	-kubectl get pods -A --kubeconfig=$(MANAGED_CONFIG)_e2e
+	-kubectl get pods -A -o yaml --kubeconfig=$(MANAGED_CONFIG)_e2e
 	@echo gatekeeper logs on managed cluster
-	-kubectl logs -n gatekeeper-system -l control-plane=audit-controller --prefix=true --since=5m --kubeconfig=$(MANAGED_CONFIG)
-	-kubectl logs -n gatekeeper-system -l control-plane=controller-manager --prefix=true --since=5m --kubeconfig=$(MANAGED_CONFIG)
+	-kubectl logs -n gatekeeper-system -l control-plane=audit-controller --prefix=true --since=5m --kubeconfig=$(MANAGED_CONFIG)_e2e
+	-kubectl logs -n gatekeeper-system -l control-plane=controller-manager --prefix=true --since=5m --kubeconfig=$(MANAGED_CONFIG)_e2e
 	@echo remote controller log:
-	-kubectl logs $$(kubectl get pods -n $(KIND_NAMESPACE) -o name --kubeconfig=$(MANAGED_CONFIG) | grep $(IMG)) -n $(KIND_NAMESPACE) --kubeconfig=$(MANAGED_CONFIG)
+	-kubectl logs $$(kubectl get pods -n $(KIND_NAMESPACE) -o name --kubeconfig=$(MANAGED_CONFIG)_e2e | grep $(IMG)) -n $(KIND_NAMESPACE) --kubeconfig=$(MANAGED_CONFIG)_e2e
 
 ############################################################
 # test coverage
