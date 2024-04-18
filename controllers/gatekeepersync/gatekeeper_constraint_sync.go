@@ -21,8 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/dynamic"
 	policyv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,7 +39,14 @@ const (
 	GatekeeperWebhookName = "gatekeeper-validating-webhook-configuration"
 )
 
-var log = logf.Log.WithName(ControllerName)
+var (
+	log    = logf.Log.WithName(ControllerName)
+	crdGVK = schema.GroupVersionKind{
+		Group:   "apiextensions.k8s.io",
+		Version: "v1",
+		Kind:    "CustomResourceDefinition",
+	}
+)
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *GatekeeperConstraintReconciler) SetupWithManager(mgr ctrl.Manager, constraintEvents *source.Channel) error {
@@ -70,7 +75,6 @@ type GatekeeperConstraintReconciler struct {
 	client.Client
 	utils.ComplianceEventSender
 	Scheme             *runtime.Scheme
-	DynamicClient      dynamic.Interface
 	ConstraintsWatcher depclient.DynamicWatcher
 	// A cache of sent messages to avoid repeating status events due to race conditions. Each value is a SHA1
 	// digest.
@@ -138,7 +142,21 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 		return reconcile.Result{}, err
 	}
 
-	constraintsToWatch := []depclient.ObjectIdentifier{}
+	// Start query batch for caching and watching related objects
+	err = r.ConstraintsWatcher.StartQueryBatch(policyObjID)
+	if err != nil {
+		log.Error(err, "Could not start query batch for the watcher", "objectID", policyObjID)
+
+		return reconcile.Result{}, err
+	}
+
+	defer func() {
+		err := r.ConstraintsWatcher.EndQueryBatch(policyObjID)
+		if err != nil {
+			log.Error(err, "Could not end query batch for the watcher", "objectID", policyObjID)
+		}
+	}()
+
 	constraintsSet := map[policyKindName]bool{}
 
 	for templateIndex, template := range policy.Spec.PolicyTemplates {
@@ -162,15 +180,9 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 			continue
 		}
 
-		constraintObjID := depclient.ObjectIdentifier{
-			Group:     templateGVK.Group,
-			Version:   templateGVK.Version,
-			Kind:      templateGVK.Kind,
-			Namespace: templateUnstructured.GetNamespace(),
-			Name:      templateUnstructured.GetName(),
-		}
+		constraintName := templateUnstructured.GetName()
 
-		pkn := policyKindName{Policy: policy.Name, Kind: templateGVK.Kind, Name: templateUnstructured.GetName()}
+		pkn := policyKindName{Policy: policy.Name, Kind: templateGVK.Kind, Name: constraintName}
 		constraintsSet[pkn] = true
 
 		constraintGVR := schema.GroupVersionResource{
@@ -182,60 +194,47 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 			Version: "v1beta1",
 		}
 
-		constraint, err := r.DynamicClient.Resource(constraintGVR).Get(
-			ctx, templateUnstructured.GetName(), metav1.GetOptions{},
+		crdName := fmt.Sprintf("%s.%s", constraintGVR.Resource, constraintGVR.Group)
+
+		// Getting the CRD first creates a watch so that if the constraint template gets cleaned up and thus the
+		// CRD is deleted, the watch on the constraint can get cleaned up.
+		crd, err := r.ConstraintsWatcher.Get(policyObjID, crdGVK, "", crdName)
+		if err != nil {
+			log.Error(err, "Failed to create a watch for the constraint CRD", "name", crdName)
+
+			return reconcile.Result{}, err
+		}
+
+		if crd == nil {
+			log.Info(
+				"The Gatekeeper ConstraintTemplate is not initialized on the cluster yet. "+
+					"Will retry the reconcile when the CRD is created.",
+				"constraint", constraintName,
+			)
+
+			continue
+		}
+
+		constraint, err := r.ConstraintsWatcher.Get(
+			policyObjID, templateGVK, templateUnstructured.GetNamespace(), constraintName,
 		)
 		if err != nil {
-			if k8serrors.IsNotFound(err) {
-				// Detect if the error is because Gatekeeper hasn't generated a CRD from the ConstraintTemplate yet.
-				// This prevents the dynamic watch library from constantly erroring due to the missing CRD. If the
-				// CRD is missing, this will watch for the CRD instead.
-				//
-				// This approach is taken instead of checking the error message in case the message changes.
-				constraintGVK := schema.GroupVersionKind{
-					Group:   constraintGVR.Group,
-					Version: constraintGVR.Version,
-					Kind:    templateGVK.Kind,
-				}
-				_, _, err := utils.GVRFromGVK(discovery.NewDiscoveryClient(r.ClientSet.RESTClient()), constraintGVK)
-
-				if errors.Is(err, utils.ErrNoVersionedResource) {
-					log.Info(
-						"The Gatekeeper ConstraintTemplate is not initialized on the cluster yet. "+
-							"Will retry the reconcile when the CRD is created.",
-						"constraint", constraintObjID.String(),
-					)
-
-					crdObjID := depclient.ObjectIdentifier{
-						Group:   "apiextensions.k8s.io",
-						Version: "v1",
-						Kind:    "CustomResourceDefinition",
-						Name:    fmt.Sprintf("%s.%s", constraintGVR.Resource, constraintGVR.Group),
-					}
-					constraintsToWatch = append(constraintsToWatch, crdObjID)
-
-					continue
-				}
-
-				log.Info(
-					"The Gatekeeper constraint does not exist on the cluster yet. "+
-						"Will retry the reconcile request once it's created.",
-					"constraint", constraintObjID.String(),
-				)
-
-				constraintsToWatch = append(constraintsToWatch, constraintObjID)
-
-				continue
-			}
-
 			log.Error(
-				err, "Failed to get the constraint. Will retry the reconcile request.", "constraint", constraintObjID,
+				err, "Failed to get the constraint. Will retry the reconcile request.", "constraint", constraintName,
 			)
 
 			return reconcile.Result{}, err
 		}
 
-		constraintsToWatch = append(constraintsToWatch, constraintObjID)
+		if constraint == nil {
+			log.Info(
+				"The Gatekeeper constraint does not exist on the cluster yet. Will retry the reconcile request once "+
+					"it's created.",
+				"constraint", constraintName,
+			)
+
+			continue
+		}
 
 		_, auditRan, _ := unstructured.NestedInt64(constraint.Object, "status", "totalViolations")
 		if !auditRan {
@@ -246,7 +245,7 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 
 		violations, _, err := unstructured.NestedSlice(constraint.Object, "status", "violations")
 		if err != nil {
-			log.Error(err, "The constraint status is invalid", "constraint", constraintObjID)
+			log.Error(err, "The constraint status is invalid", "constraint", constraintName)
 
 			err := r.sendComplianceEvent(
 				ctx, policy, constraint, templateIndex, "The constraint status is invalid", policyv1.NonCompliant,
@@ -322,23 +321,6 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 
 		return true
 	})
-
-	// This is true if a policy used to have Gatekeeper constraints but now does not.
-	if len(constraintsToWatch) == 0 {
-		err = r.ConstraintsWatcher.RemoveWatcher(policyObjID)
-		if err != nil {
-			log.Error(err, "Failed to remove the watches on the constraints")
-
-			return reconcile.Result{}, err
-		}
-	} else {
-		err = r.ConstraintsWatcher.AddOrUpdateWatcher(policyObjID, constraintsToWatch...)
-		if err != nil {
-			log.Error(err, "Failed to update the watches on the constraints")
-
-			return reconcile.Result{}, err
-		}
-	}
 
 	return reconcile.Result{}, nil
 }
