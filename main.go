@@ -484,6 +484,14 @@ func getManager(
 
 	options.LeaderElectionID = "governance-policy-framework-addon.open-cluster-management.io"
 	options.HealthProbeBindAddress = healthAddr
+	options.Client = client.Options{
+		Cache: &client.CacheOptions{
+			DisableFor: []client.Object{
+				&gktemplatesv1.ConstraintTemplate{},
+				&gktemplatesv1beta1.ConstraintTemplate{},
+			},
+		},
+	}
 	options.Cache = cache.Options{
 		ByObject: map[client.Object]cache.ByObject{
 			&extensionsv1.CustomResourceDefinition{}: {
