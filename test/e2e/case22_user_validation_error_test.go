@@ -59,15 +59,15 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
 			g.Expect(err).ToNot(HaveOccurred())
-			if len(plc.Status.Details) < 2 {
+			if len(plc.Status.Details) < 1 {
 				return ""
 			}
 
-			if len(plc.Status.Details[1].History) < 1 {
+			if len(plc.Status.Details[0].History) < 1 {
 				return ""
 			}
 
-			return plc.Status.Details[1].History[0].Message
+			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(ContainSubstring("NonCompliant; template-error;"))
 	})
 
