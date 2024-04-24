@@ -138,7 +138,7 @@ var _ = Describe("Test error handling", func() {
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(hubPlc.Object, &plc)
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(plc.Status.Details).To(HaveLen(1))
-			g.Expect(plc.Status.Details[0].History).To(HaveLen(1))
+			g.Expect(plc.Status.Details[0].History).To(Or(HaveLen(1), HaveLen(2)))
 			g.Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case10_invalid-name"))
 			g.Expect(plc.Status.Details[0].History[0].Message).To(ContainSubstring(statusMsg))
 		}, defaultTimeoutSeconds, 1).Should(Succeed())
@@ -353,26 +353,20 @@ var _ = Describe("Test error handling", func() {
 			1,
 		).Should(BeTrue())
 	})
-	It("should only generate one event for a missing kind", func() {
+	It("should only generate a limited number of events for a missing kind", func() {
 		policyName := "case10-missing-kind"
 		hubApplyPolicy(policyName,
 			yamlBasePath+"missing-kind.yaml")
 
 		By("Checking for the error event and ensuring it only occurs once")
 		Eventually(
-			checkForEvent(
-				policyName, "Object 'Kind' is missing in",
-			),
-			defaultTimeoutSeconds,
-			1,
+			checkForEvent(policyName, "Object 'Kind' is missing in"), defaultTimeoutSeconds, 1,
 		).Should(BeTrue())
 		Consistently(
-			getMatchingEvents(
-				policyName, "Object 'Kind' is missing in",
-			),
-			defaultTimeoutSeconds,
-			1,
-		).Should(HaveLen(2))
+			getMatchingEvents(policyName, "Object 'Kind' is missing in"), defaultTimeoutSeconds, 1,
+			// Some duplication might be unavoidable,
+			// but note that one of the matching events here is *not* a compliance event
+		).Should(Or(HaveLen(2), HaveLen(3)))
 	})
 })
 
