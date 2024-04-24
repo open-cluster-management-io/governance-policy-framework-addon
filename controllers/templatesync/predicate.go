@@ -4,6 +4,8 @@
 package templatesync
 
 import (
+	"strings"
+
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -25,7 +27,29 @@ func templatePredicates() predicate.Funcs {
 			if hasAnyDependencies(updatedPolicy) {
 				// if it has dependencies, and it's not currently Pending, then
 				// it needs to re-calculate if it *should* be Pending.
-				return updatedPolicy.Status.ComplianceState != "Pending"
+				if updatedPolicy.Status.ComplianceState != "Pending" {
+					return true
+				}
+			}
+
+			// Look through the history for `template-error` events. If one is
+			// found and the "current" (0th) event is not a `template-error`, then
+			// reconcile to determine if the template-error event needs to be
+			// re-sent.
+			for _, dpt := range updatedPolicy.Status.Details {
+				if dpt == nil {
+					continue
+				}
+
+				for i, historyEvent := range dpt.History {
+					if strings.Contains(historyEvent.Message, "template-error") {
+						if i == 0 {
+							break
+						}
+
+						return true
+					}
+				}
 			}
 
 			return false
