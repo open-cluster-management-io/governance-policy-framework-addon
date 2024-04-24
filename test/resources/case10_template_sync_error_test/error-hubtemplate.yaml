@@ -15,5 +15,7 @@ spec:
         kind: MockPolicy
         metadata:
           name: case10-bad-hubtemplate-policy
+          annotations:
+            policy.open-cluster-management.io/hub-templates-error: "must be aboveground"
         spec:
           foo: 'I come from {{hub the land down under hub}}'
