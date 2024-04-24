@@ -96,7 +96,7 @@ var _ = Describe("Test error handling", func() {
 
 		By("Checking for event with missing name err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
-			checkForEvent("case10-template-name-error", "template-error; Failed to get name from policy"),
+			checkForEvent("case10-template-name-error", "template-error; Failed to parse or get name from policy"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
@@ -255,7 +255,7 @@ var _ = Describe("Test error handling", func() {
 			return found
 		}, defaultTimeoutSeconds*2, 1).Should(BeFalse())
 	})
-	It("should throw a noncompliance event if a non-configurationpolicy uses a hub template", func() {
+	It("should throw a noncompliance event for hub template errors", func() {
 		By("Deploying a test policy CRD")
 		_, err := kubectlManaged("apply", "-f", yamlBasePath+"mock-crd.yaml")
 		Expect(err).ToNot(HaveOccurred())
@@ -266,11 +266,11 @@ var _ = Describe("Test error handling", func() {
 		})
 
 		hubApplyPolicy("case10-bad-hubtemplate",
-			yamlBasePath+"non-config-hubtemplate.yaml")
+			yamlBasePath+"error-hubtemplate.yaml")
 
 		By("Checking for the error event")
 		Eventually(
-			checkForEvent("case10-bad-hubtemplate", "Templates are not supported for kind"),
+			checkForEvent("case10-bad-hubtemplate", "must be aboveground"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())

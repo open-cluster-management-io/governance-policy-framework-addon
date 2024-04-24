@@ -361,13 +361,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
-		var tName string
-		if tMetaObj, ok := object.(metav1.Object); ok {
-			tName = tMetaObj.GetName()
-		}
+		metaObj, ok := object.(metav1.Object)
+		tName := metaObj.GetName()
 
-		if tName == "" {
-			errMsg := fmt.Sprintf("Failed to get name from policy template at index %v", tIndex)
+		if !ok || tName == "" {
+			errMsg := fmt.Sprintf("Failed to parse or get name from policy template at index %v", tIndex)
 			resultError = k8serrors.NewBadRequest(errMsg)
 
 			_ = r.emitTemplateError(ctx, instance, tIndex,
@@ -463,21 +461,15 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
-		// reject if not configuration policy and has template strings, and don't requeue
-		if gvk.Kind != "ConfigurationPolicy" {
-			// if not configuration policies, do a simple check for templates {{hub and reject
-			// only checking for hub and not {{ as they could be valid cases where they are valid chars.
-			if strings.Contains(string(policyT.ObjectDefinition.Raw), "{{hub ") {
-				errMsg := fmt.Sprintf("Templates are not supported for kind : %s", gvk.Kind)
+		// check for hub template error
+		if errAnno := metaObj.GetAnnotations()["policy.open-cluster-management.io/hub-templates-error"]; errAnno != "" {
+			_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errAnno)
 
-				_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errMsg)
+			tLogger.Error(k8serrors.NewBadRequest(errAnno), "Failed to process the policy template")
 
-				tLogger.Error(k8serrors.NewBadRequest(errMsg), "Failed to process the policy template")
+			policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
 
-				policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
-
-				continue
-			}
+			continue
 		}
 
 		dependencyFailures := r.processDependencies(ctx, dClient, discoveryClient, templateDeps, tLogger)
