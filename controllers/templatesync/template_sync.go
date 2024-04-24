@@ -1408,8 +1408,16 @@ func (r *PolicyReconciler) emitTemplateEvent(
 	ctx context.Context, pol *policiesv1.Policy, tIndex int, tName string, clusterScoped bool,
 	eventType string, compliance policiesv1.ComplianceState, msg string,
 ) error {
-	// check if the error is already present in the policy status - if so, return early
-	if strings.Contains(getLatestStatusMessage(pol, tIndex), string(compliance)+"; "+msg) {
+	// refresh the policy to get the latest status, this helps prevent duplicates
+	refreshed := &policiesv1.Policy{}
+
+	err := r.Get(ctx, types.NamespacedName{Namespace: pol.GetNamespace(), Name: pol.GetName()}, refreshed)
+	if err != nil {
+		return err
+	}
+
+	// check if the event is already present in the policy status - if so, return early
+	if strings.Contains(getLatestStatusMessage(refreshed, tIndex), string(compliance)+"; "+msg) {
 		return nil
 	}
 
@@ -1442,7 +1450,7 @@ func (r *PolicyReconciler) emitTemplateEvent(
 
 	instanceUnstructured := &unstructured.Unstructured{}
 
-	err := instanceUnstructured.UnmarshalJSON(pol.Spec.PolicyTemplates[tIndex].ObjectDefinition.Raw)
+	err = instanceUnstructured.UnmarshalJSON(pol.Spec.PolicyTemplates[tIndex].ObjectDefinition.Raw)
 	if err == nil {
 		if pol.Annotations[utils.ParentDBIDAnnotation] != "" {
 			annotations := instanceUnstructured.GetAnnotations()
