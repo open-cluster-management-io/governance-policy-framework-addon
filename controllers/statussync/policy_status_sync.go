@@ -205,7 +205,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, err
 	}
 	// filter events to current policy instance and build map
-	eventForPolicyMap := make(map[string]*[]historyEvent)
+	eventForPolicyMap := make(map[string][]historyEvent)
 	// panic if regexp invalid
 	rgx := regexp.MustCompile(`(?i)^policy:\s*(?:([a-z0-9.-]+)\s*\/)?(.+)`)
 
@@ -217,7 +217,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// Only handle events that match the UID of the current Policy
 		if event.InvolvedObject.UID == instance.UID && reason != "" {
 			templateName := rgx.FindStringSubmatch(event.Reason)[2]
-			eventHistory := historyEvent{
+			histEvent := historyEvent{
 				ComplianceHistory: policiesv1.ComplianceHistory{
 					LastTimestamp: event.LastTimestamp,
 					Message: strings.TrimSpace(strings.TrimPrefix(
@@ -228,12 +228,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				event:     &event,
 			}
 
-			if eventForPolicyMap[templateName] == nil {
-				eventForPolicyMap[templateName] = &[]historyEvent{}
-			}
-
-			templateEvents := append(*eventForPolicyMap[templateName], eventHistory)
-			eventForPolicyMap[templateName] = &templateEvents
+			eventForPolicyMap[templateName] = append(eventForPolicyMap[templateName], histEvent)
 		}
 	}
 
@@ -253,7 +248,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			reqLogger.Error(err, "Failed to decode policy template, skipping it")
 
 			existingDpt.ComplianceState = policiesv1.NonCompliant
-			newStatus.Details = append(newStatus.Details, existingDpt)
 			tName = fmt.Sprintf("template-%v", i) // template-sync emits this name on error
 		} else {
 			tName = object.(metav1.Object).GetName()
@@ -284,10 +278,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			}
 		}
 
-		history := []historyEvent{}
-		if eventForPolicyMap[tName] != nil {
-			history = *eventForPolicyMap[tName]
-		}
+		history := eventForPolicyMap[tName]
 
 		// Queue up all new status events to record on the compliance API
 		if r.EventsQueue != nil {
