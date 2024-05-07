@@ -22,6 +22,7 @@ import (
 	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -38,7 +39,6 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -52,10 +52,7 @@ const (
 	ControllerName string = "policy-template-sync"
 )
 
-var (
-	log                        = ctrl.Log.WithName(ControllerName)
-	errResourceDiscoveryFailed *apiutil.ErrResourceDiscoveryFailed
-)
+var log = ctrl.Log.WithName(ControllerName)
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=*,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=templates.gatekeeper.sh,resources=constrainttemplates,verbs=get;list;watch;create;update;patch;delete
@@ -1024,7 +1021,7 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 					namespaced: false,
 				})
 			}
-		} else if errors.As(err, &errResourceDiscoveryFailed) {
+		} else if apimeta.IsNoMatchError(err) {
 			// If there's no v1 ConstraintTemplate, try the v1beta1 version
 			gkConstraintTemplateListv1beta1 := gktemplatesv1beta1.ConstraintTemplateList{}
 			err := r.List(ctx, &gkConstraintTemplateListv1beta1, &client.ListOptions{})
@@ -1057,7 +1054,7 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 					})
 				}
 				// Log and ignore other errors to allow cleanup to continue since Gatekeeper may not be installed
-			} else if errors.As(err, &errResourceDiscoveryFailed) {
+			} else if apimeta.IsNoMatchError(err) {
 				reqLogger.Info("The ConstraintTemplate CRD is not installed")
 				r.setCreatedGkConstraint(false)
 			} else {
@@ -1092,7 +1089,7 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 				})
 			}
 		}
-	} else if errors.As(err, &errResourceDiscoveryFailed) {
+	} else if apimeta.IsNoMatchError(err) {
 		crdsv1beta1 := extensionsv1beta1.CustomResourceDefinitionList{}
 		err := r.List(ctx, &crdsv1beta1, &crdQuery)
 		if err != nil {
@@ -1548,7 +1545,7 @@ func (r *PolicyReconciler) hasPolicyTemplateLabel(
 	err := r.Get(ctx, crdName, &crd)
 	if err == nil {
 		return crd.GetLabels()[utils.PolicyTypeLabel] == "template", nil
-	} else if errors.As(err, &errResourceDiscoveryFailed) {
+	} else if apimeta.IsNoMatchError(err) {
 		betaCrd := extensionsv1beta1.CustomResourceDefinition{}
 
 		err = r.Get(ctx, crdName, &betaCrd)
