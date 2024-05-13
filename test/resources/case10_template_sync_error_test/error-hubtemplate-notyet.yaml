@@ -1,7 +1,7 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: case10-bad-hubtemplate
+  name: case10-bad-hubtemplate-notyet
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
@@ -14,10 +14,11 @@ spec:
         apiVersion: policy.open-cluster-management.io/v1
         kind: ConfigurationPolicy
         metadata:
-          name: case10-bad-hubtemplate-policy
-          annotations:
-            policy.open-cluster-management.io/hub-templates-error: "must be aboveground"
+          name: case10-bad-hubtemplate-notyet
+          # annotations:
+          #   policy.open-cluster-management.io/hub-templates-error: "must be aboveground"
         spec:
+          pruneObjectBehavior: DeleteAll
           object-templates:
             - complianceType: musthave
               objectDefinition:

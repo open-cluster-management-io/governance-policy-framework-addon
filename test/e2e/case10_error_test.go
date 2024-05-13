@@ -9,6 +9,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -255,32 +256,111 @@ var _ = Describe("Test error handling", func() {
 			return found
 		}, defaultTimeoutSeconds*2, 1).Should(BeFalse())
 	})
-	It("should throw a noncompliance event for hub template errors", func() {
-		By("Deploying a test policy CRD")
-		_, err := kubectlManaged("apply", "-f", yamlBasePath+"mock-crd.yaml")
-		Expect(err).ToNot(HaveOccurred())
-		DeferCleanup(func() error {
-			_, err := kubectlManaged("delete", "-f", yamlBasePath+"mock-crd.yaml")
+	Describe("testing hub template errors cases", Ordered, func() {
+		AfterEach(func(ctx SpecContext) {
+			cfgInt := clientManagedDynamic.Resource(gvrConfigurationPolicy).Namespace(clusterNamespace)
+			Eventually(func() error {
+				_, err := cfgInt.Patch(ctx, "case10-bad-hubtemplate-notyet", types.JSONPatchType,
+					[]byte(`[{"op":"replace","path":"/metadata/finalizers","value":[]}]`),
+					metav1.PatchOptions{})
+				if k8serrors.IsNotFound(err) {
+					return nil
+				}
 
-			return err
+				return err
+			}, defaultTimeoutSeconds, 1).ShouldNot(HaveOccurred())
 		})
 
-		hubApplyPolicy("case10-bad-hubtemplate",
-			yamlBasePath+"error-hubtemplate.yaml")
+		It("should throw a noncompliance event for hub template errors", func() {
+			hubApplyPolicy("case10-bad-hubtemplate",
+				yamlBasePath+"error-hubtemplate.yaml")
 
-		By("Checking for the error event")
-		Eventually(
-			checkForEvent("case10-bad-hubtemplate", "must be aboveground"),
-			defaultTimeoutSeconds,
-			1,
-		).Should(BeTrue())
+			By("Checking for the error event")
+			Eventually(
+				checkForEvent("case10-bad-hubtemplate", "must be aboveground"),
+				defaultTimeoutSeconds,
+				1,
+			).Should(BeTrue())
 
-		By("Checking for the compliance message formatting")
-		Eventually(
-			checkForEvent("case10-bad-hubtemplate", nonCompliantPrefix+nonCompliantPrefix),
-			defaultTimeoutSeconds,
-			1,
-		).Should(BeFalse())
+			By("Checking for the compliance message formatting")
+			Eventually(
+				checkForEvent("case10-bad-hubtemplate", nonCompliantPrefix+nonCompliantPrefix),
+				defaultTimeoutSeconds,
+				1,
+			).Should(BeFalse())
+		})
+		It("should patch the pruneObjectBehavior to None during a hub-template-error", func(ctx SpecContext) {
+			hubApplyPolicy("case10-bad-hubtemplate-notyet",
+				yamlBasePath+"error-hubtemplate-notyet.yaml")
+
+			cfgInt := clientManagedDynamic.Resource(gvrConfigurationPolicy).Namespace(clusterNamespace)
+
+			By("Checking the pruneObjectBehavior")
+			Eventually(func() string {
+				cfgpol, err := cfgInt.Get(ctx, "case10-bad-hubtemplate-notyet", metav1.GetOptions{})
+				if err != nil {
+					return ""
+				}
+
+				prune, found, err := unstructured.NestedString(cfgpol.Object, "spec", "pruneObjectBehavior")
+				if !found || err != nil {
+					return ""
+				}
+
+				return prune
+			}, defaultTimeoutSeconds, 1).Should(Equal("DeleteAll"))
+
+			By("Applying a finalizer to the configuration policy")
+			Eventually(func() error {
+				_, err := cfgInt.Patch(ctx, "case10-bad-hubtemplate-notyet", types.JSONPatchType,
+					[]byte(`[{"op":"replace","path":"/metadata/finalizers","value":["policy.test/hold"]}]`),
+					metav1.PatchOptions{})
+
+				return err
+			}, defaultTimeoutSeconds, 1).ShouldNot(HaveOccurred())
+
+			polInt := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub)
+
+			By("Adding the hub-template-error annotation to the policy")
+			Eventually(func() error {
+				annoPatch := []byte(`[{"op":"replace",` +
+					`"path":"/spec/policy-templates/0/objectDefinition/metadata/annotations",` +
+					`"value":{"policy.open-cluster-management.io/hub-templates-error": "must be aboveground"}}]`)
+				_, err := polInt.Patch(ctx, "case10-bad-hubtemplate-notyet", types.JSONPatchType,
+					annoPatch, metav1.PatchOptions{})
+
+				return err
+			}, defaultTimeoutSeconds, 1).ShouldNot(HaveOccurred())
+
+			By("Checking for the error event")
+			Eventually(
+				checkForEvent("case10-bad-hubtemplate-notyet", "must be aboveground"),
+				defaultTimeoutSeconds,
+				1,
+			).Should(BeTrue())
+
+			By("Checking the pruneObjectBehavior")
+			Eventually(func() string {
+				cfgpol, err := cfgInt.Get(ctx, "case10-bad-hubtemplate-notyet", metav1.GetOptions{})
+				if err != nil {
+					return ""
+				}
+
+				prune, found, err := unstructured.NestedString(cfgpol.Object, "spec", "pruneObjectBehavior")
+				if !found || err != nil {
+					return ""
+				}
+
+				return prune
+			}, defaultTimeoutSeconds, 1).Should(Equal("None"))
+		})
+		It("should mark the policy as pending instead of throwing a hub-template error event", func() {
+			hubApplyPolicy("case10-bad-hubtemplate-pending",
+				yamlBasePath+"error-hubtemplate-pending.yaml")
+
+			Eventually(checkCompliance("case10-bad-hubtemplate-pending"),
+				defaultTimeoutSeconds, 1).Should(Equal("Pending"))
+		})
 	})
 	It("should throw a noncompliance event if the template object is invalid", func() {
 		hubApplyPolicy("case10-invalid-severity",
