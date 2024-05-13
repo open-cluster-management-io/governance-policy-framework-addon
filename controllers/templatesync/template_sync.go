@@ -50,6 +50,8 @@ import (
 
 const (
 	ControllerName string = "policy-template-sync"
+
+	hubTmplErrorKey = "policy.open-cluster-management.io/hub-templates-error"
 )
 
 var log = ctrl.Log.WithName(ControllerName)
@@ -458,17 +460,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			continue
 		}
 
-		// check for hub template error
-		if errAnno := metaObj.GetAnnotations()["policy.open-cluster-management.io/hub-templates-error"]; errAnno != "" {
-			_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errAnno)
-
-			tLogger.Error(k8serrors.NewBadRequest(errAnno), "Failed to process the policy template")
-
-			policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
-
-			continue
-		}
-
 		dependencyFailures := r.processDependencies(ctx, dClient, discoveryClient, templateDeps, tLogger)
 
 		// Instantiate a dynamic client -- if it's a clusterwide resource, then leave off the namespace
@@ -522,26 +513,37 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// Attempt to fetch the resource
 		eObject, err := res.Get(ctx, tName, metav1.GetOptions{})
 		if err != nil {
-			if len(dependencyFailures) > 0 {
-				// template must be pending, do not create it
-				emitErr := r.emitTemplatePending(ctx, instance, tIndex, tName, isClusterScoped,
-					generatePendingMsg(dependencyFailures))
-				if emitErr != nil {
-					resultError = emitErr
+			// not found should consider creating it
+			if k8serrors.IsNotFound(err) {
+				if len(dependencyFailures) > 0 {
+					// template must be pending, do not create it
+					emitErr := r.emitTemplatePending(ctx, instance, tIndex, tName, isClusterScoped,
+						generatePendingMsg(dependencyFailures))
+					if emitErr != nil {
+						resultError = emitErr
+
+						continue
+					}
+
+					tLogger.Info("Dependencies were not satisfied for the policy template",
+						"namespace", instance.GetNamespace(),
+						"kind", gvk.Kind,
+					)
 
 					continue
 				}
 
-				tLogger.Info("Dependencies were not satisfied for the policy template",
-					"namespace", instance.GetNamespace(),
-					"kind", gvk.Kind,
-				)
+				// check for hub template error before creating
+				if errAnno := metaObj.GetAnnotations()[hubTmplErrorKey]; errAnno != "" {
+					_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errAnno)
 
-				continue
-			}
+					tLogger.Error(k8serrors.NewBadRequest(errAnno), "Failed to process the policy template")
 
-			// not found should create it
-			if k8serrors.IsNotFound(err) {
+					policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
+
+					continue
+				}
+
 				// Handle setting the owner reference (this is skipped for clusterwide objects since our
 				// namespaced policy can't own a clusterwide object)
 				if !isClusterScoped {
@@ -665,6 +667,45 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			err = res.Delete(ctx, tName, metav1.DeleteOptions{})
 			if err != nil {
 				tLogger.Error(err, "Failed to delete a template that entered pending state",
+					"namespace", instance.GetNamespace(),
+					"name", tName,
+				)
+				policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "delete-error").Inc()
+
+				resultError = err
+			}
+
+			continue
+		}
+
+		// check for hub template error
+		if errAnno := metaObj.GetAnnotations()[hubTmplErrorKey]; errAnno != "" {
+			_ = r.emitTemplateError(ctx, instance, tIndex, tName, isClusterScoped, errAnno)
+
+			tLogger.Error(k8serrors.NewBadRequest(errAnno), "Failed to process the policy template")
+
+			policyUserErrorsCounter.WithLabelValues(instance.Name, tName, "format-error").Inc()
+
+			if rsrc.Resource == "configurationpolicies" {
+				// Patch it so that it doesn't clean up resources in the case of a formatting error
+				jsonPatch := []byte(`[{"op":"replace","path":"/spec/pruneObjectBehavior","value":"None"}]`)
+
+				_, err := res.Patch(ctx, tName, types.JSONPatchType, jsonPatch, metav1.PatchOptions{})
+				if err != nil {
+					tLogger.Error(err, "Failed to patch a ConfigurationPolicy that entered hub-template-error state",
+						"namespace", instance.GetNamespace(),
+						"name", tName,
+					)
+
+					resultError = err
+
+					continue
+				}
+			}
+
+			err = res.Delete(ctx, tName, metav1.DeleteOptions{})
+			if err != nil {
+				tLogger.Error(err, "Failed to delete a template that entered hub-template-error state",
 					"namespace", instance.GetNamespace(),
 					"name", tName,
 				)

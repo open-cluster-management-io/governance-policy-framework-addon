@@ -1,7 +1,7 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: case10-bad-hubtemplate
+  name: case10-bad-hubtemplate-pending
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
@@ -9,12 +9,18 @@ metadata:
 spec:
   remediationAction: inform
   disabled: false
+  dependencies:
+  - apiVersion: policy.open-cluster-management.io/v1
+    kind: Policy
+    name: australia
+    namespace: default
+    compliance: Compliant
   policy-templates:
     - objectDefinition:
         apiVersion: policy.open-cluster-management.io/v1
         kind: ConfigurationPolicy
         metadata:
-          name: case10-bad-hubtemplate-policy
+          name: case10-bad-hubtemplate-pending
           annotations:
             policy.open-cluster-management.io/hub-templates-error: "must be aboveground"
         spec:
