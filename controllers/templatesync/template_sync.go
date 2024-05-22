@@ -177,13 +177,13 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	// Check duplicate names in configuration-policies
-	has := hasDupName(instance)
-	if has {
-		msg := "There are duplicate names in configurationpolicies, please check the policy"
+	dupName := getDupName(instance)
+	if dupName != "" {
+		msg := "All policy-template names must be unique within a policy"
 		reqLogger.Info(msg)
 
 		for tIndex := range instance.Spec.PolicyTemplates {
-			_ = r.emitTemplateError(ctx, instance, tIndex, fmt.Sprintf("template-%v", tIndex), false, msg)
+			_ = r.emitTemplateError(ctx, instance, tIndex, dupName, false, msg)
 		}
 
 		return reconcile.Result{}, nil
@@ -1693,27 +1693,27 @@ func (r *PolicyReconciler) setCreatedGkConstraint(b bool) {
 	r.createdGkConstraint = &b
 }
 
-// Check duplicate names in policy-templates(configurationPolicies)
-func hasDupName(pol *policiesv1.Policy) bool {
+// Check duplicate names in policy-templates and return the first duplicate name found, if any.
+func getDupName(pol *policiesv1.Policy) string {
 	templates := pol.Spec.PolicyTemplates
 
-	foundNames := make(map[string]struct{})
+	foundNames := make(map[string]bool, len(templates))
 
 	for _, v := range templates {
 		unstructured, err := unmarshalFromJSON(v.ObjectDefinition.Raw)
 		if err != nil {
 			// Skip unmarshal error here, template error should appear later
-			return false
+			return ""
 		}
 
 		name := unstructured.GetName()
 
-		if _, has := foundNames[name]; has {
-			return true
+		if foundNames[name] {
+			return name
 		}
 
-		foundNames[name] = struct{}{}
+		foundNames[name] = true
 	}
 
-	return false
+	return ""
 }

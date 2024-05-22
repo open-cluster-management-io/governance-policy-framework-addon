@@ -93,7 +93,7 @@ func TestHandleSyncSuccessNoDoubleRemoveStatus(t *testing.T) {
 	}
 }
 
-func TestHasDuplicateNames(t *testing.T) {
+func TestGetDupName(t *testing.T) {
 	policy := policiesv1.Policy{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Policy",
@@ -131,8 +131,8 @@ func TestHasDuplicateNames(t *testing.T) {
 
 	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &x)
 
-	has := hasDupName(&policy)
-	if has {
+	dupName := getDupName(&policy)
+	if dupName != "" {
 		t.Fatal("Unexpected duplicate policy template names")
 	}
 
@@ -160,8 +160,8 @@ func TestHasDuplicateNames(t *testing.T) {
 
 	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &y)
 
-	has = hasDupName(&policy)
-	if !has {
+	dupName = getDupName(&policy)
+	if dupName != "test-configpolicy" {
 		t.Fatal("Duplicate names for templates not detected")
 	}
 
@@ -189,8 +189,8 @@ func TestHasDuplicateNames(t *testing.T) {
 
 	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &z)
 
-	has = hasDupName(&policy)
-	if !has {
+	dupName = getDupName(&policy)
+	if dupName != "test-configpolicy" {
 		t.Fatal("Duplicate names for templates not detected")
 	}
 
@@ -208,8 +208,8 @@ func TestHasDuplicateNames(t *testing.T) {
 
 	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &x2)
 
-	has = hasDupName(&policy)
-	if !has { // expect duplicate detection to return true
+	dupName = getDupName(&policy)
+	if dupName != "test-configpolicy" { // expect duplicate detection to return true
 		t.Fatal("Duplicate name not detected")
 	}
 }
