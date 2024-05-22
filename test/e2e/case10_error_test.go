@@ -42,11 +42,26 @@ var _ = Describe("Test error handling", func() {
 
 		By("Should generate warning events")
 		Eventually(
-			checkForEvent(dupNamePolicyName,
-				"There are duplicate names in configurationpolicies, please check the policy"),
+			checkForEvent(dupNamePolicyName, "All policy-template names must be unique within a policy"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
+
+		By("Checking if the policy status is NonCompliant")
+		Eventually(func(g Gomega) string {
+			hubPlc := utils.GetWithTimeout(
+				clientHubDynamic,
+				gvrPolicy,
+				dupNamePolicyName,
+				clusterNamespaceOnHub,
+				true,
+				defaultTimeoutSeconds,
+			)
+
+			compliant, _, _ := unstructured.NestedString(hubPlc.Object, "status", "compliant")
+
+			return compliant
+		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		By("Should not create any configuration policy")
 		Consistently(func() interface{} {
