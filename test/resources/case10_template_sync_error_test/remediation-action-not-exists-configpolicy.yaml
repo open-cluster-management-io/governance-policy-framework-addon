@@ -4,9 +4,10 @@ metadata:
   name: case10-remediation-action-not-exists-configpolicy
 spec:
   remediationAction: inform
-  pruneObjectBehavior: "None"
+  pruneObjectBehavior: None
   object-templates:
     - complianceType: musthave
+      recreateOption: None
       objectDefinition:
         apiVersion: v1
         kind: Pod

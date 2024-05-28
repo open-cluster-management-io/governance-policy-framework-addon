@@ -4,9 +4,10 @@ metadata:
   name: case15-config-policy
 spec:
   remediationAction: inform
-  pruneObjectBehavior: "None"
+  pruneObjectBehavior: None
   object-templates:
     - complianceType: musthave
+      recreateOption: None
       objectDefinition:
         apiVersion: v1
         kind: Pod
