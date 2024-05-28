@@ -27,4 +27,3 @@ spec:
                 spec:
                   containers:
                     - name: nginx
-
