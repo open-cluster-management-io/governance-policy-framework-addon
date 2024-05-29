@@ -961,7 +961,31 @@ func equivalentTemplates(eObject *unstructured.Unstructured, tObject *unstructur
 		if pruneObjectBehavior == "" {
 			err := unstructured.SetNestedField(tObject.Object, "None", "spec", "pruneObjectBehavior")
 			if err != nil {
-				log.Error(err, "Failed to set the default value of pruneObjectBehavior for")
+				log.Error(err, "Failed to set the default value of pruneObjectBehavior")
+			}
+		}
+
+		var updatedObjectTemplates bool
+
+		objectTemplates, _, _ := unstructured.NestedSlice(tObject.Object, "spec", "object-templates")
+
+		for i := range objectTemplates {
+			objectTemplate, ok := objectTemplates[i].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			if _, ok := objectTemplate["recreateOption"]; !ok {
+				objectTemplate["recreateOption"] = "None"
+				objectTemplates[i] = objectTemplate
+				updatedObjectTemplates = true
+			}
+		}
+
+		if updatedObjectTemplates {
+			err := unstructured.SetNestedField(tObject.Object, objectTemplates, "spec", "object-templates")
+			if err != nil {
+				log.Error(err, "Failed to set the default value of recreateOption")
 			}
 		}
 	}
