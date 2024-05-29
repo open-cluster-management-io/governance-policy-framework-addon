@@ -213,3 +213,63 @@ func TestGetDupName(t *testing.T) {
 		t.Fatal("Duplicate name not detected")
 	}
 }
+
+func TestEquivalentTemplatesRecreateOption(t *testing.T) {
+	existing := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "policy.open-cluster-management.io/v1",
+			"kind":       "ConfigurationPolicy",
+			"metadata": map[string]interface{}{
+				"name":      "my-policy",
+				"namespace": "local-cluster",
+			},
+			"spec": map[string]interface{}{
+				"pruneObjectBehavior": "None",
+				"object-templates": []interface{}{
+					map[string]interface{}{
+						"complianceType": "musthave",
+						"recreateOption": "None",
+						"objectDefinition": map[string]interface{}{
+							"apiVersion": "v1",
+							"kind":       "Pod",
+							"metadata": map[string]interface{}{
+								"name":      "nginx-pod-e2e",
+								"namespace": "default",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	template := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "policy.open-cluster-management.io/v1",
+			"kind":       "ConfigurationPolicy",
+			"metadata": map[string]interface{}{
+				"name":      "my-policy",
+				"namespace": "local-cluster",
+			},
+			"spec": map[string]interface{}{
+				"object-templates": []interface{}{
+					map[string]interface{}{
+						"complianceType": "musthave",
+						"objectDefinition": map[string]interface{}{
+							"apiVersion": "v1",
+							"kind":       "Pod",
+							"metadata": map[string]interface{}{
+								"name":      "nginx-pod-e2e",
+								"namespace": "default",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if !equivalentTemplates(existing, template) {
+		t.Fatal("Expected the templates to be equivalent")
+	}
+}
