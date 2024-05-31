@@ -273,3 +273,62 @@ func TestEquivalentTemplatesRecreateOption(t *testing.T) {
 		t.Fatal("Expected the templates to be equivalent")
 	}
 }
+
+func TestEquivalentTemplatesOperatorPolicyComplianceConfig(t *testing.T) {
+	existing := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "policy.open-cluster-management.io/v1beta1",
+			"kind":       "OperatorPolicy",
+			"metadata": map[string]interface{}{
+				"name": "test-policy",
+			},
+			"spec": map[string]interface{}{
+				"remediationAction": "inform",
+				"severity":          "medium",
+				"complianceType":    "musthave",
+				"subscription:": map[string]interface{}{
+					"channel":         "stable-3.10",
+					"name":            "project-quay",
+					"namespace":       "operator-policy-testns",
+					"source":          "operatorhubio-catalog",
+					"sourceNamespace": "olm",
+					"startingCSV":     "quay-operator.v3.10.0",
+				},
+				"upgradeApproval": "Automatic",
+				"complianceConfig": map[string]interface{}{
+					"catalogSourceUnhealthy": "Compliant",
+					"deploymentsUnavailable": "NonCompliant",
+					"upgradesAvailable":      "Compliant",
+				},
+			},
+		},
+	}
+
+	template := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "policy.open-cluster-management.io/v1beta1",
+			"kind":       "OperatorPolicy",
+			"metadata": map[string]interface{}{
+				"name": "test-policy",
+			},
+			"spec": map[string]interface{}{
+				"remediationAction": "inform",
+				"severity":          "medium",
+				"complianceType":    "musthave",
+				"subscription:": map[string]interface{}{
+					"channel":         "stable-3.10",
+					"name":            "project-quay",
+					"namespace":       "operator-policy-testns",
+					"source":          "operatorhubio-catalog",
+					"sourceNamespace": "olm",
+					"startingCSV":     "quay-operator.v3.10.0",
+				},
+				"upgradeApproval": "Automatic",
+			},
+		},
+	}
+
+	if !equivalentTemplates(existing, template) {
+		t.Fatal("Expected the templates to be equivalent")
+	}
+}

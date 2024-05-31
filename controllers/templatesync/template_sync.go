@@ -990,6 +990,44 @@ func equivalentTemplates(eObject *unstructured.Unstructured, tObject *unstructur
 		}
 	}
 
+	if tObject.GetKind() == "OperatorPolicy" {
+		// catalogSourceUnhealthy
+		catalogSourceUnhealthy, _, _ := unstructured.NestedString(tObject.Object, "spec",
+			"complianceConfig", "catalogSourceUnhealthy")
+
+		if catalogSourceUnhealthy == "" {
+			err := unstructured.SetNestedField(tObject.Object, "Compliant", "spec",
+				"complianceConfig", "catalogSourceUnhealthy")
+			if err != nil {
+				log.Error(err, "Failed to set the default value of catalogSourceUnhealthy")
+			}
+		}
+
+		// deploymentsUnavailable
+		deploymentsUnavailable, _, _ := unstructured.NestedString(tObject.Object, "spec",
+			"complianceConfig", "deploymentsUnavailable")
+
+		if deploymentsUnavailable == "" {
+			err := unstructured.SetNestedField(tObject.Object, "NonCompliant", "spec",
+				"complianceConfig", "deploymentsUnavailable")
+			if err != nil {
+				log.Error(err, "Failed to set the default value of deploymentsUnavailable")
+			}
+		}
+
+		// upgradesAvailable
+		upgradesAvailable, _, _ := unstructured.NestedString(tObject.Object, "spec",
+			"complianceConfig", "upgradesAvailable")
+
+		if upgradesAvailable == "" {
+			err := unstructured.SetNestedField(tObject.Object, "Compliant", "spec",
+				"complianceConfig", "upgradesAvailable")
+			if err != nil {
+				log.Error(err, "Failed to set the default value of upgradesAvailable")
+			}
+		}
+	}
+
 	if !equality.Semantic.DeepEqual(eObject.UnstructuredContent()["spec"], tObject.Object["spec"]) {
 		return false
 	}
