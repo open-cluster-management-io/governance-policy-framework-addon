@@ -213,7 +213,7 @@ var _ = Describe("Test error handling", func() {
 			1, true, defaultTimeoutSeconds)
 
 		By("Manually updating the status on the created configuration policy")
-		compliancePatch := []byte(`[{"op":"add","path":"/status","value":{"compliant":"testing"}}]`)
+		compliancePatch := []byte(`[{"op":"add","path":"/status","value":{"compliant":"Pending"}}]`)
 		// can't just use kubectl - status is a sub-resource
 		cfgInt := clientManagedDynamic.Resource(gvrConfigurationPolicy).Namespace(clusterNamespace)
 		_, err := cfgInt.Patch(context.TODO(), "case10-config-policy", types.JSONPatchType,
@@ -253,7 +253,7 @@ var _ = Describe("Test error handling", func() {
 		compState, found, err := unstructured.NestedString(cfgPolicy.Object, "status", "compliant")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeTrue())
-		Expect(compState).To(Equal("testing"))
+		Expect(compState).To(Equal("Pending"))
 
 		By("Re-applying the working policy")
 		hubApplyPolicy("case10-test-policy",
