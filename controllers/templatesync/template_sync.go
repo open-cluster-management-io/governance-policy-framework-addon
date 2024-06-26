@@ -241,15 +241,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			Group:     dep.GroupVersionKind().Group,
 			Version:   dep.GroupVersionKind().Version,
 			Kind:      dep.GroupVersionKind().Kind,
-			Namespace: dep.Namespace,
+			Namespace: getDepNamespace(r.ClusterNamespace, dep),
 			Name:      dep.Name,
-		}
-
-		// Use cluster namespace for known policy types when the namespace is blank
-		if depID.Namespace == "" && depID.Group == policiesv1.GroupVersion.Group &&
-			depID.Version == policiesv1.GroupVersion.Version &&
-			strings.HasSuffix(depID.Kind, "Policy") {
-			depID.Namespace = request.Namespace
 		}
 
 		existingDep, ok := topLevelDeps[depID]
@@ -322,15 +315,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				Group:     dep.GroupVersionKind().Group,
 				Version:   dep.GroupVersionKind().Version,
 				Kind:      dep.GroupVersionKind().Kind,
-				Namespace: dep.Namespace,
+				Namespace: getDepNamespace(r.ClusterNamespace, dep),
 				Name:      dep.Name,
-			}
-
-			// Use cluster namespace for known policy types when the namespace is blank
-			if depID.Namespace == "" && depID.Group == policiesv1.GroupVersion.Group &&
-				depID.Version == policiesv1.GroupVersion.Version &&
-				strings.HasSuffix(depID.Kind, "Policy") {
-				depID.Namespace = request.Namespace
 			}
 
 			existingDep, ok := templateDeps[depID]
@@ -1287,6 +1273,18 @@ const (
 	DepFailWrongCompliance = "Compliance mismatch on the dependency object"
 )
 
+// getDepNamespace will return the cluster namespace if the namespace is a policy, otherwise it returns the value
+// of dep.Namespace.
+func getDepNamespace(clusterNamespace string, dep policiesv1.PolicyDependency) string {
+	// Use cluster namespace for known policy types since the governance-policy-framework doesn't have permission
+	// to read outside of the cluster namespace.
+	if dep.GroupVersionKind().Group == policiesv1.GroupVersion.Group && strings.HasSuffix(dep.Kind, "Policy") {
+		return clusterNamespace
+	}
+
+	return dep.Namespace
+}
+
 // processDependencies iterates through all dependencies of a template and returns an map of
 // unmet dependencies to the reason that dependency was not satisfied.
 func (r *PolicyReconciler) processDependencies(
@@ -1310,13 +1308,7 @@ func (r *PolicyReconciler) processDependencies(
 		var res dynamic.ResourceInterface
 
 		if namespaced {
-			ns := dep.Namespace
-			if ns == "" && dep.Group == policiesv1.GroupVersion.Group {
-				// ocm policies should always be in the cluster namespace
-				ns = r.ClusterNamespace
-			}
-
-			res = dClient.Resource(rsrc).Namespace(ns)
+			res = dClient.Resource(rsrc).Namespace(dep.Namespace)
 		} else {
 			res = dClient.Resource(rsrc)
 		}
