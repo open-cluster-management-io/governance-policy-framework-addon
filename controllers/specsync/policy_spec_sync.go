@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,6 +19,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -59,6 +61,8 @@ type PolicyReconciler struct {
 	// The namespace that the replicated policies should be synced to.
 	TargetNamespace      string
 	ConcurrentReconciles int
+	// StatusSyncRequests triggers status-sync controller reconciles based on what is observed on the hub
+	StatusSyncRequests chan<- event.GenericEvent
 }
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=create;delete;get;list;patch;update;watch
@@ -173,6 +177,10 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		r.ManagedRecorder.Event(managedPlc, "Normal", "PolicySpecSync",
 			fmt.Sprintf("Policy %s was updated in cluster namespace %s", instance.GetName(),
 				r.TargetNamespace))
+	} else if !equality.Semantic.DeepEqual(instance.Status, managedPlc.Status) {
+		reqLogger.Info("Policy status does not match on the hub. Triggering the status-sync to update it.")
+
+		r.StatusSyncRequests <- event.GenericEvent{Object: managedPlc}
 	}
 
 	reqLogger.V(2).Info("Reconciliation complete.")

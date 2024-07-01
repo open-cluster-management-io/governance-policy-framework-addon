@@ -780,6 +780,8 @@ func addControllers(
 	var hubClient client.Client
 	var specSyncRequests chan event.GenericEvent
 	var specSyncRequestsSource *source.Channel
+	var statusSyncRequests chan event.GenericEvent
+	var statusSyncRequestsSource *source.Channel
 
 	if hubMgr == nil {
 		hubCache, err := cache.New(hubCfg,
@@ -830,6 +832,12 @@ func addControllers(
 			DestBufferSize: bufferSize,
 		}
 
+		statusSyncRequests = make(chan event.GenericEvent, bufferSize)
+		statusSyncRequestsSource = &source.Channel{
+			Source:         statusSyncRequests,
+			DestBufferSize: bufferSize,
+		}
+
 		hubClient = hubMgr.GetClient()
 	}
 
@@ -852,7 +860,7 @@ func addControllers(
 		ConcurrentReconciles:  int(tool.Options.EvaluationConcurrency),
 		EventsQueue:           queue,
 		SpecSyncRequests:      specSyncRequests,
-	}).SetupWithManager(managedMgr); err != nil {
+	}).SetupWithManager(managedMgr, statusSyncRequestsSource); err != nil {
 		log.Error(err, "unable to create controller", "controller", "Policy")
 		os.Exit(1)
 	}
@@ -917,6 +925,7 @@ func addControllers(
 		Scheme:               hubMgr.GetScheme(),
 		TargetNamespace:      tool.Options.ClusterNamespace,
 		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
+		StatusSyncRequests:   statusSyncRequests,
 	}).SetupWithManager(hubMgr, specSyncRequestsSource); err != nil {
 		log.Error(err, "Unable to create the controller", "controller", specsync.ControllerName)
 		os.Exit(1)

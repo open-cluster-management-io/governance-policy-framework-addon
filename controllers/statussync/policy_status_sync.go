@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
@@ -61,8 +62,8 @@ var (
 )
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource *source.Channel) error {
+	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&policiesv1.Policy{}).
 		Watches(
 			&corev1.Event{},
@@ -70,8 +71,13 @@ func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			builder.WithPredicates(eventPredicateFuncs),
 		).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
-		Named(ControllerName).
-		Complete(r)
+		Named(ControllerName)
+
+	if additionalSource != nil {
+		builder = builder.WatchesRawSource(additionalSource, &handler.EnqueueRequestForObject{})
+	}
+
+	return builder.Complete(r)
 }
 
 // blank assignment to verify that ReconcilePolicy implements reconcile.Reconciler

@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
@@ -117,7 +118,7 @@ var _ = Describe("Test status sync", func() {
 			return hubPlc.Object["status"]
 		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
 	})
-	It("Should set status to Compliant again", func() {
+	It("Should set status to Compliant again", func(ctx SpecContext) {
 		By("Generating an compliant event on the policy")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
@@ -150,9 +151,12 @@ var _ = Describe("Test status sync", func() {
 		Expect((plc.Status.Details)).To(HaveLen(1))
 		Expect((plc.Status.Details[0].History)).To(HaveLen(1))
 		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case2-test-policy-configurationpolicy"))
-		By("Checking if hub policy status is in sync")
+
+		By("Checking if the hub policy status is in sync")
+		var hubPlc *unstructured.Unstructured
+
 		Eventually(func() interface{} {
-			hubPlc := utils.GetWithTimeout(
+			hubPlc = utils.GetWithTimeout(
 				clientHubDynamic,
 				gvrPolicy,
 				case2PolicyName,
@@ -162,6 +166,26 @@ var _ = Describe("Test status sync", func() {
 
 			return hubPlc.Object["status"]
 		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
+
+		By("Clearing the hub status to verify it gets recovered")
+		delete(hubPlc.Object, "status")
+		_, err = clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub).UpdateStatus(
+			ctx, hubPlc, metav1.UpdateOptions{},
+		)
+		Expect(err).ShouldNot(HaveOccurred())
+
+		Eventually(func() interface{} {
+			hubPlc = utils.GetWithTimeout(
+				clientHubDynamic,
+				gvrPolicy,
+				case2PolicyName,
+				clusterNamespaceOnHub,
+				true,
+				defaultTimeoutSeconds)
+
+			return hubPlc.Object["status"]
+		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
+
 		By("clean up all events")
 		_, err = kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
 		Expect(err).ShouldNot(HaveOccurred())
