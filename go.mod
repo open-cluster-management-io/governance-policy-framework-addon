@@ -11,7 +11,7 @@ require (
 	github.com/prometheus/client_golang v1.19.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stolostron/go-log-utils v0.1.2
-	github.com/stolostron/kubernetes-dependency-watches v0.7.0
+	github.com/stolostron/kubernetes-dependency-watches v0.8.1
 	golang.org/x/mod v0.17.0
 	k8s.io/api v0.29.5
 	k8s.io/apiextensions-apiserver v0.29.5
@@ -19,8 +19,8 @@ require (
 	k8s.io/client-go v0.29.5
 	k8s.io/klog/v2 v2.120.1
 	open-cluster-management.io/addon-framework v0.9.3
-	open-cluster-management.io/config-policy-controller v0.13.0
-	open-cluster-management.io/governance-policy-propagator v0.13.0
+	open-cluster-management.io/config-policy-controller v0.14.1-0.20240702161045-fb3b07d73236
+	open-cluster-management.io/governance-policy-propagator v0.14.1-0.20240702153215-f22f0f2fb413
 	sigs.k8s.io/controller-runtime v0.17.5
 )
 
@@ -48,15 +48,16 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/cel-go v0.17.8 // indirect
-	github.com/google/gnostic-models v0.6.8 // indirect
+	github.com/google/gnostic-models v0.6.9-0.20230804172637-c7be7c783f49 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20240528025155-186aa0362fba // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
-	github.com/imdario/mergo v1.0.0 // indirect
+	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/lib/pq v1.10.9 // indirect
@@ -73,8 +74,16 @@ require (
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
-	github.com/stolostron/go-template-utils/v4 v4.2.0 // indirect
+	github.com/stolostron/go-template-utils/v4 v4.3.0 // indirect
 	github.com/stolostron/rbac-api-utils v0.0.0-20240404212618-7f57fc664256 // indirect
+	go.etcd.io/etcd/client/pkg/v3 v3.5.12 // indirect
+	go.etcd.io/etcd/client/v3 v3.5.12 // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.48.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.48.0 // indirect
+	go.opentelemetry.io/otel v1.23.1 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.23.1 // indirect
+	go.opentelemetry.io/otel/sdk v1.23.1 // indirect
+	go.opentelemetry.io/otel/trace v1.23.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
@@ -102,9 +111,8 @@ require (
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0 // indirect
 	open-cluster-management.io/api v0.13.0 // indirect
 	open-cluster-management.io/multicloud-operators-subscription v0.13.0 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
-replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.16 // Replaced so that 'go get -u' works. Remove/bump when upgrading.
