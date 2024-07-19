@@ -23,6 +23,7 @@ type SyncerOptions struct {
 	EnableLeaderElection      bool
 	ProbeAddr                 string
 	MetricsAddr               string
+	SecureMetrics             bool
 	// The namespace that the replicated policies should be synced to. This defaults to the same namespace as on the
 	// Hub.
 	ClusterNamespace      string
@@ -109,6 +110,13 @@ func ProcessFlags() {
 		"metrics-bind-address",
 		"localhost:8383",
 		"The address the metrics endpoint binds to.",
+	)
+
+	flag.BoolVar(
+		&Options.SecureMetrics,
+		"secure-metrics",
+		false,
+		"Enable secure metrics endpoint with certificates at /var/run/metrics-cert",
 	)
 
 	flag.Uint8Var(

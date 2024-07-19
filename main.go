@@ -59,6 +59,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -215,13 +216,21 @@ func main() {
 	managedCfg.QPS = tool.Options.ClientQPS
 	managedCfg.Burst = int(tool.Options.ClientBurst)
 
+	metricsOptions := server.Options{
+		BindAddress: tool.Options.MetricsAddr,
+	}
+
+	if tool.Options.SecureMetrics {
+		metricsOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
+		metricsOptions.SecureServing = true
+		metricsOptions.CertDir = "/var/run/metrics-cert"
+	}
+
 	mgrOptionsBase := manager.Options{
 		LeaderElection: tool.Options.EnableLeaderElection,
 		// Disable the metrics endpoint
-		Metrics: server.Options{
-			BindAddress: tool.Options.MetricsAddr,
-		},
-		Scheme: scheme,
+		Metrics: metricsOptions,
+		Scheme:  scheme,
 		// Override the EventBroadcaster so that the spam filter will not ignore events for the policy but with
 		// different messages if a large amount of events for that policy are sent in a short time.
 		EventBroadcaster: record.NewBroadcasterWithCorrelatorOptions(
