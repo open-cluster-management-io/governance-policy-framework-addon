@@ -30,7 +30,7 @@ type SyncerOptions struct {
 	DeploymentName        string
 	EvaluationConcurrency uint8
 	ClientQPS             float32
-	ClientBurst           uint
+	ClientBurst           uint32
 	ComplianceAPIURL      string
 }
 
@@ -135,7 +135,7 @@ func ProcessFlags() {
 			"Will scale with concurrency, if not explicitly set.",
 	)
 
-	flag.UintVar(
+	flag.Uint32Var(
 		&Options.ClientBurst,
 		"client-burst",
 		45, // the controller-runtime defaults are 20:30 (qps:burst) - this matches that ratio
@@ -156,7 +156,7 @@ func ProcessFlags() {
 		}
 
 		if !flag.Changed("client-burst") {
-			Options.ClientBurst = uint(Options.EvaluationConcurrency)*22 + 1
+			Options.ClientBurst = uint32(Options.EvaluationConcurrency)*22 + 1
 		}
 	}
 
