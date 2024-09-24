@@ -25,7 +25,7 @@ var (
 	deploymentName      string
 	deploymentNamespace string
 	policyNamespace     string
-	timeoutSeconds      uint
+	timeoutSeconds      uint32
 )
 
 var triggerLog = ctrl.Log.WithName("trigger-uninstall")
@@ -95,7 +95,7 @@ func parseUninstallFlags(args []string) error {
 	triggerUninstallFlagSet.StringVar(
 		&policyNamespace, "policy-namespace", "", "The namespace where the Policy objects are stored",
 	)
-	triggerUninstallFlagSet.UintVar(
+	triggerUninstallFlagSet.Uint32Var(
 		&timeoutSeconds, "timeout-seconds", 300, "The number of seconds before the operation is canceled",
 	)
 	triggerUninstallFlagSet.AddGoFlagSet(flag.CommandLine)
