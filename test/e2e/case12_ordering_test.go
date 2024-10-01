@@ -381,4 +381,31 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		By("Checking if policy status is consistently pending")
 		Consistently(checkCompliance(case12PolicyName), "15s", 1).Should(Equal("Pending"))
 	})
+	// This test case is meant for a specific panic that was being caused by some Policies.
+	It("Should function properly despite a nonexistent dependency kind", func() {
+		const (
+			testPolicyName string = "case12-test-nonexist-dep"
+			testPolicyYaml string = "../resources/case12_ordering/case12-plc-nonexist-dep.yaml"
+			templateName   string = "case12-config-policy"
+		)
+
+		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
+		hubPolicyApplyAndDeferCleanup(testPolicyYaml, testPolicyName)
+
+		By("Generating a noncompliant event on the first template")
+		generateEventOnPolicy(testPolicyName, templateName, "not yet successful", "NonCompliant")
+
+		By("Checking if policy status is noncompliant")
+		Eventually(checkCompliance(testPolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+
+		// Sleep to avoid the status-sync from reconciling again before the template-sync has a
+		// chance to reconcile and (possibly) panic.
+		time.Sleep(5 * time.Second)
+
+		By("Generating a compliant event on the first template")
+		generateEventOnPolicy(testPolicyName, templateName, "all systems go", "Compliant")
+
+		By("Checking if policy status is Compliant")
+		Eventually(checkCompliance(testPolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+	})
 })
