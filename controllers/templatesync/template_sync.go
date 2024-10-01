@@ -879,12 +879,20 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	if len(allDeps) != 0 || len(childTemplates) != 0 {
-		objectsToWatch := make([]depclient.ObjectIdentifier, 0, len(allDeps)+len(childTemplates))
+		watchSet := make(map[depclient.ObjectIdentifier]struct{})
+
 		for depID := range allDeps {
-			objectsToWatch = append(objectsToWatch, depID)
+			watchSet[depID] = struct{}{}
 		}
 
-		objectsToWatch = append(objectsToWatch, childTemplates...)
+		for _, childID := range childTemplates {
+			watchSet[childID] = struct{}{}
+		}
+
+		objectsToWatch := make([]depclient.ObjectIdentifier, 0, len(watchSet))
+		for depID := range watchSet {
+			objectsToWatch = append(objectsToWatch, depID)
+		}
 
 		err = r.DynamicWatcher.AddOrUpdateWatcher(policyObjectID, objectsToWatch...)
 	} else {
