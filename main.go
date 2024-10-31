@@ -47,7 +47,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/tools/watch"
-	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"open-cluster-management.io/addon-framework/pkg/lease"
 	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
@@ -63,7 +62,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"open-cluster-management.io/governance-policy-framework-addon/controllers/complianceeventssync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/gatekeepersync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/secretsync"
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/specsync"
@@ -342,34 +340,7 @@ func main() {
 
 	log.Info("Adding controllers to managers")
 
-	var queue workqueue.RateLimitingInterface
-
-	var dynamicClient *dynamic.DynamicClient
-
-	var policyListResourceVersion string
-
-	if tool.Options.ComplianceAPIURL != "" {
-		queue = workqueue.NewRateLimitingQueueWithConfig(
-			workqueue.DefaultControllerRateLimiter(),
-			workqueue.RateLimitingQueueConfig{Name: "compliance-api-events"},
-		)
-
-		dynamicClient = dynamic.NewForConfigOrDie(managedCfg)
-
-		gvr := complianceeventssync.GVRPolicy
-
-		listResult, err := dynamicClient.Resource(gvr).Namespace(tool.Options.ClusterNamespace).List(
-			mgrCtx, metav1.ListOptions{},
-		)
-		if err != nil {
-			log.Error(err, "Failed to list the policies for recording disabled events")
-			os.Exit(1)
-		}
-
-		policyListResourceVersion = listResult.GetResourceVersion()
-	}
-
-	addControllers(mgrCtx, hubCfg, hubMgr, mgr, queue)
+	addControllers(mgrCtx, hubCfg, hubMgr, mgr)
 
 	log.Info("Starting the controller managers")
 
@@ -385,32 +356,6 @@ func main() {
 		}
 	}()
 
-	if tool.Options.ComplianceAPIURL != "" {
-		wg.Add(1)
-
-		go func() {
-			err := statussync.StartComplianceEventsSyncer(
-				mgrCtx, tool.Options.ClusterNamespace, hubCfg, dynamicClient, tool.Options.ComplianceAPIURL, queue,
-			)
-			if err != nil {
-				log.Error(err, "Failed to start the compliance events API syncer")
-
-				mgrCtxCancel()
-			}
-
-			wg.Done()
-		}()
-
-		wg.Add(1)
-
-		go func() {
-			complianceeventssync.DisabledEventsRecorder(
-				mgrCtx, dynamicClient, tool.Options.ClusterNamespace, queue, policyListResourceVersion,
-			)
-			wg.Done()
-		}()
-	}
-
 	var errorExit bool
 
 	wg.Add(1)
@@ -423,10 +368,6 @@ func main() {
 			mgrCtxCancel()
 
 			errorExit = true
-		}
-
-		if queue != nil {
-			queue.ShutDownWithDrain()
 		}
 
 		wg.Done()
@@ -516,7 +457,7 @@ func getManager(
 						Transform: func(obj interface{}) (interface{}, error) {
 							event := obj.(*v1.Event)
 							// Only cache fields that are utilized by the controllers.
-							guttedEvent := &v1.Event{
+							return &v1.Event{
 								InvolvedObject: event.InvolvedObject,
 								TypeMeta:       event.TypeMeta,
 								ObjectMeta: metav1.ObjectMeta{
@@ -528,26 +469,7 @@ func getManager(
 								Message:       event.Message,
 								Reason:        event.Reason,
 								EventTime:     event.EventTime,
-							}
-
-							eventAnnotations := map[string]string{}
-							parentID := event.Annotations[utils.ParentDBIDAnnotation]
-
-							if parentID != "" {
-								eventAnnotations[utils.ParentDBIDAnnotation] = parentID
-							}
-
-							policyID := event.Annotations[utils.PolicyDBIDAnnotation]
-
-							if policyID != "" {
-								eventAnnotations[utils.PolicyDBIDAnnotation] = policyID
-							}
-
-							if len(eventAnnotations) > 0 {
-								guttedEvent.Annotations = eventAnnotations
-							}
-
-							return guttedEvent, nil
+							}, nil
 						},
 					},
 				},
@@ -783,7 +705,6 @@ func addControllers(
 	hubCfg *rest.Config,
 	hubMgr manager.Manager,
 	managedMgr manager.Manager,
-	queue workqueue.RateLimitingInterface,
 ) {
 	// Set up all controllers for manager on managed cluster
 	var hubClient client.Client
@@ -867,7 +788,6 @@ func addControllers(
 		ManagedRecorder:       managedMgr.GetEventRecorderFor(statussync.ControllerName),
 		Scheme:                managedMgr.GetScheme(),
 		ConcurrentReconciles:  int(tool.Options.EvaluationConcurrency),
-		EventsQueue:           queue,
 		SpecSyncRequests:      specSyncRequests,
 	}).SetupWithManager(managedMgr, statusSyncRequestsSource); err != nil {
 		log.Error(err, "unable to create controller", "controller", "Policy")
@@ -895,7 +815,6 @@ func addControllers(
 		InstanceName:         instanceName,
 		DisableGkSync:        tool.Options.DisableGkSync,
 		ConcurrentReconciles: int(tool.Options.EvaluationConcurrency),
-		EventsQueue:          queue,
 	}
 
 	go func() {

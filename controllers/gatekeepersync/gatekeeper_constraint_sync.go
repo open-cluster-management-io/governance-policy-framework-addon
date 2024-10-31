@@ -185,16 +185,8 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 		pkn := policyKindName{Policy: policy.Name, Kind: templateGVK.Kind, Name: constraintName}
 		constraintsSet[pkn] = true
 
-		constraintGVR := schema.GroupVersionResource{
-			Group: utils.GConstraint,
-			// https://github.com/open-policy-agent/frameworks/blob/v0.9.0/constraint/pkg/client/crds/crds.go#L34
-			Resource: strings.ToLower(templateGVK.Kind),
-			// This uses v1beta1 even if the constraint in the template may have a newer version in the future so that
-			// the schema is consistent for status parsing. At the time of this writing, v1beta1 is the latest.
-			Version: "v1beta1",
-		}
-
-		crdName := fmt.Sprintf("%s.%s", constraintGVR.Resource, constraintGVR.Group)
+		// https://github.com/open-policy-agent/frameworks/blob/v0.9.0/constraint/pkg/client/crds/crds.go#L34
+		crdName := fmt.Sprintf("%s.%s", strings.ToLower(templateGVK.Kind), utils.GConstraint)
 
 		// Getting the CRD first creates a watch so that if the constraint template gets cleaned up and thus the
 		// CRD is deleted, the watch on the constraint can get cleaned up.

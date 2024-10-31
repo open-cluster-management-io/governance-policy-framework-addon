@@ -36,8 +36,7 @@
                 "--leader-elect=false",
                 "--cluster-namespace=managed",
                 "--cluster-namespace-on-hub=managed",
-                "--log-level=3",
-                "--compliance-api-url=http://127.0.0.1:8385"
+                "--log-level=3"
             ]
         },
         // Set FDescribe or FIt on the test to debug. Then set the desired breakpoint.
