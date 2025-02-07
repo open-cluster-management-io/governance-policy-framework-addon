@@ -11,6 +11,31 @@ import (
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
 )
 
+var _ = Describe("Test template sync overrides namespace", func() {
+	const (
+		namespaceSetPolicyName       string = "case9-test-policy-with-ns"
+		namespaceSetPolicyYaml       string = "../resources/case9_template_sync/case9-test-policy-with-ns.yaml"
+		namespaceSetConfigPolicyName string = "case9-config-policy-with-ns"
+	)
+
+	BeforeEach(func() {
+		hubApplyPolicy(namespaceSetPolicyName, namespaceSetPolicyYaml)
+	})
+	AfterEach(func() {
+		By("Deleting a policy on the hub in ns:" + clusterNamespaceOnHub)
+		_, err := kubectlHub("delete", "-f", namespaceSetPolicyYaml, "-n", clusterNamespaceOnHub, "--ignore-not-found")
+		Expect(err).ShouldNot(HaveOccurred())
+		opt := metav1.ListOptions{}
+		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
+	})
+	It("should override the namespace in the template", func() {
+		By("Checking that the ConfigurationPolicy was created in the cluster namespace")
+		foundPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy, namespaceSetConfigPolicyName,
+			clusterNamespace, true, defaultTimeoutSeconds)
+		Expect(foundPlc).NotTo(BeNil())
+	})
+})
+
 var _ = Describe("Test template sync", func() {
 	const (
 		case9PolicyName       string = "case9-test-policy"
