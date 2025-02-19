@@ -705,3 +705,70 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		})
 	})
 })
+
+var _ = Describe("Test Gatekeeper ConstraintTemplate error", Ordered, Label("skip-minimum"), func() {
+	const (
+		yamlBasePath string = "../resources/case17_gatekeeper_sync/error-status"
+		policyYaml   string = yamlBasePath + "/policy.yaml"
+		policyName   string = "case17-invalid-syntax"
+	)
+
+	BeforeAll(func() {
+		if gkSyncDisabled {
+			Skip("Gatekeeper sync is disabled--skipping Gatekeeper tests")
+		}
+
+		Eventually(func(g Gomega) {
+			deployments, err := clientManaged.AppsV1().Deployments("gatekeeper-system").
+				List(context.TODO(), metav1.ListOptions{})
+			g.Expect(err).ShouldNot(HaveOccurred())
+			g.Expect(deployments.Items).ToNot(BeEmpty())
+
+			var available bool
+			for _, deployment := range deployments.Items {
+				for _, condition := range deployment.Status.Conditions {
+					if condition.Reason == "MinimumReplicasAvailable" {
+						available = condition.Status == "True"
+					}
+				}
+				g.Expect(available).To(BeTrue())
+			}
+		}, defaultTimeoutSeconds, 1).Should(Succeed(), "Gatekeeper should be installed before the test")
+	})
+
+	AfterAll(func() {
+		_, err := kubectlHub("delete", "-f", policyYaml, "-n", clusterNamespaceOnHub)
+		Expect(err).ShouldNot(HaveOccurred())
+	})
+
+	It("Should the policy status is NonCompliant", func() {
+		By("Creating policy " + policyName + " on the hub in ns:" + clusterNamespaceOnHub)
+		_, err := kubectlHub("apply", "-f", policyYaml, "-n", clusterNamespaceOnHub)
+		Expect(err).ShouldNot(HaveOccurred())
+
+		By("Waiting for policy status of the constraint to be compliant")
+		Eventually(func(g Gomega) {
+			plc := propagatorutils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				policyName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds,
+			)
+
+			managedPolicy := policyv1.Policy{}
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(
+				plc.Object, &managedPolicy,
+			)
+			g.Expect(err).ToNot(HaveOccurred())
+
+			g.Expect(string(managedPolicy.Status.ComplianceState)).To(Equal("NonCompliant"))
+
+			message := managedPolicy.Status.Details[0].History[0].Message
+			g.Expect(message).To(
+				Equal("NonCompliant; template-error; Failed to create Gatekeeper ConstraintTemplate. " +
+					"Check the status of case17error."))
+		}, defaultTimeoutSeconds, 1).Should(Succeed())
+	})
+})

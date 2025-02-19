@@ -227,7 +227,7 @@ install-resources:
 	-kubectl apply -k deploy/hubpermissions --kubeconfig=$(HUB_CONFIG)_e2e
 	@if [ "$(KIND_VERSION)" != "minimum" ]; then \
 		echo installing Gatekeeper on the managed cluster; \
-		curl -L https://raw.githubusercontent.com/stolostron/gatekeeper/release-3.15/deploy/gatekeeper.yaml | sed 's/- --disable-cert-rotation/- --disable-cert-rotation\n        - --audit-interval=10/g' | kubectl apply --kubeconfig=$(MANAGED_CONFIG)_e2e -f -; \
+		curl -L https://raw.githubusercontent.com/stolostron/gatekeeper/release-3.17/deploy/gatekeeper.yaml | sed 's/- --disable-cert-rotation/- --disable-cert-rotation\n        - --audit-interval=10/g' | kubectl apply --kubeconfig=$(MANAGED_CONFIG)_e2e -f -; \
 		kubectl -n gatekeeper-system wait --for=condition=Available deployment/gatekeeper-audit --kubeconfig=$(MANAGED_CONFIG)_e2e; \
 	fi
 
