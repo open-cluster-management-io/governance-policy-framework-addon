@@ -564,6 +564,20 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 					continue
 				}
 
+				// Applicable for Gatekeeper versions v3.17 and later.
+				if isGkConstraintTemplate {
+					sentMsg, err := r.emitGKConstraintTemplateErrMsg(ctx, tObjectUnstructured,
+						res, instance, tIndex, tName)
+					if err != nil {
+						return reconcile.Result{}, err
+					}
+
+					if sentMsg {
+						// Skip success event emitting
+						continue
+					}
+				}
+
 				successMsg := fmt.Sprintf("Policy template %s created successfully", tName)
 
 				tLogger.Info("Policy template created successfully")
@@ -620,6 +634,25 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "get-error").Inc()
 
 			continue
+		}
+
+		// Applicable for Gatekeeper versions v3.17 and later.
+		if isGkConstraintTemplate {
+			sentErrMsg, err := r.emitGKConstraintTemplateErrMsg(ctx, tObjectUnstructured,
+				res, instance, tIndex, tName)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+
+			if !sentErrMsg {
+				tLogger.Info("Emitting status event for " + gvk.Kind)
+				msg := fmt.Sprintf("%s %s was created successfully", gvk.Kind, tName)
+
+				emitErr := r.emitTemplateSuccess(ctx, instance, tIndex, tName, isClusterScoped, msg)
+				if emitErr != nil {
+					resultError = emitErr
+				}
+			}
 		}
 
 		if len(dependencyFailures) > 0 {
@@ -1091,8 +1124,12 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 				r.setCreatedGkConstraint(false)
 			}
 			// Iterate over the ConstraintTemplates to gather the Constraints on the cluster
+			// In Gatekeeper v3.17 and later, ConstraintTemplates are created even if they contain errors.
+			// Only append to tmplGVRs if the ConstraintTemplate's status.created field is true.
 			for _, gkCT := range gkConstraintTemplateListv1.Items {
-				gkCT := gkCT
+				if !gkCT.Status.Created {
+					continue
+				}
 
 				tmplGVRs = append(tmplGVRs, gvrScoped{
 					gvr: schema.GroupVersionResource{
@@ -1739,4 +1776,43 @@ func getDupName(pol *policiesv1.Policy) string {
 	}
 
 	return ""
+}
+
+// emitGKConstraintTemplateErrMsg generates an error message based
+// on the Gatekeeper ConstraintTemplate status.
+// retrieves the "status.created" field from a Gatekeeper ConstraintTemplate.
+// In Gatekeeper 3.17 and later, if a ConstraintTemplate contains a Rego syntax error,
+// it is still created, but its status field will have "created: false" instead of failing outright.
+// Returns true if an error message is emitted.
+func (r *PolicyReconciler) emitGKConstraintTemplateErrMsg(
+	ctx context.Context,
+	tObjectUnstructured *unstructured.Unstructured,
+	res dynamic.ResourceInterface,
+	instance *policiesv1.Policy,
+	tIndex int,
+	tName string,
+) (bool, error) {
+	name := tObjectUnstructured.GetName()
+
+	template, err := res.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	created, ok, err := unstructured.NestedBool(template.Object, "status", "created")
+	if !ok || err != nil {
+		errMsg := fmt.Sprintf("Failed to retrieve status.created from ConstraintTemplate %s: %v", name, err)
+		_ = r.emitTemplateError(ctx, instance, tIndex, tName, true, errMsg)
+
+		return true, nil
+	}
+
+	if !created {
+		errMsg := fmt.Sprintf("Failed to create Gatekeeper ConstraintTemplate. Check the status of %s.", name)
+		_ = r.emitTemplateError(ctx, instance, tIndex, tName, true, errMsg)
+
+		return true, nil
+	}
+
+	return false, nil
 }
