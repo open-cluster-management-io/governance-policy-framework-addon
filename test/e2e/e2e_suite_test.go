@@ -5,6 +5,7 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -15,7 +16,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -126,7 +127,7 @@ var _ = BeforeSuite(func() {
 	if _, err := namespacesHub.Get(
 		context.TODO(),
 		clusterNamespaceOnHub,
-		metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
+		metav1.GetOptions{}); err != nil && k8serrors.IsNotFound(err) {
 		Expect(namespacesHub.Create(context.TODO(), &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterNamespaceOnHub,
@@ -137,7 +138,7 @@ var _ = BeforeSuite(func() {
 	if _, err := namespacesManaged.Get(
 		context.TODO(),
 		testNamespace,
-		metav1.GetOptions{}); err != nil && errors.IsNotFound(err) {
+		metav1.GetOptions{}); err != nil && k8serrors.IsNotFound(err) {
 		Expect(namespacesManaged.Create(context.TODO(), &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testNamespace,
@@ -157,7 +158,7 @@ var _ = BeforeSuite(func() {
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterNamespace}},
 			metav1.CreateOptions{},
 		)
-		if !errors.IsAlreadyExists(err) {
+		if !k8serrors.IsAlreadyExists(err) {
 			Expect(err).ShouldNot(HaveOccurred())
 		}
 	} else {
@@ -241,7 +242,7 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("could not create a valid kubeconfig")
+	return nil, errors.New("could not create a valid kubeconfig")
 }
 
 func kubectlHub(args ...string) (string, error) {

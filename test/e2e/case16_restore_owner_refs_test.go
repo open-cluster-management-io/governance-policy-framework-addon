@@ -43,7 +43,7 @@ var _ = Describe("Test owner reference recovery", func() {
 				"--type", "merge", "--patch-file", case16PatchConfigPolicyYaml)
 
 			return err
-		}, defaultTimeoutSeconds, 1).Should(BeNil())
+		}, defaultTimeoutSeconds, 1).Should(Succeed())
 
 		Eventually(func() interface{} {
 			configPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,

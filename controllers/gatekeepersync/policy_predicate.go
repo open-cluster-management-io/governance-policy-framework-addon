@@ -28,7 +28,7 @@ func policyPredicates() predicate.Funcs {
 			// oldPolicy is also checked in the event all the Gatekeeper constraints were removed.
 			return hasGatekeeperConstraints(oldPolicy) || hasGatekeeperConstraints(updatedPolicy)
 		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
+		DeleteFunc: func(_ event.DeleteEvent) bool {
 			return true
 		},
 	}

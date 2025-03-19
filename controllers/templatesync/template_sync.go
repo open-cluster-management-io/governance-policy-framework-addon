@@ -39,7 +39,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -62,13 +61,13 @@ var log = ctrl.Log.WithName(ControllerName)
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=list;watch
 
 // Setup sets up the controller
-func (r *PolicyReconciler) Setup(mgr ctrl.Manager, depEvents *source.Channel) error {
+func (r *PolicyReconciler) Setup(mgr ctrl.Manager, depEvents source.Source) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(ControllerName).
 		For(&policiesv1.Policy{}).
 		WithEventFilter(templatePredicates()).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
-		WatchesRawSource(depEvents, &handler.EnqueueRequestForObject{}).
+		WatchesRawSource(depEvents).
 		Complete(r)
 }
 
@@ -368,13 +367,14 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			resultError = err
 			errMsg := "Mapping not found, "
 
-			if isGkObj && r.DisableGkSync {
+			switch {
+			case isGkObj && r.DisableGkSync:
 				errMsg = "A Gatekeeper policy-template was provided, but the Gatekeeper integration is disabled"
-			} else if isGkConstraintTemplate {
+			case isGkConstraintTemplate:
 				errMsg += "check if Gatekeeper is installed"
-			} else if isGkConstraint {
+			case isGkConstraint:
 				errMsg += "check if the required ConstraintTemplate has been deployed"
-			} else {
+			default:
 				errMsg += "check if you have the CRD deployed"
 			}
 
@@ -407,7 +407,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// label, signaling that it should be synced
 		hasTemplateLabel, err := r.hasPolicyTemplateLabel(ctx, rsrc)
 		if err != nil {
-			reqLogger.Error(err, fmt.Sprintf("Failed to retrieve CRD %s", rsrc.GroupResource().String()))
+			reqLogger.Error(err, "Failed to retrieve CRD "+rsrc.GroupResource().String())
 
 			policySystemErrorsCounter.WithLabelValues(request.Name, tName, "get-error").Inc()
 
@@ -418,14 +418,14 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// If no policy-type=template label AND the GroupKind is not on the explicit allow list, don't
 		// sync this template
 		if !hasTemplateLabel && !utils.IsAllowedPolicy(gvk.GroupKind()) || (isGkObj && r.DisableGkSync) {
-			errMsg := fmt.Sprintf("policy-template kind is not supported: %s", gvk.String())
+			errMsg := "policy-template kind is not supported: " + gvk.String()
 
 			if r.DisableGkSync && isGkObj {
 				errMsg = fmt.Sprintf(
 					"not syncing kind %s because the Gatekeeper integration is disabled", gvk.String())
 			}
 
-			err := fmt.Errorf(errMsg)
+			err := errors.New(errMsg)
 
 			resultError = err
 
@@ -1108,7 +1108,9 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 		gkConstraintTemplateListv1 := gktemplatesv1.ConstraintTemplateList{}
 
 		err := r.List(ctx, &gkConstraintTemplateListv1, &client.ListOptions{})
-		if err == nil {
+
+		switch {
+		case err == nil:
 			// Add the ConstraintTemplate to the GVR list
 			if len(gkConstraintTemplateListv1.Items) > 0 {
 				tmplGVRs = append(tmplGVRs, gvrScoped{
@@ -1140,11 +1142,14 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 					namespaced: false,
 				})
 			}
-		} else if apimeta.IsNoMatchError(err) {
+
+		case apimeta.IsNoMatchError(err):
 			// If there's no v1 ConstraintTemplate, try the v1beta1 version
 			gkConstraintTemplateListv1beta1 := gktemplatesv1beta1.ConstraintTemplateList{}
 			err := r.List(ctx, &gkConstraintTemplateListv1beta1, &client.ListOptions{})
-			if err == nil {
+
+			switch {
+			case err == nil:
 				// Add the ConstraintTemplate to the GVR list
 				if len(gkConstraintTemplateListv1.Items) > 0 {
 					tmplGVRs = append(tmplGVRs, gvrScoped{
@@ -1161,8 +1166,6 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 				}
 				// Iterate over the ConstraintTemplates to gather the Constraints on the cluster
 				for _, gkCT := range gkConstraintTemplateListv1beta1.Items {
-					gkCT := gkCT
-
 					tmplGVRs = append(tmplGVRs, gvrScoped{
 						gvr: schema.GroupVersionResource{
 							Group:    utils.GConstraint,
@@ -1172,15 +1175,18 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 						namespaced: false,
 					})
 				}
-				// Log and ignore other errors to allow cleanup to continue since Gatekeeper may not be installed
-			} else if apimeta.IsNoMatchError(err) {
+
+			// Log and ignore other errors to allow cleanup to continue since Gatekeeper may not be installed
+			case apimeta.IsNoMatchError(err):
 				log.Info("The ConstraintTemplate CRD is not installed")
 				r.setCreatedGkConstraint(false)
-			} else {
-				reqLogger.Info(fmt.Sprintf("Ignoring ConstraintTemplate cleanup error: %s", err.Error()))
+
+			default:
+				reqLogger.Info("Ignoring ConstraintTemplate cleanup error: " + err.Error())
 			}
-		} else {
-			reqLogger.Info(fmt.Sprintf("Ignoring ConstraintTemplate cleanup error: %s", err.Error()))
+
+		default:
+			reqLogger.Info("Ignoring ConstraintTemplate cleanup error: " + err.Error())
 		}
 	}
 
@@ -1193,10 +1199,10 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 	crdsv1 := extensionsv1.CustomResourceDefinitionList{}
 
 	err := r.List(ctx, &crdsv1, &crdQuery)
-	if err == nil {
-		for _, crd := range crdsv1.Items {
-			crd := crd
 
+	switch {
+	case err == nil:
+		for _, crd := range crdsv1.Items {
 			if len(crd.Spec.Versions) > 0 {
 				tmplGVRs = append(tmplGVRs, gvrScoped{
 					gvr: schema.GroupVersionResource{
@@ -1208,15 +1214,15 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 				})
 			}
 		}
-	} else if apimeta.IsNoMatchError(err) {
+	case apimeta.IsNoMatchError(err):
 		crdsv1beta1 := extensionsv1beta1.CustomResourceDefinitionList{}
+
 		err := r.List(ctx, &crdsv1beta1, &crdQuery)
 		if err != nil {
 			return fmt.Errorf("error listing v1beta1 CRDs with query %+v: %w", crdQuery, err)
 		}
-		for _, crd := range crdsv1beta1.Items {
-			crd := crd
 
+		for _, crd := range crdsv1beta1.Items {
 			if len(crd.Spec.Versions) > 0 {
 				tmplGVRs = append(tmplGVRs, gvrScoped{
 					gvr: schema.GroupVersionResource{
@@ -1228,13 +1234,11 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 				})
 			}
 		}
-	} else {
+	default:
 		return fmt.Errorf("error listing v1 CRDs with query %+v: %w", crdQuery, err)
 	}
 
 	for _, gvrScoped := range tmplGVRs {
-		gvrScoped := gvrScoped
-
 		// Instantiate a dynamic client for the GVR
 		resourceNs := ""
 		if gvrScoped.namespaced {
@@ -1256,8 +1260,6 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 		}
 
 		for _, tmpl := range children.Items {
-			tmpl := tmpl
-
 			// delete all templates with policy label that aren't still in the policy
 			found := false
 
@@ -1729,6 +1731,7 @@ func finalizerCleanup(
 			continue
 		} else if err != nil {
 			policySystemErrorsCounter.WithLabelValues(pol.Name, tName, "get-error").Inc()
+
 			errorList = append(errorList, err)
 
 			continue

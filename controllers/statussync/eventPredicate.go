@@ -49,7 +49,7 @@ var eventPredicateFuncs = predicate.Funcs{
 
 		return false
 	},
-	DeleteFunc: func(e event.DeleteEvent) bool {
+	DeleteFunc: func(_ event.DeleteEvent) bool {
 		return false
 	},
 }
