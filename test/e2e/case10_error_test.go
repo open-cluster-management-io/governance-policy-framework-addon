@@ -48,7 +48,7 @@ var _ = Describe("Test error handling", func() {
 		).Should(BeTrue())
 
 		By("Checking if the policy status is NonCompliant")
-		Eventually(func(g Gomega) string {
+		Eventually(func(_ Gomega) string {
 			hubPlc := utils.GetWithTimeout(
 				clientHubDynamic,
 				gvrPolicy,

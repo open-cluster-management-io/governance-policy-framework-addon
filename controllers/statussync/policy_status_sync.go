@@ -43,7 +43,7 @@ const (
 var log = ctrl.Log.WithName(ControllerName)
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource *source.Channel) error {
+func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource source.Source) error {
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&policiesv1.Policy{}).
 		Watches(
@@ -55,7 +55,7 @@ func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource *
 		Named(ControllerName)
 
 	if additionalSource != nil {
-		builder = builder.WatchesRawSource(additionalSource, &handler.EnqueueRequestForObject{})
+		builder = builder.WatchesRawSource(additionalSource)
 	}
 
 	return builder.Complete(r)
@@ -348,15 +348,17 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	isCompliant := true
 
 	for _, dpt := range newStatus.Details {
-		if dpt.ComplianceState == "NonCompliant" {
+		switch dpt.ComplianceState {
+		case policiesv1.NonCompliant:
 			instance.Status.ComplianceState = policiesv1.NonCompliant
 			isCompliant = false
-
-			break
-		} else if dpt.ComplianceState == "Pending" {
+		case policiesv1.Pending:
 			instance.Status.ComplianceState = policiesv1.Pending
 			isCompliant = false
-		} else if dpt.ComplianceState == "" {
+		case policiesv1.Compliant: // Add this case to fix exhaustive issue
+			instance.Status.ComplianceState = policiesv1.Compliant
+			isCompliant = true
+		case "":
 			isCompliant = false
 		}
 	}

@@ -55,6 +55,6 @@ var _ = Describe("Test user error metrics", Ordered, func() {
 			values = utils.GetMetrics(metricName, policyName)
 
 			return values
-		}, defaultTimeoutSeconds, 1).Should(HaveLen(0))
+		}, defaultTimeoutSeconds, 1).Should(BeEmpty())
 	})
 })

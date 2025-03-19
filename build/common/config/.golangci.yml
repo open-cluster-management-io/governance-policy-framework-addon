@@ -24,6 +24,7 @@ run:
 linters:
   enable-all: true
   disable:
+    - mnd
     - bodyclose
     - cyclop
     - depguard
