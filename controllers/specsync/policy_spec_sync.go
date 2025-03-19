@@ -20,7 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -34,14 +33,14 @@ const ControllerName string = "policy-spec-sync"
 var log = logf.Log.WithName(ControllerName)
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource *source.Channel) error {
+func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource source.Source) error {
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&policiesv1.Policy{}).
 		Named(ControllerName).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles})
 
 	if additionalSource != nil {
-		builder = builder.WatchesRawSource(additionalSource, &handler.EnqueueRequestForObject{})
+		builder = builder.WatchesRawSource(additionalSource)
 	}
 
 	return builder.Complete(r)
