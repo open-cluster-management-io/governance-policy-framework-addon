@@ -28,7 +28,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -100,7 +99,6 @@ func init() {
 	utilruntime.Must(policiesv1.AddToScheme(scheme))
 	utilruntime.Must(policiesv1.AddToScheme(eventsScheme))
 	utilruntime.Must(extensionsv1.AddToScheme(scheme))
-	utilruntime.Must(extensionsv1beta1.AddToScheme(scheme))
 	utilruntime.Must(gktemplatesv1.AddToScheme(scheme))
 	utilruntime.Must(gktemplatesv1beta1.AddToScheme(scheme))
 	utilruntime.Must(appsv1.AddToScheme(scheme))
@@ -448,9 +446,6 @@ func getManager(
 	options.Cache = cache.Options{
 		ByObject: map[client.Object]cache.ByObject{
 			&extensionsv1.CustomResourceDefinition{}: {
-				Label: crdLabelSelector,
-			},
-			&extensionsv1beta1.CustomResourceDefinition{}: {
 				Label: crdLabelSelector,
 			},
 			&v1.Event{}: {
