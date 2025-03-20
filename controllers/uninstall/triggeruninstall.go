@@ -146,7 +146,7 @@ func setUninstallAnnotation(ctx context.Context, client *kubernetes.Clientset) e
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("context canceled before the uninstallation preparation was complete")
+			return errors.New("context canceled before the uninstallation preparation was complete")
 		default:
 		}
 
@@ -192,7 +192,7 @@ func deletePolicies(ctx context.Context, dynamicClient dynamic.Interface) error 
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("context canceled before the uninstallation preparation was complete")
+			return errors.New("context canceled before the uninstallation preparation was complete")
 		default:
 		}
 

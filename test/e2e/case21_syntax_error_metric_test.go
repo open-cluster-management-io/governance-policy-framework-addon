@@ -54,7 +54,7 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 			values = utils.GetMetrics(systemMetricName, policyName)
 
 			return values
-		}, defaultTimeoutSeconds, 1).Should(HaveLen(0))
+		}, defaultTimeoutSeconds, 1).Should(BeEmpty())
 	})
 
 	It("Should clean up user error metric on policy deletion", func() {
@@ -69,7 +69,7 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 			values = utils.GetMetrics(userMetricName, policyName)
 
 			return values
-		}, defaultTimeoutSeconds, 1).Should(HaveLen(0))
+		}, defaultTimeoutSeconds, 1).Should(BeEmpty())
 	})
 
 	It("Should increment user error metric when patching a syntax error onto a correct policy", func() {
@@ -95,6 +95,6 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 			values = utils.GetMetrics(systemMetricName, policyName)
 
 			return values
-		}, defaultTimeoutSeconds, 1).Should(HaveLen(0))
+		}, defaultTimeoutSeconds, 1).Should(BeEmpty())
 	})
 })
