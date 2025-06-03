@@ -1044,19 +1044,25 @@ func equivalentTemplates(eObject *unstructured.Unstructured, tObject *unstructur
 		return false
 	}
 
-	if !equality.Semantic.DeepEqual(eObject.GetAnnotations(), tObject.GetAnnotations()) {
-		return false
+	existingAnnos := eObject.GetAnnotations()
+
+	for key, val := range tObject.GetAnnotations() {
+		existingVal, ok := existingAnnos[key]
+		if !ok || existingVal != val {
+			return false
+		}
 	}
 
-	if !equality.Semantic.DeepEqual(eObject.GetLabels(), tObject.GetLabels()) {
-		return false
+	existingLabels := eObject.GetLabels()
+
+	for key, val := range tObject.GetLabels() {
+		existingVal, ok := existingLabels[key]
+		if !ok || existingVal != val {
+			return false
+		}
 	}
 
-	if !equality.Semantic.DeepEqual(eObject.GetOwnerReferences(), tObject.GetOwnerReferences()) {
-		return false
-	}
-
-	return true
+	return equality.Semantic.DeepEqual(eObject.GetOwnerReferences(), tObject.GetOwnerReferences())
 }
 
 // setDefaultTemplateLabels ensures the template contains all necessary labels for processing

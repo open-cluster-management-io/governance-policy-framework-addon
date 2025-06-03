@@ -333,6 +333,50 @@ func TestEquivalentTemplatesOperatorPolicyComplianceConfig(t *testing.T) {
 	}
 }
 
+func TestEquivalentTemplatesExtraMetadata(t *testing.T) {
+	existing := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "templates.gatekeeper.sh/v1",
+			"kind":       "ConstraintTemplate",
+			"metadata": map[string]interface{}{
+				"name": "k8srequiredlabels",
+			},
+			"spec": map[string]interface{}{
+				"crd": "fake",
+			},
+		},
+	}
+
+	existing.SetAnnotations(map[string]string{
+		"gatekeeper.sh/block-vapb-generation-until": "the-future",
+	})
+	existing.SetLabels(map[string]string{
+		"gatekeeper.sh/special": "fake",
+	})
+
+	template := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "templates.gatekeeper.sh/v1",
+			"kind":       "ConstraintTemplate",
+			"metadata": map[string]interface{}{
+				"name": "k8srequiredlabels",
+			},
+			"spec": map[string]interface{}{
+				"crd": "fake",
+			},
+		},
+	}
+
+	if !equivalentTemplates(existing, template) {
+		t.Fatal("Expected the templates to be equivalent - the existing object has extra metadata")
+	}
+
+	// Note the positions have swapped!
+	if equivalentTemplates(template, existing) {
+		t.Fatal("Expected the templates not to be equivalent - the template has extra metadata")
+	}
+}
+
 func TestGetDepNamespace(t *testing.T) {
 	t.Parallel()
 
