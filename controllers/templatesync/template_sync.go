@@ -532,7 +532,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 				tObjectUnstructured.SetNamespace(resourceNs)
 
-				eObject, err = res.Create(ctx, tObjectUnstructured, metav1.CreateOptions{})
+				eObject, err = res.Create(ctx, tObjectUnstructured, metav1.CreateOptions{
+					FieldValidation: metav1.FieldValidationStrict,
+				})
 				if err != nil {
 					multiTemplateRegExp := regexp.MustCompile(
 						`spec" must validate one and only one schema \(oneOf\)\. Found 2 valid alternatives$`,
