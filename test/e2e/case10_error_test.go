@@ -463,6 +463,41 @@ var _ = Describe("Test error handling", func() {
 			// but note that one of the matching events here is *not* a compliance event
 		).Should(Or(HaveLen(2), HaveLen(3)))
 	})
+	It("should generate template error when template has invalid fields with FieldValidationStrict", func() {
+		const (
+			policyName = "case10-template-field-validation-error"
+			policyYAML = yamlBasePath + "template-field-validation-error.yaml"
+		)
+
+		By("Creating a policy with an invalid field in the template")
+		hubApplyPolicy(policyName, policyYAML)
+
+		By("Checking for template-error event due to field validation")
+		Eventually(
+			checkForEvent(policyName, "template-error; Failed to create policy template"),
+			defaultTimeoutSeconds,
+			1,
+		).Should(BeTrue())
+
+		By("Verifying the policy status shows NonCompliant")
+		Eventually(func(g Gomega) interface{} {
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				policyName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds)
+
+			var plc *policiesv1.Policy
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(plc.Status.Details).To(HaveLen(1))
+			g.Expect(plc.Status.Details[0].History).ToNot(BeEmpty())
+
+			return plc.Status.Details[0].History[0].Message
+		}, defaultTimeoutSeconds, 1).Should(ContainSubstring("template-error"))
+	})
 })
 
 // Checks for an event on the managed cluster
