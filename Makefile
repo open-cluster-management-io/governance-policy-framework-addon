@@ -49,6 +49,7 @@ CONTROLLER_NAME ?= $(shell cat COMPONENT_NAME 2> /dev/null)
 ifeq ($(KIND_VERSION), minimum)
 	KIND_ARGS = --image kindest/node:v1.19.16
 	E2E_FILTER = --label-filter="!skip-minimum"
+	export DISABLE_GK_SYNC = true
 else ifneq ($(KIND_VERSION), latest)
 	KIND_ARGS = --image kindest/node:$(KIND_VERSION)
 else

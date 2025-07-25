@@ -50,10 +50,15 @@ var (
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *GatekeeperConstraintReconciler) SetupWithManager(mgr ctrl.Manager, constraintEvents source.Source) error {
+	skipNameValidation := true // we need to be able to stop and restart this controller
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&policyv1.Policy{}).
 		WithEventFilter(policyPredicates()).
-		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
+		WithOptions(controller.Options{
+			SkipNameValidation:      &skipNameValidation,
+			MaxConcurrentReconciles: r.ConcurrentReconciles,
+		}).
 		WatchesRawSource(constraintEvents).
 		Named(ControllerName).
 		Complete(r)
