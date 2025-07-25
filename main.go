@@ -955,6 +955,11 @@ func manageGatekeeperSyncManager(
 			mgrRunning = false
 
 			mgrCtxCancel()
+
+			// Reset the context for later, otherwise the context is permanently cancelled,
+			// and the manager won't start if Gatekeeper is reinstalled.
+			//nolint:fatcontext
+			mgrCtx, mgrCtxCancel = context.WithCancel(ctx)
 		}
 
 		select {

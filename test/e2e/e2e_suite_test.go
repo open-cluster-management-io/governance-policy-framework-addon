@@ -12,6 +12,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -45,6 +46,7 @@ var (
 	gvrEvent               schema.GroupVersionResource
 	gvrConfigurationPolicy schema.GroupVersionResource
 	gvrConstraintTemplate  schema.GroupVersionResource
+	gvrCRD                 schema.GroupVersionResource
 	kubeconfigHub          string
 	kubeconfigManaged      string
 	defaultTimeoutSeconds  int
@@ -106,6 +108,12 @@ var _ = BeforeSuite(func() {
 		Version:  "v1",
 		Resource: "constrainttemplates",
 	}
+	gvrCRD = schema.GroupVersionResource{
+		Group:    "apiextensions.k8s.io",
+		Version:  "v1",
+		Resource: "customresourcedefinitions",
+	}
+
 	clientHub = NewKubeClient("", kubeconfigHub, "")
 	clientHubDynamic = NewKubeClientDynamic("", kubeconfigHub, "")
 	clientManaged = NewKubeClient("", kubeconfigManaged, "")
@@ -173,6 +181,50 @@ var _ = BeforeSuite(func() {
 		InstanceName:     "status-sync-controller-test",
 		ClientSet:        kubernetes.NewForConfigOrDie(managedConfig),
 		ControllerName:   "status-sync-controller-test",
+	}
+
+	if !gkSyncDisabled {
+		// This section deletes and then re-creates the Gatekeeper ConstraintTemplate CRD, which
+		// should cause the gatekeeper-sync controller to stop and then restart. The tests in
+		// 'case17_gatekeeper_sync_test.go' then verify that gatekeeper-sync is running correctly,
+		// ensuring that there is not a bug in the restart procedure.
+
+		// AI-ASSISTED: The code in this block was based on output from Cursor using claude-4-sonnet.
+
+		gkCRDName := "constrainttemplates.templates.gatekeeper.sh"
+
+		By("Deleting the constrainttemplate CRD to simulate uninstalling Gatekeeper")
+
+		originalCRD, err := clientManagedDynamic.Resource(gvrCRD).Get(context.TODO(), gkCRDName, metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		err = clientManagedDynamic.Resource(gvrCRD).Delete(context.TODO(), gkCRDName, metav1.DeleteOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() bool {
+			_, err := clientManagedDynamic.Resource(gvrCRD).Get(
+				context.TODO(), gkCRDName, metav1.GetOptions{},
+			)
+
+			return k8serrors.IsNotFound(err)
+		}, defaultTimeoutSeconds, 1).Should(BeTrue())
+
+		By("Waiting 10 seconds for the manager to detect missing CRD")
+		time.Sleep(10 * time.Second)
+
+		// Cleanup fields that would cause the Create to fail
+		unstructured.RemoveNestedField(originalCRD.Object, "metadata", "resourceVersion")
+		unstructured.RemoveNestedField(originalCRD.Object, "metadata", "uid")
+		unstructured.RemoveNestedField(originalCRD.Object, "metadata", "generation")
+		unstructured.RemoveNestedField(originalCRD.Object, "metadata", "creationTimestamp")
+		unstructured.RemoveNestedField(originalCRD.Object, "status")
+
+		By("Re-creating the constrainttemplate CRD to simulate re-installing Gatekeeper")
+		_, err = clientManagedDynamic.Resource(gvrCRD).Create(context.TODO(), originalCRD, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Waiting 10 seconds for the manager to detect the fresh CRD")
+		time.Sleep(10 * time.Second)
 	}
 })
 
