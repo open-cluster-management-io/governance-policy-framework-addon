@@ -463,24 +463,26 @@ var _ = Describe("Test error handling", func() {
 			// but note that one of the matching events here is *not* a compliance event
 		).Should(Or(HaveLen(2), HaveLen(3)))
 	})
-	It("should generate template error when template has invalid fields with FieldValidationStrict", func() {
+	It("should generate template error when template has unknown fields", func() {
 		const (
-			policyName = "case10-template-field-validation-error"
-			policyYAML = yamlBasePath + "template-field-validation-error.yaml"
+			policyName        = "case10-template-field-validation-error"
+			validPolicyYAML   = yamlBasePath + "field-validation-template.yaml"
+			invalidPolicyYAML = yamlBasePath + "field-validation-error.yaml"
+			unknownFieldErr   = `strict decoding error: unknown field "spec.unknownField"`
 		)
 
 		By("Creating a policy with an invalid field in the template")
-		hubApplyPolicy(policyName, policyYAML)
+		hubApplyPolicy(policyName, invalidPolicyYAML)
 
 		By("Checking for template-error event due to field validation")
 		Eventually(
-			checkForEvent(policyName, "template-error; Failed to create policy template"),
+			checkForEvent(policyName, "Failed to create policy template"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
 
-		By("Verifying the policy status shows NonCompliant")
-		Eventually(func(g Gomega) interface{} {
+		By("Verifying the policy status shows NonCompliant with specific field validation error")
+		Eventually(func(g Gomega) string {
 			managedPlc := utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -496,7 +498,58 @@ var _ = Describe("Test error handling", func() {
 			g.Expect(plc.Status.Details[0].History).ToNot(BeEmpty())
 
 			return plc.Status.Details[0].History[0].Message
-		}, defaultTimeoutSeconds, 1).Should(ContainSubstring("template-error"))
+		}, defaultTimeoutSeconds, 1).Should(ContainSubstring(unknownFieldErr))
+
+		By("Cleaning up the policy")
+		utils.Kubectl("delete", "policy", policyName, "-n", clusterNamespaceOnHub, "--kubeconfig="+kubeconfigHub)
+
+		By("Creating a valid policy first")
+		hubApplyPolicy(policyName, validPolicyYAML)
+
+		By("Waiting for the valid policy to be processed")
+		Eventually(func() bool {
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				policyName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds)
+
+			return managedPlc != nil
+		}, defaultTimeoutSeconds, 1).Should(BeTrue())
+
+		By("Updating the policy with invalid field in the template")
+		hubApplyPolicy(policyName, invalidPolicyYAML)
+
+		By("Checking for template-error event due to field validation on update")
+		Eventually(
+			checkForEvent(policyName, "Failed to create policy template"),
+			defaultTimeoutSeconds,
+			1,
+		).Should(BeTrue())
+
+		By("Verifying the updated policy status shows NonCompliant with specific field validation error")
+		Eventually(func(g Gomega) string {
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				policyName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds)
+
+			var plc *policiesv1.Policy
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(plc.Status.Details).To(HaveLen(1))
+			g.Expect(plc.Status.Details[0].History).ToNot(BeEmpty())
+
+			return plc.Status.Details[0].History[0].Message
+		}, defaultTimeoutSeconds, 1).Should(ContainSubstring(unknownFieldErr))
+
+		By("Final cleanup of the policy")
+		utils.Kubectl("delete", "policy", policyName, "-n", clusterNamespaceOnHub, "--kubeconfig="+kubeconfigHub)
 	})
 })
 
