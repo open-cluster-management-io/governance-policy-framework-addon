@@ -816,7 +816,9 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			eObject.SetOwnerReferences(tObjectUnstructured.GetOwnerReferences())
 
-			_, err = res.Update(ctx, eObject, metav1.UpdateOptions{})
+			_, err = res.Update(ctx, eObject, metav1.UpdateOptions{
+				FieldValidation: metav1.FieldValidationStrict,
+			})
 			if err != nil {
 				// If the policy template retrieved from the cache has since changed, there will be a conflict error
 				// and the reconcile should be retried since this is recoverable.

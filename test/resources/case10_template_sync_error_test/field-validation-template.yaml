@@ -1,0 +1,31 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: case10-template-field-validation-error
+  labels:
+    policy.open-cluster-management.io/cluster-name: managed
+    policy.open-cluster-management.io/cluster-namespace: managed
+    policy.open-cluster-management.io/root-policy: case10-template-field-validation-error
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: case10-config-policy-field-validation
+        spec:
+          remediationAction: inform
+          severity: high
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  name: nginx-pod-e2e
+                  namespace: default
+                spec:
+                  containers:
+                    - name: nginx
