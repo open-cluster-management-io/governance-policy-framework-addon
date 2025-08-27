@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -40,7 +41,15 @@ const (
 	ControllerName string = "policy-status-sync"
 )
 
-var log = ctrl.Log.WithName(ControllerName)
+func logFromCtx(ctx context.Context) logr.Logger {
+	l, err := logr.FromContext(ctx)
+	if err != nil {
+		// fallback to the controller-runtime logger, which will have less info
+		l = ctrl.Log
+	}
+
+	return l.WithName(ControllerName)
+}
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource source.Source) error {
@@ -92,9 +101,7 @@ type PolicyReconciler struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues(
-		"Request.Namespace", request.Namespace, "Request.Name", request.Name, "HubNamespace", r.ClusterNamespaceOnHub,
-	)
+	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
 
 	if uninstall.DeploymentIsUninstalling {
 		reqLogger.Info("Skipping reconcile because the deployment is in uninstallation mode")
