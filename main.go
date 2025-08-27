@@ -770,16 +770,40 @@ func addControllers(
 
 	hubRecorder := eventBroadcasterHub.NewRecorder(eventsScheme, v1.EventSource{Component: statussync.ControllerName})
 
-	if err := (&statussync.PolicyReconciler{
+	statusDepReconciler, statusDepEvents := depclient.NewControllerRuntimeSource()
+
+	statusDepWatcher, err := depclient.New(managedMgr.GetConfig(), statusDepReconciler, &depclient.Options{
+		EnableCache:             true,
+		DisableInitialReconcile: true,
+	})
+	if err != nil {
+		log.Error(err, "Unable to create dependency watcher")
+		os.Exit(1)
+	}
+
+	statusReconciler := &statussync.PolicyReconciler{
 		ClusterNamespaceOnHub: tool.Options.ClusterNamespaceOnHub,
 		HubClient:             hubClient,
 		HubRecorder:           hubRecorder,
 		ManagedClient:         managedMgr.GetClient(),
 		ManagedRecorder:       managedMgr.GetEventRecorderFor(statussync.ControllerName),
+		DynamicWatcher:        statusDepWatcher,
 		Scheme:                managedMgr.GetScheme(),
 		ConcurrentReconciles:  int(tool.Options.EvaluationConcurrency),
 		SpecSyncRequests:      specSyncRequests,
-	}).SetupWithManager(managedMgr, statusSyncRequestsSource); err != nil {
+	}
+
+	go func() {
+		err := statusDepWatcher.Start(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	// Wait until the dynamic watcher has started.
+	<-statusDepWatcher.Started()
+
+	if err := statusReconciler.SetupWithManager(managedMgr, statusSyncRequestsSource, statusDepEvents); err != nil {
 		log.Error(err, "unable to create controller", "controller", "Policy")
 		os.Exit(1)
 	}
