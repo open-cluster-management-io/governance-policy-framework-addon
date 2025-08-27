@@ -466,7 +466,6 @@ func getManager(
 								LastTimestamp: event.LastTimestamp,
 								Message:       event.Message,
 								Reason:        event.Reason,
-								EventTime:     event.EventTime,
 							}, nil
 						},
 					},
