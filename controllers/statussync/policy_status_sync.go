@@ -111,10 +111,40 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	reqLogger.V(1).Info("Reconciling the policy")
 
-	// Fetch the Policy instance
-	instance := &policiesv1.Policy{}
+	instance, hubInstance, err := r.getInstances(ctx, request)
+	if err != nil || instance == nil || hubInstance == nil {
+		return reconcile.Result{}, err
+	}
 
-	err := r.ManagedClient.Get(ctx, request.NamespacedName, instance)
+	reqLogger.Info("Recalculating details for policy templates")
+
+	oldStatus := *instance.Status.DeepCopy()
+
+	instance.Status.Details, err = r.getDetails(ctx, instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	err = r.updateStatuses(ctx, instance, hubInstance, oldStatus)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	reqLogger.V(1).Info("Reconciling complete")
+
+	return reconcile.Result{}, nil
+}
+
+// getInstances retrieves both the managed cluster and hub cluster instances of
+// a Policy. It handles Policy deletion, missing Policies, and Policy mismatches
+// by triggering spec synchronization when inconsistencies are detected.
+func (r *PolicyReconciler) getInstances(
+	ctx context.Context, request reconcile.Request,
+) (managedInstance, hubInstance *policiesv1.Policy, err error) {
+	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
+	managedInstance = &policiesv1.Policy{}
+
+	err = r.ManagedClient.Get(ctx, request.NamespacedName, managedInstance)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			// The replicated policy on the managed cluster was deleted.
@@ -128,12 +158,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				if k8serrors.IsNotFound(err) {
 					reqLogger.Info("Policy was deleted, no status to update")
 
-					return reconcile.Result{}, nil
+					return nil, nil, nil
 				}
 
 				reqLogger.Error(err, "Failed to get the policy, will requeue the request")
 
-				return reconcile.Result{}, err
+				return nil, nil, err
 			}
 
 			if r.SpecSyncRequests != nil {
@@ -142,17 +172,18 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				r.triggerSpecSyncReconcile(request)
 			}
 
-			return reconcile.Result{}, nil
+			return nil, nil, nil
 		}
 
 		reqLogger.Error(err, "Error reading the policy object, will requeue the request")
 
-		return reconcile.Result{}, err
+		return nil, nil, err
 	}
 
-	hubInstance := &policiesv1.Policy{}
+	hubInstance = &policiesv1.Policy{}
+	nn := types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}
 
-	err = r.HubClient.Get(ctx, types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}, hubInstance)
+	err = r.HubClient.Get(ctx, nn, hubInstance)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			if r.SpecSyncRequests != nil {
@@ -163,32 +194,42 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				r.triggerSpecSyncReconcile(request)
 			}
 
-			return reconcile.Result{}, nil
+			return nil, nil, nil
 		}
 
 		reqLogger.Error(err, "Failed to get policy on hub")
 
-		return reconcile.Result{}, err
+		return nil, nil, err
 	}
 
-	if !utils.EquivalentReplicatedPolicies(instance, hubInstance) {
+	if !utils.EquivalentReplicatedPolicies(managedInstance, hubInstance) {
 		if r.SpecSyncRequests != nil {
 			reqLogger.Info("Found a mismatch with the hub and managed policies. Triggering the spec-sync to handle it.")
 
 			r.triggerSpecSyncReconcile(request)
 		}
 
-		return reconcile.Result{}, nil
+		return nil, nil, nil
 	}
 
-	// managed Policy matches Hub policy, now get the status events
+	return managedInstance, hubInstance, nil
+}
+
+// getDetails collects and processes compliance events for each policy template,
+// building a history of compliance states and deduplicating similar events.
+// It limits history to 10 events per template, sorts by timestamp (most recent
+// first), and returns detailed status information for status synchronization.
+func (r *PolicyReconciler) getDetails(
+	ctx context.Context, instance *policiesv1.Policy,
+) (allDetails []*policiesv1.DetailsPerTemplate, err error) {
+	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
 	eventList := &corev1.EventList{}
 
 	err = r.ManagedClient.List(ctx, eventList, client.InNamespace(instance.GetNamespace()))
 	if err != nil {
 		reqLogger.Error(err, "Error listing events, will requeue the request")
 
-		return reconcile.Result{}, err
+		return nil, err
 	}
 
 	// filter events to current policy instance and build map
@@ -212,11 +253,6 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 	}
 
-	oldStatus := *instance.Status.DeepCopy()
-	newStatus := policiesv1.PolicyStatus{}
-
-	reqLogger.Info("Recalculating details for policy templates")
-
 	for i, policyT := range instance.Spec.PolicyTemplates {
 		details := &policiesv1.DetailsPerTemplate{}
 
@@ -231,6 +267,8 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			tName = object.(metav1.Object).GetName()
 		}
 
+		detailLogger := reqLogger.WithValues("TemplateName", tName, "TemplateIdx", i)
+
 		// retrieve existingDpt from instance.status.details field
 		found := false
 
@@ -241,7 +279,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				details = dpt
 				found = true
 
-				reqLogger.V(1).Info("Found existing template status details", "TemplateName", tName, "TemplateIdx", i)
+				detailLogger.V(1).Info("Found existing template status details")
 
 				break
 			}
@@ -249,7 +287,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 		// no dpt from status field, initialize it
 		if !found {
-			reqLogger.V(1).Info("No existing template status details", "TemplateName", tName, "TemplateIdx", i)
+			detailLogger.V(1).Info("No existing template status details")
 
 			details = &policiesv1.DetailsPerTemplate{
 				TemplateMeta: metav1.ObjectMeta{
@@ -281,12 +319,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				jTime, jErr := parseTimestampFromEventName(details.History[j].EventName)
 
 				if iErr != nil || jErr != nil {
-					reqLogger.Error(err, "Can't guarantee ordering of events in this status")
+					detailLogger.Error(err, "Can't guarantee ordering of events in this status")
 
 					return false
 				}
 
-				reqLogger.V(2).Info("Event timestamp collision, order determined by hex timestamp in name",
+				detailLogger.V(2).Info("Event timestamp collision, order determined by hex timestamp in name",
 					"event1Name", details.History[i].EventName, "event2Name", details.History[j].EventName)
 
 				return iTime.After(jTime.Time)
@@ -327,17 +365,28 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 
 		// append details to status
-		newStatus.Details = append(newStatus.Details, details)
+		allDetails = append(allDetails, details)
 
-		reqLogger.V(1).Info("Details recalculated", "TemplateName", tName, "TemplateIdx", i)
+		detailLogger.V(1).Info("Details recalculated")
 	}
 
-	instance.Status = newStatus
+	return allDetails, nil
+}
+
+// updateStatuses determines the overall compliance state from template details
+// and synchronizes policy status between managed and hub clusters. It updates
+// the managed cluster first, then propagates changes to the hub cluster, only
+// when status changes are detected.
+func (r *PolicyReconciler) updateStatuses(
+	ctx context.Context, instance, hubInstance *policiesv1.Policy, oldStatus policiesv1.PolicyStatus,
+) (err error) {
+	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
+
 	// one violation found in status of one template, set overall compliancy to NonCompliant
 	isCompliant := true
 
 Loop:
-	for _, dpt := range newStatus.Details {
+	for _, dpt := range instance.Status.Details {
 		switch dpt.ComplianceState {
 		case policiesv1.NonCompliant:
 			instance.Status.ComplianceState = policiesv1.NonCompliant
@@ -360,7 +409,7 @@ Loop:
 	}
 
 	// Update status on managed cluster if needed.
-	match := equality.Semantic.DeepEqual(newStatus.Details, oldStatus.Details) &&
+	match := equality.Semantic.DeepEqual(instance.Status.Details, oldStatus.Details) &&
 		instance.Status.ComplianceState == oldStatus.ComplianceState
 
 	if !match {
@@ -370,7 +419,7 @@ Loop:
 		if err != nil {
 			reqLogger.Error(err, "Failed to get update policy status on managed")
 
-			return reconcile.Result{}, err
+			return err
 		}
 
 		r.ManagedRecorder.Event(instance, "Normal", "PolicyStatusSync",
@@ -382,7 +431,7 @@ Loop:
 
 	if os.Getenv("ON_MULTICLUSTERHUB") != "true" {
 		// Re-fetch the hub template in case it changed
-		nn := types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}
+		nn := types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: instance.Name}
 		updatedHubInstance := &policiesv1.Policy{}
 
 		err = r.HubClient.Get(ctx, nn, updatedHubInstance)
@@ -401,7 +450,7 @@ Loop:
 			if err != nil {
 				reqLogger.Error(err, "Failed to update policy status on hub")
 
-				return reconcile.Result{}, err
+				return err
 			}
 
 			r.HubRecorder.Event(hubInstance, "Normal", "PolicyStatusSync",
@@ -412,9 +461,7 @@ Loop:
 		}
 	}
 
-	reqLogger.V(2).Info("Reconciling complete")
-
-	return reconcile.Result{}, nil
+	return nil
 }
 
 func (r *PolicyReconciler) triggerSpecSyncReconcile(request reconcile.Request) {
@@ -427,8 +474,9 @@ func (r *PolicyReconciler) triggerSpecSyncReconcile(request reconcile.Request) {
 	r.SpecSyncRequests <- event.GenericEvent{Object: hubReplicatedPolicy}
 }
 
-// parseTimestampFromEventName will parse the event name for a hexadecimal nanosecond timestamp as a suffix after a
-// period. This is a client-go convention that is repeated in the policy framework.
+// parseTimestampFromEventName will parse the event name for a hexadecimal
+// nanosecond timestamp as a suffix after a period. This is a client-go
+// convention that is repeated in the policy framework.
 func parseTimestampFromEventName(eventName string) (metav1.Time, error) {
 	nameParts := strings.Split(eventName, ".")
 
