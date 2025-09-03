@@ -5,6 +5,7 @@ package statussync
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,12 +15,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
+	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
@@ -40,10 +44,18 @@ const (
 	ControllerName string = "policy-status-sync"
 )
 
-var log = ctrl.Log.WithName(ControllerName)
+func logFromCtx(ctx context.Context) logr.Logger {
+	l, err := logr.FromContext(ctx)
+	if err != nil {
+		// fallback to the controller-runtime logger, which will have less info
+		l = ctrl.Log
+	}
+
+	return l.WithName(ControllerName)
+}
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource source.Source) error {
+func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSources ...source.Source) error {
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&policiesv1.Policy{}).
 		Watches(
@@ -54,8 +66,10 @@ func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource s
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
 		Named(ControllerName)
 
-	if additionalSource != nil {
-		builder = builder.WatchesRawSource(additionalSource)
+	for _, addlSource := range additionalSources {
+		if addlSource != nil {
+			builder = builder.WatchesRawSource(addlSource)
+		}
 	}
 
 	return builder.Complete(r)
@@ -72,6 +86,7 @@ type PolicyReconciler struct {
 	ManagedClient         client.Client
 	HubRecorder           record.EventRecorder
 	ManagedRecorder       record.EventRecorder
+	DynamicWatcher        depclient.DynamicWatcher
 	Scheme                *runtime.Scheme
 	ClusterNamespaceOnHub string
 	ConcurrentReconciles  int
@@ -92,9 +107,7 @@ type PolicyReconciler struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues(
-		"Request.Namespace", request.Namespace, "Request.Name", request.Name, "HubNamespace", r.ClusterNamespaceOnHub,
-	)
+	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
 
 	if uninstall.DeploymentIsUninstalling {
 		reqLogger.Info("Skipping reconcile because the deployment is in uninstallation mode")
@@ -104,10 +117,57 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 	reqLogger.V(1).Info("Reconciling the policy")
 
-	// Fetch the Policy instance
-	instance := &policiesv1.Policy{}
+	policyObjID := policyID(request.Name, request.Namespace)
 
-	err := r.ManagedClient.Get(ctx, request.NamespacedName, instance)
+	// Start query batch for caching and watching related objects
+	err := r.DynamicWatcher.StartQueryBatch(policyObjID)
+	if err != nil {
+		reqLogger.Error(err, "Could not start query batch for the watcher", "objectID", policyObjID)
+
+		return reconcile.Result{}, err
+	}
+
+	defer func() {
+		err := r.DynamicWatcher.EndQueryBatch(policyObjID)
+		if err != nil {
+			reqLogger.Error(err, "Could not end query batch for the watcher", "objectID", policyObjID)
+		}
+	}()
+
+	instance, hubInstance, err := r.getInstances(ctx, request)
+	if err != nil || instance == nil || hubInstance == nil {
+		return reconcile.Result{}, err
+	}
+
+	reqLogger.Info("Recalculating details for policy templates")
+
+	oldStatus := *instance.Status.DeepCopy()
+
+	instance.Status.Details, err = r.getDetails(ctx, instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	err = r.updateStatuses(ctx, instance, hubInstance, oldStatus)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	reqLogger.V(1).Info("Reconciling complete")
+
+	return reconcile.Result{}, nil
+}
+
+// getInstances retrieves both the managed cluster and hub cluster instances of
+// a Policy. It handles Policy deletion, missing Policies, and Policy mismatches
+// by triggering spec synchronization when inconsistencies are detected.
+func (r *PolicyReconciler) getInstances(
+	ctx context.Context, request reconcile.Request,
+) (managedInstance, hubInstance *policiesv1.Policy, err error) {
+	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
+	managedInstance = &policiesv1.Policy{}
+
+	err = r.ManagedClient.Get(ctx, request.NamespacedName, managedInstance)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			// The replicated policy on the managed cluster was deleted.
@@ -119,15 +179,14 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			)
 			if err != nil {
 				if k8serrors.IsNotFound(err) {
-					// confirmed deleted on hub, doing nothing
 					reqLogger.Info("Policy was deleted, no status to update")
 
-					return reconcile.Result{}, nil
+					return nil, nil, nil
 				}
-				// other error, requeue
+
 				reqLogger.Error(err, "Failed to get the policy, will requeue the request")
 
-				return reconcile.Result{}, err
+				return nil, nil, err
 			}
 
 			if r.SpecSyncRequests != nil {
@@ -136,20 +195,19 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				r.triggerSpecSyncReconcile(request)
 			}
 
-			return reconcile.Result{}, nil
+			return nil, nil, nil
 		}
-		// Error reading the object - requeue the request.
+
 		reqLogger.Error(err, "Error reading the policy object, will requeue the request")
 
-		return reconcile.Result{}, err
+		return nil, nil, err
 	}
 
-	// get hub policy
-	hubPlc := &policiesv1.Policy{}
+	hubInstance = &policiesv1.Policy{}
+	nn := types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}
 
-	err = r.HubClient.Get(ctx, types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}, hubPlc)
+	err = r.HubClient.Get(ctx, nn, hubInstance)
 	if err != nil {
-		// hub policy not found, it has been deleted
 		if k8serrors.IsNotFound(err) {
 			if r.SpecSyncRequests != nil {
 				reqLogger.Info(
@@ -159,37 +217,41 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				r.triggerSpecSyncReconcile(request)
 			}
 
-			return reconcile.Result{}, nil
+			return nil, nil, nil
 		}
 
 		reqLogger.Error(err, "Failed to get policy on hub")
 
-		return reconcile.Result{}, err
+		return nil, nil, err
 	}
-	// found, ensure managed plc matches hub plc
-	if !utils.EquivalentReplicatedPolicies(instance, hubPlc) {
+
+	if !utils.EquivalentReplicatedPolicies(managedInstance, hubInstance) {
 		if r.SpecSyncRequests != nil {
 			reqLogger.Info("Found a mismatch with the hub and managed policies. Triggering the spec-sync to handle it.")
 
 			r.triggerSpecSyncReconcile(request)
 		}
 
-		return reconcile.Result{}, nil
+		return nil, nil, nil
 	}
 
-	// plc matches hub plc, then get events
+	return managedInstance, hubInstance, nil
+}
+
+// getEventsInCluster retrieves and filters compliance events for a policy from
+// the managed cluster, organizing them by template name.
+func (r *PolicyReconciler) getEventsInCluster(
+	ctx context.Context, instance *policiesv1.Policy,
+) (map[string][]policiesv1.ComplianceHistory, error) {
 	eventList := &corev1.EventList{}
 
-	err = r.ManagedClient.List(ctx, eventList, client.InNamespace(instance.GetNamespace()))
+	err := r.ManagedClient.List(ctx, eventList, client.InNamespace(instance.GetNamespace()))
 	if err != nil {
-		// there is an error to list events, requeue
-		reqLogger.Error(err, "Error listing events, will requeue the request")
-
-		return reconcile.Result{}, err
+		return nil, err
 	}
+
 	// filter events to current policy instance and build map
-	eventForPolicyMap := make(map[string][]historyEvent)
-	// panic if regexp invalid
+	eventForPolicyMap := make(map[string][]policiesv1.ComplianceHistory)
 	rgx := regexp.MustCompile(`(?i)^policy:\s*(?:([a-z0-9.-]+)\s*\/)?(.+)`)
 
 	for _, event := range eventList.Items {
@@ -198,157 +260,257 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// Only handle events that match the UID of the current Policy
 		if event.InvolvedObject.UID == instance.UID && reason != "" {
 			templateName := rgx.FindStringSubmatch(event.Reason)[2]
-			histEvent := historyEvent{
-				ComplianceHistory: policiesv1.ComplianceHistory{
-					LastTimestamp: event.LastTimestamp,
-					Message: strings.TrimSpace(strings.TrimPrefix(
-						event.Message, "(combined from similar events):")),
-					EventName: event.GetName(),
-				},
-				eventTime: *event.EventTime.DeepCopy(),
+			histEvent := policiesv1.ComplianceHistory{
+				LastTimestamp: event.LastTimestamp,
+				Message: strings.TrimSpace(strings.TrimPrefix(
+					event.Message, "(combined from similar events):")),
+				EventName: event.GetName(),
 			}
 
 			eventForPolicyMap[templateName] = append(eventForPolicyMap[templateName], histEvent)
 		}
 	}
 
-	oldStatus := *instance.Status.DeepCopy()
-	newStatus := policiesv1.PolicyStatus{}
+	return eventForPolicyMap, nil
+}
 
-	reqLogger.Info("Updating status for policy templates")
-
-	for i, policyT := range instance.Spec.PolicyTemplates {
-		existingDpt := &policiesv1.DetailsPerTemplate{}
-
-		var tName string
-
-		object, _, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
-		if err != nil {
-			// failed to decode PolicyTemplate, skipping it
-			reqLogger.Error(err, "Failed to decode policy template, skipping it")
-
-			existingDpt.ComplianceState = policiesv1.NonCompliant
-			tName = fmt.Sprintf("template-%v", i) // template-sync emits this name on error
-		} else {
-			tName = object.(metav1.Object).GetName()
+// getEventsInTemplate retrieves compliance history events from a template's
+// status field, converting them to the standard compliance history format. It
+// skips events with missing timestamps or messages and generates event names
+// using the Policy name and nanosecond timestamp, matching the client-go
+// convention. If the template's status field is not found or is not in the
+// correct format, it returns an empty list.
+func (r *PolicyReconciler) getEventsInTemplate(
+	tmplGVK schema.GroupVersionKind, name, namespace string, policyObjID depclient.ObjectIdentifier,
+) ([]policiesv1.ComplianceHistory, error) {
+	tmplUnstruct, err := r.DynamicWatcher.Get(policyObjID, tmplGVK, namespace, name)
+	if err != nil {
+		if errors.Is(err, depclient.ErrNoVersionedResource) || errors.Is(err, depclient.ErrResourceUnwatchable) {
+			// If the kind isn't found, or isn't compatible with watches, just return an empty list.
+			return []policiesv1.ComplianceHistory{}, nil
 		}
 
-		// retrieve existingDpt from instance.status.details field
-		found := false
-
-		for _, dpt := range instance.Status.Details {
-			if dpt.TemplateMeta.Name == tName {
-				// found existing status for policyTemplate
-				// retrieve it
-				existingDpt = dpt
-				found = true
-
-				reqLogger.V(1).Info("Found existing status, retrieving it", "PolicyTemplate", tName)
-
-				break
-			}
-		}
-		// no dpt from status field, initialize it
-		if !found {
-			existingDpt = &policiesv1.DetailsPerTemplate{
-				TemplateMeta: metav1.ObjectMeta{
-					Name: tName,
-				},
-				History: []policiesv1.ComplianceHistory{},
-			}
-		}
-
-		history := eventForPolicyMap[tName]
-
-		for _, ech := range existingDpt.History {
-			exists := false
-
-			for _, ch := range history {
-				if ch.LastTimestamp.Time.Equal(ech.LastTimestamp.Time) && ch.EventName == ech.EventName {
-					// do nothing
-					exists = true
-
-					break
-				}
-			}
-			// doesn't exist, append to history
-			if !exists {
-				history = append(history, historyEvent{ComplianceHistory: ech})
-			}
-		}
-		// sort by lasttimestamp, break ties with EventTime (if present) or EventName
-		sort.Slice(history, func(i, j int) bool {
-			if history[i].LastTimestamp.Equal(&history[j].LastTimestamp) {
-				if !history[i].eventTime.IsZero() && !history[j].eventTime.IsZero() {
-					reqLogger.V(2).Info("Event timestamp collision, order determined by EventTime",
-						"event1Name", history[i].EventName, "event2Name", history[j].EventName)
-
-					return !history[i].eventTime.Before(&history[j].eventTime)
-				}
-
-				iTime, err := parseTimestampFromEventName(history[i].EventName)
-				if err != nil {
-					reqLogger.Error(err, "Can't guarantee ordering of events in this status")
-
-					return false
-				}
-
-				jTime, err := parseTimestampFromEventName(history[j].EventName)
-				if err != nil {
-					reqLogger.Error(err, "Can't guarantee ordering of events in this status")
-
-					return false
-				}
-
-				reqLogger.V(2).Info("Event timestamp collision, order determined by hex timestamp in name",
-					"event1Name", history[i].EventName, "event2Name", history[j].EventName)
-
-				return iTime.After(jTime.Time)
-			}
-
-			return !history[i].LastTimestamp.Time.Before(history[j].LastTimestamp.Time)
-		})
-		// remove duplicates
-		newHistory := []policiesv1.ComplianceHistory{}
-
-		for historyIndex := 0; historyIndex < len(history); historyIndex++ {
-			newHistory = append(newHistory, history[historyIndex].ComplianceHistory)
-
-			for j := historyIndex; j < len(history); j++ {
-				// Skip over duplicate statuses where the event name and message match the current status
-				if history[historyIndex].EventName != history[j].EventName ||
-					history[historyIndex].Message != history[j].Message {
-					historyIndex = j - 1
-
-					break
-				}
-			}
-		}
-		// shorten it to first 10
-		size := 10
-		if len(newHistory) < 10 {
-			size = len(newHistory)
-		}
-
-		existingDpt.History = newHistory[0:size]
-
-		// set compliancy at different level
-		if len(existingDpt.History) > 0 {
-			existingDpt.ComplianceState = parseComplianceFromMessage(existingDpt.History[0].Message)
-		}
-
-		// append existingDpt to status
-		newStatus.Details = append(newStatus.Details, existingDpt)
-
-		reqLogger.V(1).Info("Status update complete", "PolicyTemplate", tName)
+		return []policiesv1.ComplianceHistory{}, err
 	}
 
-	instance.Status = newStatus
+	if tmplUnstruct == nil {
+		return []policiesv1.ComplianceHistory{}, nil
+	}
+
+	events, found, err := unstructured.NestedSlice(tmplUnstruct.Object, "status", "history")
+	if !found || err != nil {
+		// If there's an error or the field isn't found, just return an empty list.
+		return []policiesv1.ComplianceHistory{}, nil //nolint:nilerr
+	}
+
+	historyEvents := make([]policiesv1.ComplianceHistory, 0, len(events))
+
+	for _, ev := range events {
+		evBytes, err := json.Marshal(ev)
+		if err != nil {
+			continue
+		}
+
+		event := templateHistoryEvent{}
+
+		err = json.Unmarshal(evBytes, &event)
+		if err != nil {
+			continue
+		}
+
+		if event.LastTimestamp.IsZero() || event.Message == "" {
+			continue // Skip events that don't have the proper data
+		}
+
+		historyEvents = append(historyEvents, policiesv1.ComplianceHistory{
+			LastTimestamp: metav1.Time(event.LastTimestamp),
+			Message:       event.Message,
+			EventName:     fmt.Sprintf("%v.%x", policyObjID.Name, event.LastTimestamp.UnixNano()),
+		})
+	}
+
+	return historyEvents, nil
+}
+
+// getDetails collects and processes compliance events for each policy template,
+// building a history of compliance states and deduplicating similar events.
+// It limits history to 10 events per template, sorts by timestamp (most recent
+// first), and returns detailed status information for status synchronization.
+func (r *PolicyReconciler) getDetails(
+	ctx context.Context, instance *policiesv1.Policy,
+) (allDetails []*policiesv1.DetailsPerTemplate, err error) {
+	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
+
+	eventForPolicyMap, err := r.getEventsInCluster(ctx, instance)
+	if err != nil {
+		reqLogger.Error(err, "Error listing events, will requeue the request")
+
+		return nil, err
+	}
+
+	policyObjID := policyID(instance.Name, instance.Namespace)
+
+	for i, policyT := range instance.Spec.PolicyTemplates {
+		var tName string
+
+		object, tmplGVK, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
+		if err != nil {
+			reqLogger.Error(err, "Failed to decode policy template", "TemplateIdx", i)
+
+			tName = fmt.Sprintf("template-%v", i) // template-sync emits this name on error
+		} else {
+			obj, ok := object.(metav1.Object)
+			if !ok || tmplGVK == nil {
+				reqLogger.Error(err, "Failed to decode policy template", "TemplateIdx", i)
+
+				tName = fmt.Sprintf("template-%v", i) // template-sync emits this name on error
+			} else {
+				tName = obj.GetName()
+
+				templateEvents, err := r.getEventsInTemplate(*tmplGVK, tName, instance.Namespace, policyObjID)
+				if err != nil {
+					reqLogger.Error(err, "Error getting template, will requeue the request",
+						"TemplateName", tName, "TemplateIdx", i)
+
+					return nil, err
+				}
+
+				eventForPolicyMap[tName] = append(eventForPolicyMap[tName], templateEvents...)
+			}
+		}
+
+		detailLogger := reqLogger.WithValues("TemplateName", tName, "TemplateIdx", i)
+		templateDetails := mergeDetails(eventForPolicyMap[tName], instance.Status.Details, tName, detailLogger)
+
+		allDetails = append(allDetails, templateDetails)
+
+		detailLogger.V(1).Info("Details recalculated")
+	}
+
+	return allDetails, nil
+}
+
+// mergeDetails combines new compliance events with existing template status
+// details, deduplicating events, sorting by timestamp, limiting history to 10
+// events, and determining the compliance state from the most recent event. It
+// preserves existing status details when available.
+func mergeDetails(
+	events []policiesv1.ComplianceHistory,
+	existingDPTs []*policiesv1.DetailsPerTemplate,
+	tName string,
+	detailLogger logr.Logger,
+) (details *policiesv1.DetailsPerTemplate) {
+	found := false
+
+	for _, dpt := range existingDPTs {
+		if dpt.TemplateMeta.Name == tName {
+			// found existing status for policyTemplate
+			// retrieve it
+			details = dpt
+			found = true
+
+			detailLogger.V(1).Info("Found existing template status details")
+
+			break
+		}
+	}
+
+	// no dpt from status field, initialize it
+	if !found {
+		detailLogger.V(1).Info("No existing template status details")
+
+		details = &policiesv1.DetailsPerTemplate{
+			TemplateMeta: metav1.ObjectMeta{
+				Name: tName,
+			},
+			History: []policiesv1.ComplianceHistory{},
+		}
+	}
+
+	// Add new events if they are not yet in the history
+EventLoop:
+	for _, newEvent := range events {
+		for _, existingEvent := range details.History {
+			match := existingEvent.LastTimestamp.Time.Equal(newEvent.LastTimestamp.Time) &&
+				existingEvent.EventName == newEvent.EventName
+
+			if match {
+				continue EventLoop
+			}
+		}
+
+		details.History = append(details.History, newEvent)
+	}
+
+	// sort by LastTimestamp, break ties with EventName. The most recent event is the 0th.
+	sort.Slice(details.History, func(i, j int) bool {
+		if details.History[i].LastTimestamp.Equal(&details.History[j].LastTimestamp) {
+			iTime, iErr := parseTimestampFromEventName(details.History[i].EventName)
+			jTime, jErr := parseTimestampFromEventName(details.History[j].EventName)
+
+			if iErr != nil || jErr != nil {
+				detailLogger.Error(errors.Join(iErr, jErr), "Can't guarantee ordering of events in this status")
+
+				return false
+			}
+
+			detailLogger.V(2).Info("Event timestamp collision, order determined by hex timestamp in name",
+				"event1Name", details.History[i].EventName, "event2Name", details.History[j].EventName)
+
+			return iTime.After(jTime.Time)
+		}
+
+		return !details.History[i].LastTimestamp.Time.Before(details.History[j].LastTimestamp.Time)
+	})
+
+	dedupedHistory := []policiesv1.ComplianceHistory{}
+
+	for i, event := range details.History {
+		// The most recent event is always saved.
+		if i == 0 {
+			dedupedHistory = append(dedupedHistory, event)
+
+			continue
+		}
+
+		// limit total length to 10
+		if len(dedupedHistory) == 10 {
+			break
+		}
+
+		// Otherwise, only save it if the message and name do not equal the next most recent event.
+		match := event.EventName == details.History[i-1].EventName &&
+			event.Message == details.History[i-1].Message
+
+		if !match {
+			dedupedHistory = append(dedupedHistory, event)
+		}
+	}
+
+	details.History = dedupedHistory
+
+	// set compliancy at different level
+	if len(details.History) > 0 {
+		details.ComplianceState = parseComplianceFromMessage(details.History[0].Message)
+	}
+
+	return details
+}
+
+// updateStatuses determines the overall compliance state from template details
+// and synchronizes policy status between managed and hub clusters. It updates
+// the managed cluster first, then propagates changes to the hub cluster, only
+// when status changes are detected.
+func (r *PolicyReconciler) updateStatuses(
+	ctx context.Context, instance, hubInstance *policiesv1.Policy, oldStatus policiesv1.PolicyStatus,
+) (err error) {
+	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
+
 	// one violation found in status of one template, set overall compliancy to NonCompliant
 	isCompliant := true
 
 Loop:
-	for _, dpt := range newStatus.Details {
+	for _, dpt := range instance.Status.Details {
 		switch dpt.ComplianceState {
 		case policiesv1.NonCompliant:
 			instance.Status.ComplianceState = policiesv1.NonCompliant
@@ -370,17 +532,18 @@ Loop:
 		instance.Status.ComplianceState = policiesv1.Compliant
 	}
 
-	// all done, update status on managed and hub
-	// instance.Status.Details = nil
-	if !equality.Semantic.DeepEqual(newStatus.Details, oldStatus.Details) ||
-		instance.Status.ComplianceState != oldStatus.ComplianceState {
+	// Update status on managed cluster if needed.
+	match := equality.Semantic.DeepEqual(instance.Status.Details, oldStatus.Details) &&
+		instance.Status.ComplianceState == oldStatus.ComplianceState
+
+	if !match {
 		reqLogger.Info("status mismatch on managed, update it")
 
 		err = r.ManagedClient.Status().Update(ctx, instance)
 		if err != nil {
 			reqLogger.Error(err, "Failed to get update policy status on managed")
 
-			return reconcile.Result{}, err
+			return err
 		}
 
 		r.ManagedRecorder.Event(instance, "Normal", "PolicyStatusSync",
@@ -392,34 +555,37 @@ Loop:
 
 	if os.Getenv("ON_MULTICLUSTERHUB") != "true" {
 		// Re-fetch the hub template in case it changed
-		err = r.HubClient.Get(ctx, types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: request.Name}, hubPlc)
+		nn := types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: instance.Name}
+		updatedHubInstance := &policiesv1.Policy{}
+
+		err = r.HubClient.Get(ctx, nn, updatedHubInstance)
 		if err != nil {
 			reqLogger.Error(err, "Failed to refresh the cached policy. Will use existing policy.")
+		} else {
+			hubInstance = updatedHubInstance
 		}
 
-		if !equality.Semantic.DeepEqual(hubPlc.Status, instance.Status) {
+		if !equality.Semantic.DeepEqual(hubInstance.Status, instance.Status) {
 			reqLogger.Info("status not in sync, update the hub")
 
-			hubPlc.Status = instance.Status
+			hubInstance.Status = instance.Status
 
-			err = r.HubClient.Status().Update(ctx, hubPlc)
+			err = r.HubClient.Status().Update(ctx, hubInstance)
 			if err != nil {
 				reqLogger.Error(err, "Failed to update policy status on hub")
 
-				return reconcile.Result{}, err
+				return err
 			}
 
-			r.HubRecorder.Event(hubPlc, "Normal", "PolicyStatusSync",
-				fmt.Sprintf("Policy %s status was updated to %s in cluster namespace %s", hubPlc.GetName(),
-					hubPlc.Status.ComplianceState, hubPlc.GetNamespace()))
+			r.HubRecorder.Event(hubInstance, "Normal", "PolicyStatusSync",
+				fmt.Sprintf("Policy %s status was updated to %s in cluster namespace %s", hubInstance.GetName(),
+					hubInstance.Status.ComplianceState, hubInstance.GetNamespace()))
 		} else {
 			reqLogger.V(1).Info("status match on hub, nothing to update")
 		}
 	}
 
-	reqLogger.V(2).Info("Reconciling complete")
-
-	return reconcile.Result{}, nil
+	return nil
 }
 
 func (r *PolicyReconciler) triggerSpecSyncReconcile(request reconcile.Request) {
@@ -432,8 +598,9 @@ func (r *PolicyReconciler) triggerSpecSyncReconcile(request reconcile.Request) {
 	r.SpecSyncRequests <- event.GenericEvent{Object: hubReplicatedPolicy}
 }
 
-// parseTimestampFromEventName will parse the event name for a hexadecimal nanosecond timestamp as a suffix after a
-// period. This is a client-go convention that is repeated in the policy framework.
+// parseTimestampFromEventName will parse the event name for a hexadecimal
+// nanosecond timestamp as a suffix after a period. This is a client-go
+// convention that is repeated in the policy framework.
 func parseTimestampFromEventName(eventName string) (metav1.Time, error) {
 	nameParts := strings.Split(eventName, ".")
 
@@ -461,7 +628,17 @@ func parseComplianceFromMessage(message string) policiesv1.ComplianceState {
 	return policiesv1.NonCompliant
 }
 
-type historyEvent struct {
-	policiesv1.ComplianceHistory
-	eventTime metav1.MicroTime
+type templateHistoryEvent struct {
+	LastTimestamp metav1.MicroTime `json:"lastTimestamp,omitempty"`
+	Message       string           `json:"message,omitempty"`
+}
+
+func policyID(name, namespace string) depclient.ObjectIdentifier {
+	return depclient.ObjectIdentifier{
+		Group:     policiesv1.GroupVersion.Group,
+		Version:   policiesv1.GroupVersion.Version,
+		Kind:      "Policy",
+		Namespace: namespace,
+		Name:      name,
+	}
 }

@@ -12,11 +12,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func eventMapper(_ context.Context, obj client.Object) []reconcile.Request {
+func eventMapper(ctx context.Context, obj client.Object) []reconcile.Request {
 	//nolint:forcetypeassert
 	event := obj.(*corev1.Event)
 
-	log := log.WithValues("eventName", event.GetName(), "eventNamespace", event.GetNamespace())
+	log := logFromCtx(ctx).WithValues("eventName", event.GetName(), "eventNamespace", event.GetNamespace())
 
 	log.V(2).Info("Reconcile Request")
 

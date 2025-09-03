@@ -5,6 +5,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -17,23 +18,20 @@ import (
 const (
 	case11PolicyYaml string = "../resources/case11_ts_collision/case11-policy.yaml"
 	case11PolicyName string = "default.case11-test-policy"
-	case11Event1     string = "default.case11-test-policy.171a96193d32cf17"
-	case11Event2     string = "default.case11-test-policy.171a96193dea32f4"
-	case11Event3     string = "default.case11-test-policy.171a96193dea32f8"
-	case11Event4     string = "default.case11-test-policy.four.171a96193d32cf17"
-	case11Event5     string = "default.case11-test-policy.five.171a96193d32cf17"
-	case11Event6     string = "default.case11-test-policy.six.171a96193d32cf17"
+	case11Event1     string = "default.case11-test-policy.171a961924a74807"
+	case11Event2     string = "default.case11-test-policy.171a961924a8fa0e"
+	case11Event3     string = "default.case11-test-policy.171a961924aaac15"
 )
 
 func case11Event(ctx context.Context,
 	uid types.UID,
-	name, namespace, message, evtype string,
+	namespace, message, evtype string,
 	evtime time.Time,
-	includeMS bool,
 ) error {
 	event := &corev1.Event{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:              name,
+			// This event name matches the convention of recorders from client-go
+			Name:              fmt.Sprintf("%v.%x", case11PolicyName, evtime.UnixNano()),
 			Namespace:         namespace,
 			CreationTimestamp: metav1.NewTime(evtime),
 		},
@@ -53,15 +51,6 @@ func case11Event(ctx context.Context,
 		LastTimestamp:  metav1.NewTime(evtime),
 		Count:          1,
 		Type:           evtype,
-	}
-
-	if includeMS {
-		event.EventTime = metav1.NewMicroTime(evtime)
-
-		// These fields must also be added to satisfy eventsv1.Event validation
-		event.Action = "filler"
-		event.ReportingController = "filler"
-		event.ReportingInstance = "filler"
 	}
 
 	_, err := clientManaged.CoreV1().Events(namespace).Create(
@@ -90,9 +79,6 @@ func case11cleanup() {
 		case11Event1,
 		case11Event2,
 		case11Event3,
-		case11Event4,
-		case11Event5,
-		case11Event6,
 	}
 
 	for _, evname := range eventsToDelete {
@@ -104,7 +90,7 @@ func case11cleanup() {
 	}
 }
 
-var _ = Describe("Test event sorting by name when timestamps collide", Ordered, func() {
+var _ = Describe("Test event sorting by name when timestamps collide at seconds granularity", Ordered, func() {
 	var managedUID types.UID
 
 	It("Creates the policy and one event, and shows compliant", func(ctx SpecContext) {
@@ -124,85 +110,10 @@ var _ = Describe("Test event sorting by name when timestamps collide", Ordered, 
 		Expect(case11Event(
 			ctx,
 			managedUID,
-			case11Event1,
-			clusterNamespace,
-			"Compliant; notification - this is the oldest event",
-			"Normal",
-			time.Date(2022, 10, 3, 14, 40, 47, 0, time.UTC),
-			false,
-		)).Should(Succeed())
-
-		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
-			Should(Equal("Compliant"))
-		Consistently(checkCompliance(case11PolicyName), "15s", 1).
-			Should(Equal("Compliant"))
-	})
-
-	It("Creates a second event with the same timestamp, and shows noncompliant", func(ctx SpecContext) {
-		Expect(case11Event(
-			ctx,
-			managedUID,
-			case11Event2,
-			clusterNamespace,
-			"NonCompliant; violation - a problem sandwich",
-			"Warning",
-			time.Date(2022, 10, 3, 14, 40, 47, 0, time.UTC),
-			false,
-		)).Should(Succeed())
-
-		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
-			Should(Equal("NonCompliant"))
-		Consistently(checkCompliance(case11PolicyName), "15s", 1).
-			Should(Equal("NonCompliant"))
-	})
-
-	It("Creates a third with the same timestamp, and shows compliant", func(ctx SpecContext) {
-		Expect(case11Event(
-			ctx,
-			managedUID,
-			case11Event3,
-			clusterNamespace,
-			"Compliant; notification - this should be the most recent",
-			"Normal",
-			time.Date(2022, 10, 3, 14, 40, 47, 0, time.UTC),
-			false,
-		)).Should(Succeed())
-
-		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
-			Should(Equal("Compliant"))
-		Consistently(checkCompliance(case11PolicyName), "15s", 1).
-			Should(Equal("Compliant"))
-	})
-
-	AfterAll(case11cleanup)
-})
-
-var _ = Describe("Test event sorting by eventtime when timestamps collide", Ordered, func() {
-	var managedUID types.UID
-
-	It("Creates the policy and one event, and shows compliant", func(ctx SpecContext) {
-		hubApplyPolicy(case11PolicyName, case11PolicyYaml)
-
-		_, err := kubectlManaged(
-			"apply", "-f", case11PolicyYaml, "-n", clusterNamespace,
-		)
-		Expect(err).ShouldNot(HaveOccurred())
-
-		managedPlc, err := clientManagedDynamic.Resource(gvrPolicy).Namespace(clusterNamespace).Get(
-			ctx, case11PolicyName, metav1.GetOptions{},
-		)
-		Expect(err).ShouldNot(HaveOccurred())
-		managedUID = managedPlc.GetUID()
-
-		Expect(case11Event(
-			ctx,
-			managedUID,
-			case11Event4,
 			clusterNamespace,
 			"Compliant; notification - this is the oldest event",
 			"Normal",
 			time.Date(2022, 10, 3, 14, 40, 47, 111111, time.UTC),
-			true,
 		)).Should(Succeed())
 
 		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
@@ -215,12 +126,10 @@ var _ = Describe("Test event sorting by eventtime when timestamps collide", Orde
 		Expect(case11Event(
 			ctx,
 			managedUID,
-			case11Event5,
 			clusterNamespace,
 			"NonCompliant; violation - a problem sandwich",
 			"Warning",
 			time.Date(2022, 10, 3, 14, 40, 47, 222222, time.UTC),
-			true,
 		)).Should(Succeed())
 
 		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
@@ -233,12 +142,10 @@ var _ = Describe("Test event sorting by eventtime when timestamps collide", Orde
 		Expect(case11Event(
 			ctx,
 			managedUID,
-			case11Event6,
 			clusterNamespace,
 			"Compliant; notification - this should be the most recent",
-			"Warning",
+			"Normal",
 			time.Date(2022, 10, 3, 14, 40, 47, 333333, time.UTC),
-			true,
 		)).Should(Succeed())
 
 		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
