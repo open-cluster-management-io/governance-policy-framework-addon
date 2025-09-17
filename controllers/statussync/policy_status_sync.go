@@ -239,7 +239,9 @@ func (r *PolicyReconciler) getInstances(
 }
 
 // getEventsInCluster retrieves and filters compliance events for a policy from
-// the managed cluster, organizing them by template name.
+// the managed cluster, organizing them by template name. If an event name has
+// the conventional hexadecimal timestamp suffix, that will be used for a
+// higher-precision timestamp in the returned history.
 func (r *PolicyReconciler) getEventsInCluster(
 	ctx context.Context, instance *policiesv1.Policy,
 ) (map[string][]policiesv1.ComplianceHistory, error) {
@@ -260,8 +262,16 @@ func (r *PolicyReconciler) getEventsInCluster(
 		// Only handle events that match the UID of the current Policy
 		if event.InvolvedObject.UID == instance.UID && reason != "" {
 			templateName := rgx.FindStringSubmatch(event.Reason)[2]
+
+			// Use the timestamp from the name if possible
+			ts, err := parseTimestampFromEventName(event.GetName())
+			if err != nil {
+				// `LastTimestamp` only has precision down to seconds
+				ts = event.LastTimestamp
+			}
+
 			histEvent := policiesv1.ComplianceHistory{
-				LastTimestamp: event.LastTimestamp,
+				LastTimestamp: ts,
 				Message: strings.TrimSpace(strings.TrimPrefix(
 					event.Message, "(combined from similar events):")),
 				EventName: event.GetName(),
@@ -324,7 +334,7 @@ func (r *PolicyReconciler) getEventsInTemplate(
 
 		historyEvents = append(historyEvents, policiesv1.ComplianceHistory{
 			LastTimestamp: metav1.Time(event.LastTimestamp),
-			Message:       event.Message,
+			Message:       strings.TrimSpace(event.Message),
 			EventName:     fmt.Sprintf("%v.%x", policyObjID.Name, event.LastTimestamp.UnixNano()),
 		})
 	}
@@ -400,14 +410,17 @@ func mergeDetails(
 	tName string,
 	detailLogger logr.Logger,
 ) (details *policiesv1.DetailsPerTemplate) {
-	found := false
+	details = &policiesv1.DetailsPerTemplate{
+		TemplateMeta: metav1.ObjectMeta{
+			Name: tName,
+		},
+		History: []policiesv1.ComplianceHistory{},
+	}
 
 	for _, dpt := range existingDPTs {
 		if dpt.TemplateMeta.Name == tName {
-			// found existing status for policyTemplate
-			// retrieve it
+			// found existing status for policyTemplate - retrieve it
 			details = dpt
-			found = true
 
 			detailLogger.V(1).Info("Found existing template status details")
 
@@ -415,57 +428,31 @@ func mergeDetails(
 		}
 	}
 
-	// no dpt from status field, initialize it
-	if !found {
-		detailLogger.V(1).Info("No existing template status details")
+	// Add old events if they were not found in cluster events or the template status
+	for _, oldEvent := range details.History {
+		found := false
 
-		details = &policiesv1.DetailsPerTemplate{
-			TemplateMeta: metav1.ObjectMeta{
-				Name: tName,
-			},
-			History: []policiesv1.ComplianceHistory{},
-		}
-	}
+		for _, foundEvent := range events {
+			if foundEvent.EventName == oldEvent.EventName {
+				found = true
 
-	// Add new events if they are not yet in the history
-EventLoop:
-	for _, newEvent := range events {
-		for _, existingEvent := range details.History {
-			match := existingEvent.LastTimestamp.Time.Equal(newEvent.LastTimestamp.Time) &&
-				existingEvent.EventName == newEvent.EventName
-
-			if match {
-				continue EventLoop
+				break
 			}
 		}
 
-		details.History = append(details.History, newEvent)
+		if !found {
+			events = append(events, oldEvent)
+		}
 	}
 
-	// sort by LastTimestamp, break ties with EventName. The most recent event is the 0th.
-	sort.Slice(details.History, func(i, j int) bool {
-		if details.History[i].LastTimestamp.Equal(&details.History[j].LastTimestamp) {
-			iTime, iErr := parseTimestampFromEventName(details.History[i].EventName)
-			jTime, jErr := parseTimestampFromEventName(details.History[j].EventName)
-
-			if iErr != nil || jErr != nil {
-				detailLogger.Error(errors.Join(iErr, jErr), "Can't guarantee ordering of events in this status")
-
-				return false
-			}
-
-			detailLogger.V(2).Info("Event timestamp collision, order determined by hex timestamp in name",
-				"event1Name", details.History[i].EventName, "event2Name", details.History[j].EventName)
-
-			return iTime.After(jTime.Time)
-		}
-
-		return !details.History[i].LastTimestamp.Time.Before(details.History[j].LastTimestamp.Time)
+	// sort by LastTimestamp. The most recent event is the 0th.
+	sort.Slice(events, func(i, j int) bool {
+		return !events[i].LastTimestamp.Time.Before(events[j].LastTimestamp.Time)
 	})
 
 	dedupedHistory := []policiesv1.ComplianceHistory{}
 
-	for i, event := range details.History {
+	for i, event := range events {
 		// The most recent event is always saved.
 		if i == 0 {
 			dedupedHistory = append(dedupedHistory, event)
@@ -478,11 +465,11 @@ EventLoop:
 			break
 		}
 
-		// Otherwise, only save it if the message and name do not equal the next most recent event.
-		match := event.EventName == details.History[i-1].EventName &&
-			event.Message == details.History[i-1].Message
+		// Events with the same message and very close timestamps should not be saved.
+		tooSimilar := timestampsWithin(event.LastTimestamp, events[i-1].LastTimestamp, 5*time.Microsecond) &&
+			event.Message == events[i-1].Message
 
-		if !match {
+		if !tooSimilar {
 			dedupedHistory = append(dedupedHistory, event)
 		}
 	}
@@ -495,6 +482,14 @@ EventLoop:
 	}
 
 	return details
+}
+
+// timestampsWithin returns true if the input timestamps are different by less than the threshold
+func timestampsWithin(ts1, ts2 metav1.Time, threshold time.Duration) bool {
+	low := ts1.Add(-1 * threshold)
+	high := ts1.Add(threshold)
+
+	return low.Before(ts2.Time) && ts2.Time.Before(high)
 }
 
 // updateStatuses determines the overall compliance state from template details
