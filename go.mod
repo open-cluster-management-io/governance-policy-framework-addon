@@ -1,6 +1,6 @@
 module open-cluster-management.io/governance-policy-framework-addon
 
-go 1.23.0
+go 1.24.0
 
 require (
 	github.com/go-logr/logr v1.4.3
@@ -22,7 +22,6 @@ require (
 	open-cluster-management.io/config-policy-controller v0.14.1-0.20240702161045-fb3b07d73236
 	open-cluster-management.io/governance-policy-propagator v0.16.0
 	sigs.k8s.io/controller-runtime v0.19.7
-
 )
 
 require (

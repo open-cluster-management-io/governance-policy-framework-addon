@@ -3,7 +3,6 @@
 package templatesync
 
 import (
-	"context"
 	"testing"
 
 	gktemplatesv1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
@@ -79,7 +78,7 @@ func TestHandleSyncSuccessNoDoubleRemoveStatus(t *testing.T) {
 	reconciler := PolicyReconciler{Recorder: recorder}
 
 	err = reconciler.handleSyncSuccess(
-		context.TODO(),
+		t.Context(),
 		&policy,
 		0,
 		configPolicy.Name,

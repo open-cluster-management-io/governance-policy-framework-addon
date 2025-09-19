@@ -4,7 +4,6 @@
 package secretsync
 
 import (
-	"context"
 	"crypto/rand"
 	"testing"
 
@@ -41,7 +40,7 @@ func getTestSecret() *corev1.Secret {
 	}
 }
 
-func TestReconcileSecretHubOnly(_ *testing.T) {
+func TestReconcileSecretHubOnly(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	encryptionSecret := getTestSecret()
@@ -54,17 +53,17 @@ func TestReconcileSecretHubOnly(_ *testing.T) {
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
-	_, err := r.Reconcile(context.TODO(), request)
+	_, err := r.Reconcile(t.Context(), request)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Verify that the Secret was synced to the managed cluster by the Reconciler.
 	managedEncryptionSecret := &corev1.Secret{}
-	err = managedClient.Get(context.TODO(), request.NamespacedName, managedEncryptionSecret)
+	err = managedClient.Get(t.Context(), request.NamespacedName, managedEncryptionSecret)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(managedEncryptionSecret.Data["key"]).To(HaveLen(keySize / 8))
 }
 
-func TestReconcileSecretHubOnlyDiffTargetNS(_ *testing.T) {
+func TestReconcileSecretHubOnlyDiffTargetNS(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	encryptionSecret := getTestSecret()
@@ -78,19 +77,19 @@ func TestReconcileSecretHubOnlyDiffTargetNS(_ *testing.T) {
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
-	_, err := r.Reconcile(context.TODO(), request)
+	_, err := r.Reconcile(t.Context(), request)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Verify that the Secret was synced to the managed cluster by the Reconciler.
 	managedEncryptionSecret := &corev1.Secret{}
 	err = managedClient.Get(
-		context.TODO(), types.NamespacedName{Name: SecretName, Namespace: "other-ns"}, managedEncryptionSecret,
+		t.Context(), types.NamespacedName{Name: SecretName, Namespace: "other-ns"}, managedEncryptionSecret,
 	)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(managedEncryptionSecret.Data["key"]).To(HaveLen(keySize / 8))
 }
 
-func TestReconcileSecretAlreadySynced(_ *testing.T) {
+func TestReconcileSecretAlreadySynced(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	encryptionSecret := getTestSecret()
@@ -101,7 +100,7 @@ func TestReconcileSecretAlreadySynced(_ *testing.T) {
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
-	err := managedClient.Get(context.TODO(), request.NamespacedName, managedEncryptionSecret)
+	err := managedClient.Get(t.Context(), request.NamespacedName, managedEncryptionSecret)
 	Expect(err).ToNot(HaveOccurred())
 
 	version := managedEncryptionSecret.ObjectMeta.ResourceVersion
@@ -109,17 +108,17 @@ func TestReconcileSecretAlreadySynced(_ *testing.T) {
 	r := SecretReconciler{
 		Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme, TargetNamespace: clusterName,
 	}
-	_, err = r.Reconcile(context.TODO(), request)
+	_, err = r.Reconcile(t.Context(), request)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Verify that the Secret was not modified by the Reconciler.
 	managedEncryptionSecret = &corev1.Secret{}
-	err = managedClient.Get(context.TODO(), request.NamespacedName, managedEncryptionSecret)
+	err = managedClient.Get(t.Context(), request.NamespacedName, managedEncryptionSecret)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(managedEncryptionSecret.ResourceVersion).To(Equal(version))
 }
 
-func TestReconcileSecretMismatch(_ *testing.T) {
+func TestReconcileSecretMismatch(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	hubEncryptionSecret := getTestSecret()
@@ -134,17 +133,17 @@ func TestReconcileSecretMismatch(_ *testing.T) {
 	r := SecretReconciler{
 		Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme, TargetNamespace: clusterName,
 	}
-	_, err := r.Reconcile(context.TODO(), request)
+	_, err := r.Reconcile(t.Context(), request)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Verify that the Secret was updated by the Reconciler.
 	managedEncryptionSecret = &corev1.Secret{}
-	err = managedClient.Get(context.TODO(), request.NamespacedName, managedEncryptionSecret)
+	err = managedClient.Get(t.Context(), request.NamespacedName, managedEncryptionSecret)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(managedEncryptionSecret.Data["key"]).To(HaveLen(keySize / 8))
 }
 
-func TestReconcileSecretDeletedOnHub(_ *testing.T) {
+func TestReconcileSecretDeletedOnHub(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	encryptionSecret := getTestSecret()
@@ -157,18 +156,18 @@ func TestReconcileSecretDeletedOnHub(_ *testing.T) {
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{Name: SecretName, Namespace: clusterName},
 	}
-	_, err := r.Reconcile(context.TODO(), request)
+	_, err := r.Reconcile(t.Context(), request)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Verify that the Secret was deleted on the managed cluster by the Reconciler.
 	managedEncryptionSecret := &corev1.Secret{}
-	err = managedClient.Get(context.TODO(), request.NamespacedName, managedEncryptionSecret)
+	err = managedClient.Get(t.Context(), request.NamespacedName, managedEncryptionSecret)
 	Expect(errors.IsNotFound(err)).To(BeTrue())
 }
 
 // The tested code should occur in production because of the field selector set on the watch, but
 // the code should still account for it.
-func TestReconcileInvalidSecretName(_ *testing.T) {
+func TestReconcileInvalidSecretName(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	encryptionSecret := getTestSecret()
@@ -182,11 +181,11 @@ func TestReconcileInvalidSecretName(_ *testing.T) {
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{Name: "not-the-secret", Namespace: clusterName},
 	}
-	_, err := r.Reconcile(context.TODO(), request)
+	_, err := r.Reconcile(t.Context(), request)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Verify that the Secret was not synced to the managed cluster by the Reconciler.
 	managedEncryptionSecret := &corev1.Secret{}
-	err = managedClient.Get(context.TODO(), request.NamespacedName, managedEncryptionSecret)
+	err = managedClient.Get(t.Context(), request.NamespacedName, managedEncryptionSecret)
 	Expect(errors.IsNotFound(err)).To(BeTrue())
 }
