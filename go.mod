@@ -13,10 +13,10 @@ require (
 	github.com/stolostron/go-log-utils v0.1.2
 	github.com/stolostron/kubernetes-dependency-watches v0.10.2
 	golang.org/x/mod v0.24.0
-	k8s.io/api v0.31.9
-	k8s.io/apiextensions-apiserver v0.31.9
-	k8s.io/apimachinery v0.31.9
-	k8s.io/client-go v0.31.9
+	k8s.io/api v0.31.13
+	k8s.io/apiextensions-apiserver v0.31.13
+	k8s.io/apimachinery v0.31.13
+	k8s.io/client-go v0.31.13
 	k8s.io/klog/v2 v2.130.1
 	open-cluster-management.io/addon-framework v0.12.0
 	open-cluster-management.io/config-policy-controller v0.14.1-0.20240702161045-fb3b07d73236
@@ -98,13 +98,13 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiserver v0.31.9 // indirect
-	k8s.io/component-base v0.31.9 // indirect
+	k8s.io/apiserver v0.31.13 // indirect
+	k8s.io/component-base v0.31.13 // indirect
 	k8s.io/kube-openapi v0.0.0-20240521193020-835d969ad83a // indirect
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8 // indirect
 	open-cluster-management.io/api v0.16.0 // indirect
 	open-cluster-management.io/multicloud-operators-subscription v0.13.0 // indirect
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.4 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.3 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
