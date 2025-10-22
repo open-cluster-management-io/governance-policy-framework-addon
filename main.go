@@ -932,7 +932,9 @@ func manageGatekeeperSyncManager(
 				return dynamicClient.Resource(crdGVR).Watch(ctx, options)
 			}
 
-			watcher, err = watch.NewRetryWatcher(resourceVersion, &apiCache.ListWatch{WatchFunc: watchFunc})
+			watcher, err = watch.NewRetryWatcherWithContext(
+				ctx, resourceVersion, &apiCache.ListWatch{WatchFunc: watchFunc},
+			)
 			if err != nil {
 				log.Error(err, "Failed to watch the CRDs to check for the Gatekeeper installation. Will retry.")
 
