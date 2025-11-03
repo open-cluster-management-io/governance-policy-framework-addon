@@ -112,7 +112,7 @@ require (
 	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
 	open-cluster-management.io/api v1.1.0 // indirect
 	open-cluster-management.io/multicloud-operators-subscription v0.16.0 // indirect
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.3 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.4 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
