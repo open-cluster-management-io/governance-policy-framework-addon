@@ -20,12 +20,10 @@ import (
 	"github.com/go-logr/zapr"
 	gktemplatesv1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
 	gktemplatesv1beta1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1beta1"
-	"github.com/spf13/pflag"
 	"github.com/stolostron/go-log-utils/zaputil"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	"golang.org/x/mod/semver"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
-	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,12 +31,10 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	apiWatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
@@ -49,7 +45,6 @@ import (
 	"k8s.io/klog/v2"
 	"open-cluster-management.io/addon-framework/pkg/lease"
 	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
-	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -77,7 +72,6 @@ var (
 	eventsScheme        = k8sruntime.NewScheme()
 	log                 = ctrl.Log.WithName("setup")
 	scheme              = k8sruntime.NewScheme()
-	eventFilter         fields.Selector
 	healthAddresses     = map[string]bool{}
 	healthAddressesLock = sync.RWMutex{}
 )
@@ -89,26 +83,6 @@ func printVersion() {
 		"GoVersion", runtime.Version(),
 		"GOOS", runtime.GOOS,
 		"GOARCH", runtime.GOARCH,
-	)
-}
-
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(v1.AddToScheme(eventsScheme))
-	//+kubebuilder:scaffold:scheme
-	utilruntime.Must(policiesv1.AddToScheme(scheme))
-	utilruntime.Must(policiesv1.AddToScheme(eventsScheme))
-	utilruntime.Must(extensionsv1.AddToScheme(scheme))
-	utilruntime.Must(gktemplatesv1.AddToScheme(scheme))
-	utilruntime.Must(gktemplatesv1beta1.AddToScheme(scheme))
-	utilruntime.Must(appsv1.AddToScheme(scheme))
-
-	// Filter out events not related to policy compliance
-	eventFilter = fields.ParseSelectorOrDie(
-		`involvedObject.kind=Policy,` +
-			`reason!="PolicySpecSync",` +
-			`reason!="PolicyTemplateSync",` +
-			`reason!="PolicyStatusSync"`,
 	)
 }
 
@@ -131,12 +105,7 @@ func main() {
 	zflags.Bind(flag.CommandLine)
 	klog.InitFlags(flag.CommandLine)
 
-	// custom flags for the controller
-	tool.ProcessFlags()
-
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-
-	pflag.Parse()
+	flagErr := tool.ProcessAndParse(flag.CommandLine)
 
 	ctrlZap, err := zflags.BuildForCtrl()
 	if err != nil {
@@ -152,27 +121,12 @@ func main() {
 		klog.SetLogger(zapr.NewLogger(klogZap).WithName("klog"))
 	}
 
-	printVersion()
-
-	if tool.Options.ClusterNamespace == "" {
-		log.Info("The --cluster-namespace flag must be provided")
+	if flagErr != nil {
+		log.Error(flagErr, "Failed to parse controller flags")
 		os.Exit(1)
 	}
 
-	if tool.Options.ClusterNamespaceOnHub == "" {
-		tool.Options.ClusterNamespaceOnHub = tool.Options.ClusterNamespace
-	}
-
-	// Get hubconfig to talk to hub apiserver
-	if tool.Options.HubConfigFilePathName == "" {
-		var found bool
-
-		tool.Options.HubConfigFilePathName, found = os.LookupEnv("HUB_CONFIG")
-		if found {
-			log.Info("Found ENV HUB_CONFIG, initializing using", "tool.Options.HubConfigFilePathName",
-				tool.Options.HubConfigFilePathName)
-		}
-	}
+	printVersion()
 
 	hubCfg, err := clientcmd.BuildConfigFromFlags("", tool.Options.HubConfigFilePathName)
 	if err != nil {
@@ -182,18 +136,6 @@ func main() {
 
 	// Get managedconfig to talk to managed apiserver
 	var managedCfg *rest.Config
-
-	if tool.Options.ManagedConfigFilePathName == "" {
-		var found bool
-
-		tool.Options.ManagedConfigFilePathName, found = os.LookupEnv("MANAGED_CONFIG")
-		if found {
-			log.Info(
-				"Found ENV MANAGED_CONFIG, initializing using",
-				"tool.Options.ManagedConfigFilePathName", tool.Options.ManagedConfigFilePathName,
-			)
-		}
-	}
 
 	if tool.Options.ManagedConfigFilePathName == "" {
 		managedCfg, err = config.GetConfig()
@@ -359,9 +301,7 @@ func main() {
 
 	var errorExit bool
 
-	wg.Add(1)
-
-	go func() {
+	wg.Go(func() {
 		if err := mgr.Start(mgrCtx); err != nil {
 			log.Error(err, "problem running manager")
 
@@ -370,9 +310,7 @@ func main() {
 
 			errorExit = true
 		}
-
-		wg.Done()
-	}()
+	})
 
 	operatorNs, err := tool.GetOperatorNamespace()
 
@@ -388,9 +326,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	wg.Add(1)
-
-	go func() {
+	wg.Go(func() {
 		if err := uninstall.StartWatcher(mgrCtx, mgr, operatorNs); err != nil {
 			log.Error(err, "problem running uninstall-watcher")
 
@@ -399,14 +335,10 @@ func main() {
 
 			errorExit = true
 		}
-
-		wg.Done()
-	}()
+	})
 
 	if !tool.Options.DisableSpecSync {
-		wg.Add(1)
-
-		go func() {
+		wg.Go(func() {
 			if err := hubMgr.Start(mgrCtx); err != nil {
 				log.Error(err, "problem running hub manager")
 
@@ -415,9 +347,7 @@ func main() {
 
 				errorExit = true
 			}
-
-			wg.Done()
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -451,7 +381,12 @@ func getManager(
 			&v1.Event{}: {
 				Namespaces: map[string]cache.Config{
 					tool.Options.ClusterNamespace: {
-						FieldSelector: eventFilter,
+						// Filter out events not related to policy compliance
+						FieldSelector: fields.ParseSelectorOrDie(`involvedObject.kind=Policy,` +
+							`reason!="PolicySpecSync",` +
+							`reason!="PolicyTemplateSync",` +
+							`reason!="PolicyStatusSync"`,
+						),
 						Transform: func(obj interface{}) (interface{}, error) {
 							event := obj.(*v1.Event)
 							// Only cache fields that are utilized by the controllers.

@@ -4,6 +4,8 @@
 package tool
 
 import (
+	"errors"
+	"flag"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -141,13 +143,21 @@ func ProcessFlags() {
 		"The maximum burst before client requests will be throttled. "+
 			"Will scale with concurrency, if not explicitly set.",
 	)
+}
 
-	if flag.Changed("evaluation-concurrency") {
-		if !flag.Changed("client-max-qps") {
+func ProcessAndParse(flagset *flag.FlagSet) error {
+	ProcessFlags()
+
+	pflag.CommandLine.AddGoFlagSet(flagset)
+
+	pflag.Parse()
+
+	if pflag.CommandLine.Changed("evaluation-concurrency") {
+		if !pflag.CommandLine.Changed("client-max-qps") {
 			Options.ClientQPS = float32(Options.EvaluationConcurrency) * 15
 		}
 
-		if !flag.Changed("client-burst") {
+		if !pflag.CommandLine.Changed("client-burst") {
 			Options.ClientBurst = uint32(Options.EvaluationConcurrency)*22 + 1
 		}
 	}
@@ -158,4 +168,35 @@ func ProcessFlags() {
 
 		Options.DeploymentName = "governance-policy-framework-addon"
 	}
+
+	if Options.ClusterNamespace == "" {
+		return errors.New("the --cluster-namespace flag must be provided")
+	}
+
+	if Options.ClusterNamespaceOnHub == "" {
+		Options.ClusterNamespaceOnHub = Options.ClusterNamespace
+	}
+
+	var found bool
+
+	// Get hubconfig to talk to hub apiserver
+	if Options.HubConfigFilePathName == "" {
+		Options.HubConfigFilePathName, found = os.LookupEnv("HUB_CONFIG")
+		if found {
+			log.Info("Found ENV HUB_CONFIG, initializing using", "Options.HubConfigFilePathName",
+				Options.HubConfigFilePathName)
+		}
+	}
+
+	if Options.ManagedConfigFilePathName == "" {
+		Options.ManagedConfigFilePathName, found = os.LookupEnv("MANAGED_CONFIG")
+		if found {
+			log.Info(
+				"Found ENV MANAGED_CONFIG, initializing using",
+				"Options.ManagedConfigFilePathName", Options.ManagedConfigFilePathName,
+			)
+		}
+	}
+
+	return nil
 }
