@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -263,15 +263,9 @@ func (r *PolicyReconciler) getEventsInCluster(
 		if event.InvolvedObject.UID == instance.UID && reason != "" {
 			templateName := rgx.FindStringSubmatch(event.Reason)[2]
 
-			// Use the timestamp from the name if possible
-			ts, err := parseTimestampFromEventName(event.GetName())
-			if err != nil {
-				// `LastTimestamp` only has precision down to seconds
-				ts = event.LastTimestamp
-			}
-
 			histEvent := policiesv1.ComplianceHistory{
-				LastTimestamp: ts,
+				// If available, a higher precision timestamp is added in mergeDetails() before sorting
+				LastTimestamp: event.LastTimestamp,
 				Message: strings.TrimSpace(strings.TrimPrefix(
 					event.Message, "(combined from similar events):")),
 				EventName: event.GetName(),
@@ -445,9 +439,17 @@ func mergeDetails(
 		}
 	}
 
+	// Use high precision timestamps on all of the events when possible
+	for i := range events {
+		ts, err := parseTimestampFromEventName(events[i].EventName)
+		if err == nil {
+			events[i].LastTimestamp = ts
+		}
+	}
+
 	// sort by LastTimestamp. The most recent event is the 0th.
-	sort.Slice(events, func(i, j int) bool {
-		return !events[i].LastTimestamp.Time.Before(events[j].LastTimestamp.Time)
+	slices.SortStableFunc(events, func(a, b policiesv1.ComplianceHistory) int {
+		return -1 * a.LastTimestamp.Compare(b.LastTimestamp.Time)
 	})
 
 	dedupedHistory := []policiesv1.ComplianceHistory{}
@@ -475,6 +477,12 @@ func mergeDetails(
 	}
 
 	details.History = dedupedHistory
+
+	// The timestamps are serialized by kubernetes with only seconds precision, with truncation.
+	// Truncate them *now*, so that comparisons can correctly detect when updates are not needed.
+	for i := range details.History {
+		details.History[i].LastTimestamp = details.History[i].LastTimestamp.Rfc3339Copy()
+	}
 
 	// set compliancy at different level
 	if len(details.History) > 0 {
