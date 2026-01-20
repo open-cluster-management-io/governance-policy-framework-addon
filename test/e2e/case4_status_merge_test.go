@@ -26,9 +26,23 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 		case4PolicyYaml       string = "../resources/case4_status_merge/case4-test-policy.yaml"
 		pastTimeStr           string = "2024-12-23T17:01:23.456789Z"
 		futureTimeStr         string = "2048-12-23T17:01:23.456789Z"
+		extraTimeStr1         string = "2036-12-23T17:01:23.456789Z"
+		extraTimeStr2         string = "2036-12-23T17:01:23.456786Z"
+	)
+
+	var (
+		ev1String    string
+		ev2String    string
+		extra1String string
+		extra2String string
 	)
 
 	BeforeAll(func() {
+		ev1String = `{"lastTimestamp": "` + pastTimeStr + `", "message": "Compliant; happy festivus"}`
+		ev2String = `{"lastTimestamp": "` + futureTimeStr + `", "message": "Compliant; happy festivus again"}`
+		extra1String = `{"lastTimestamp": "` + extraTimeStr1 + `", "message": "Compliant; this bug was annoying"}`
+		extra2String = `{"lastTimestamp": "` + extraTimeStr2 + `", "message": "Compliant; this bug was annoying"}`
+
 		hubApplyPolicy(case4PolicyName, case4PolicyYaml)
 
 		managedPlc := utils.GetWithTimeout(
@@ -187,9 +201,6 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 	})
 
 	It("Should merge status with new status on the template", func() {
-		ev1String := `{"lastTimestamp": "` + pastTimeStr + `", "message": "compliant; happy festivus"}`
-		ev2String := `{"lastTimestamp": "` + futureTimeStr + `", "message": "compliant; happy festivus again"}`
-
 		_, err := kubectlManaged("patch", "configurationpolicy", case4ConfigPolicyName, "-n="+clusterNamespace,
 			"--type=merge", "--subresource=status", `-p={"status": {"history": [`+ev1String+","+ev2String+`]}}`)
 		Expect(err).ToNot(HaveOccurred())
@@ -257,5 +268,79 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 
 			return plc.Status.Details[0].History
 		}, defaultTimeoutSeconds/2, 1).Should(HaveLen(5))
+	})
+
+	It("Should preserve history properly when event sources disappear", func() {
+		By("Adding an additional event to the template")
+		_, err := kubectlManaged("patch", "configurationpolicy", case4ConfigPolicyName, "-n="+clusterNamespace,
+			"--type=merge", "--subresource=status",
+			`-p={"status": {"history": [`+ev1String+","+ev2String+","+extra1String+`]}}`)
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Waiting for the event to appear in the history")
+		var plc *policiesv1.Policy
+		Eventually(func(g Gomega) any {
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				case4PolicyName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds)
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case4-test-policy-configurationpolicy"))
+
+			return plc.Status.Details[0].History
+		}, defaultTimeoutSeconds, 1).Should(HaveLen(6))
+
+		Expect(plc.Status.Details[0].History[1].Message).Should(ContainSubstring("this bug was annoying"))
+
+		By("Removing the event from the template")
+		_, err = kubectlManaged("patch", "configurationpolicy", case4ConfigPolicyName, "-n="+clusterNamespace,
+			"--type=merge", "--subresource=status", `-p={"status": {"history": [`+ev1String+","+ev2String+`]}}`)
+
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Verifying that the policy history does not change length")
+		Consistently(func(g Gomega) any {
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				case4PolicyName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds)
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case4-test-policy-configurationpolicy"))
+
+			return plc.Status.Details[0].History
+		}, defaultTimeoutSeconds/2, 1).Should(HaveLen(6))
+
+		By("Adding yet another event to the template, very similar to the one just removed")
+		_, err = kubectlManaged("patch", "configurationpolicy", case4ConfigPolicyName, "-n="+clusterNamespace,
+			"--type=merge", "--subresource=status",
+			`-p={"status": {"history": [`+ev1String+","+ev2String+","+extra2String+`]}}`)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Since the "extra" events have the same message and have such similar timestamps, they should
+		// be de-duplicated. However, if the "missing" event is treated incorrectly, its timestamp might
+		// get truncated, and it would not be de-duplicated properly.
+		By("Verifying that the event has been deduplicated")
+		Consistently(func(g Gomega) any {
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				case4PolicyName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds)
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case4-test-policy-configurationpolicy"))
+
+			return plc.Status.Details[0].History
+		}, defaultTimeoutSeconds/2, 1).Should(HaveLen(6))
 	})
 })
