@@ -242,7 +242,7 @@ func main() {
 
 	var hubMgr manager.Manager
 
-	if !tool.Options.DisableSpecSync {
+	if !tool.Options.OnMulticlusterhub {
 		hubMgrHealthAddr, err := getFreeLocalAddr()
 		if err != nil {
 			log.Error(err, "Failed to get a free port for the health endpoint")
@@ -337,7 +337,7 @@ func main() {
 		}
 	})
 
-	if !tool.Options.DisableSpecSync {
+	if !tool.Options.OnMulticlusterhub {
 		wg.Go(func() {
 			if err := hubMgr.Start(mgrCtx); err != nil {
 				log.Error(err, "problem running hub manager")
@@ -726,6 +726,7 @@ func addControllers(
 		Scheme:                managedMgr.GetScheme(),
 		ConcurrentReconciles:  int(tool.Options.EvaluationConcurrency),
 		SpecSyncRequests:      specSyncRequests,
+		OnMulticlusterhub:     tool.Options.OnMulticlusterhub,
 	}
 
 	go func() {
@@ -781,8 +782,8 @@ func addControllers(
 		os.Exit(1)
 	}
 
-	// Set up all controllers for manager on hub cluster
-	if tool.Options.DisableSpecSync {
+	// When running on the hub, no more controllers are needed.
+	if tool.Options.OnMulticlusterhub {
 		return
 	}
 
