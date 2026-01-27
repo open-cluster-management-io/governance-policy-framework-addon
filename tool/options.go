@@ -19,7 +19,7 @@ type SyncerOptions struct {
 	ClusterNamespaceOnHub     string
 	HubConfigFilePathName     string
 	ManagedConfigFilePathName string
-	DisableSpecSync           bool
+	OnMulticlusterhub         bool
 	DisableGkSync             bool
 	EnableLease               bool
 	EnableLeaderElection      bool
@@ -35,6 +35,8 @@ type SyncerOptions struct {
 	ClientBurst           uint32
 }
 
+var disableSpecSync bool
+
 // Options default value
 var Options = SyncerOptions{}
 
@@ -45,28 +47,28 @@ func ProcessFlags() {
 	flag.StringVar(
 		&Options.ClusterNamespace,
 		"cluster-namespace",
-		Options.ClusterNamespace,
+		"",
 		"The namespace that the replicated policies should be synced to. This is required.",
 	)
 
 	flag.StringVar(
 		&Options.ClusterNamespaceOnHub,
 		"cluster-namespace-on-hub",
-		Options.ClusterNamespaceOnHub,
+		"",
 		"The cluster namespace on the Hub. This defaults to the namespace provided with --cluster-namespace.",
 	)
 
 	flag.StringVar(
 		&Options.HubConfigFilePathName,
 		"hub-cluster-configfile",
-		Options.HubConfigFilePathName,
+		"",
 		"Configuration file pathname to hub kubernetes cluster",
 	)
 
 	flag.StringVar(
 		&Options.ManagedConfigFilePathName,
 		"managed-cluster-configfile",
-		Options.ManagedConfigFilePathName,
+		"",
 		"Configuration file pathname to managed kubernetes cluster",
 	)
 
@@ -78,10 +80,18 @@ func ProcessFlags() {
 	)
 
 	flag.BoolVar(
-		&Options.DisableSpecSync,
+		&disableSpecSync,
 		"disable-spec-sync",
 		false,
-		"If enabled, the spec-sync controller will not be started. This is used when running on the Hub.",
+		"(Deprecated. Use '--on-multicluster-hub' instead.) If enabled, the spec-sync controller "+
+			"will not be started. This is used when running on the Hub.",
+	)
+
+	flag.BoolVar(
+		&Options.OnMulticlusterhub,
+		"on-multicluster-hub",
+		false,
+		"If true, controllers will not sync things to/from the hub.",
 	)
 
 	flag.BoolVar(
@@ -167,6 +177,21 @@ func ProcessAndParse(flagset *flag.FlagSet) error {
 		log.Info("Environment variable DEPLOYMENT_NAME is empty, using default 'governance-policy-framework-addon'")
 
 		Options.DeploymentName = "governance-policy-framework-addon"
+	}
+
+	// The `--disable-spec-sync` flag and ON_MULTICLUSTERHUB env var are deprecated,
+	// The preferred configuration point is the `--on-multicluster-hub` flag.
+	if disableSpecSync {
+		log.Info("The '--disable-spec-sync' flag is deprecated. Use '--on-multicluster-hub' instead.")
+
+		Options.OnMulticlusterhub = true
+	}
+
+	if os.Getenv("ON_MULTICLUSTERHUB") == "true" {
+		log.Info("The 'ON_MULTICLUSTERHUB' environment variable is deprecated. " +
+			"Use the '--on-multicluster-hub' flag instead.")
+
+		Options.OnMulticlusterhub = true
 	}
 
 	if Options.ClusterNamespace == "" {

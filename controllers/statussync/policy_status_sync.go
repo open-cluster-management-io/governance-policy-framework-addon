@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -91,6 +90,7 @@ type PolicyReconciler struct {
 	ClusterNamespaceOnHub string
 	ConcurrentReconciles  int
 	SpecSyncRequests      chan<- event.GenericEvent
+	OnMulticlusterhub     bool
 }
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=get;list;watch;create;update;patch;delete
@@ -135,7 +135,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}()
 
 	instance, hubInstance, err := r.getInstances(ctx, request)
-	if err != nil || instance == nil || hubInstance == nil {
+	if err != nil || instance == nil || (!r.OnMulticlusterhub && hubInstance == nil) {
 		return reconcile.Result{}, err
 	}
 
@@ -170,6 +170,10 @@ func (r *PolicyReconciler) getInstances(
 	err = r.ManagedClient.Get(ctx, request.NamespacedName, managedInstance)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
+			if r.OnMulticlusterhub {
+				return nil, nil, nil
+			}
+
 			// The replicated policy on the managed cluster was deleted.
 			// check if it was deleted by user by checking if it still exists on hub
 			hubInstance := &policiesv1.Policy{}
@@ -201,6 +205,10 @@ func (r *PolicyReconciler) getInstances(
 		reqLogger.Error(err, "Error reading the policy object, will requeue the request")
 
 		return nil, nil, err
+	}
+
+	if r.OnMulticlusterhub {
+		return managedInstance, nil, nil
 	}
 
 	hubInstance = &policiesv1.Policy{}
@@ -556,7 +564,7 @@ Loop:
 		reqLogger.V(1).Info("status match on managed, nothing to update")
 	}
 
-	if os.Getenv("ON_MULTICLUSTERHUB") != "true" {
+	if !r.OnMulticlusterhub {
 		// Re-fetch the hub template in case it changed
 		nn := types.NamespacedName{Namespace: r.ClusterNamespaceOnHub, Name: instance.Name}
 		updatedHubInstance := &policiesv1.Policy{}
