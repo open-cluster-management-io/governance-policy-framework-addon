@@ -36,6 +36,8 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		policyYamlExtra           string        = yamlBasePath + policyName + "-extra.yaml"
 		policyName2               string        = policyName + "-2"
 		policyYaml2               string        = yamlBasePath + policyName2 + ".yaml"
+		maxIAMPolicyName          string        = "gatekeeper-limitclusteradmin"
+		maxIAMPolicyYaml          string        = yamlBasePath + "limitclusteradmin-policy.yaml"
 		gkAuditFrequency          time.Duration = time.Minute
 		gkConstraintTemplateName  string        = caseNumber + "constrainttemplate"
 		gkConstraintTemplateYaml  string        = yamlBasePath + gkConstraintTemplateName + ".yaml"
@@ -98,7 +100,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 			Expect(err).ToNot(HaveOccurred())
 		}
 
-		for _, pName := range []string{policyName, policyName2} {
+		for _, pName := range []string{policyName, policyName2, maxIAMPolicyName} {
 			By("Deleting policy " + pName + " on the hub in ns:" + clusterNamespaceOnHub)
 			err := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub).Delete(
 				context.TODO(), pName, metav1.DeleteOptions{},
@@ -494,6 +496,66 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		propagatorutils.GetWithTimeout(clientManagedDynamic, gvrConstraint, gkConstraintName2,
 			"", false, defaultTimeoutSeconds,
 		)
+	})
+
+	It("should not repeatedly reconcile the 'maxiamclusterbindings' ConstraintTemplate", func() {
+		By("Applying the " + maxIAMPolicyName + " policy")
+		_, err := kubectlHub("apply", "-f", maxIAMPolicyYaml, "-n", clusterNamespaceOnHub)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Waiting for policy status to be populated")
+		Eventually(func(g Gomega) {
+			plc := propagatorutils.GetWithTimeout(clientManagedDynamic, gvrPolicy,
+				maxIAMPolicyName, clusterNamespace, true, defaultTimeoutSeconds)
+
+			dpt, found, err := unstructured.NestedSlice(plc.Object, "status", "details")
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(found).To(BeTrue())
+			g.Expect(dpt).To(HaveLen(2))
+
+			dpt0, ok := dpt[0].(map[string]any)
+			g.Expect(ok).To(BeTrue())
+
+			history0, found, err := unstructured.NestedSlice(dpt0, "history")
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(found).To(BeTrue())
+			g.Expect(history0).NotTo(BeEmpty())
+
+			dpt1, ok := dpt[1].(map[string]any)
+			g.Expect(ok).To(BeTrue())
+
+			history1, found, err := unstructured.NestedSlice(dpt1, "history")
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(found).To(BeTrue())
+			g.Expect(history1).NotTo(BeEmpty())
+		}, defaultTimeoutSeconds, 1).Should(Succeed())
+
+		By("Verifying the policy history does not fill up")
+		Consistently(func(g Gomega) {
+			plc := propagatorutils.GetWithTimeout(clientManagedDynamic, gvrPolicy,
+				maxIAMPolicyName, clusterNamespace, true, defaultTimeoutSeconds)
+
+			dpt, found, err := unstructured.NestedSlice(plc.Object, "status", "details")
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(found).To(BeTrue())
+			g.Expect(dpt).To(HaveLen(2))
+
+			dpt0, ok := dpt[0].(map[string]any)
+			g.Expect(ok).To(BeTrue())
+
+			history0, found, err := unstructured.NestedSlice(dpt0, "history")
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(found).To(BeTrue())
+			g.Expect(len(history0)).To(BeNumerically("<", 5))
+
+			dpt1, ok := dpt[1].(map[string]any)
+			g.Expect(ok).To(BeTrue())
+
+			history1, found, err := unstructured.NestedSlice(dpt1, "history")
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(found).To(BeTrue())
+			g.Expect(len(history1)).To(BeNumerically("<", 5))
+		}, "20s", 1).Should(Succeed())
 	})
 
 	Describe("Test policy ordering with gatekeeper objects", func() {

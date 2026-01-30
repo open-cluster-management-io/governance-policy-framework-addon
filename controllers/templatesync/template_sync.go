@@ -4,6 +4,7 @@
 package templatesync
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -811,12 +812,12 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			eObjectUnstructured["spec"] = tObjectUnstructured.Object["spec"]
 
 			eObject.SetAnnotations(tObjectUnstructured.GetAnnotations())
-
 			eObject.SetLabels(tObjectUnstructured.GetLabels())
-
 			eObject.SetOwnerReferences(tObjectUnstructured.GetOwnerReferences())
 
-			_, err = res.Update(ctx, eObject, metav1.UpdateOptions{
+			previousRV := eObject.GetResourceVersion()
+
+			updatedObj, err := res.Update(ctx, eObject, metav1.UpdateOptions{
 				FieldValidation: metav1.FieldValidationStrict,
 			})
 			if err != nil {
@@ -845,38 +846,40 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				continue
 			}
 
-			successMsg := fmt.Sprintf("Policy template %s was updated successfully", tName)
+			if updatedObj.GetResourceVersion() != previousRV {
+				successMsg := fmt.Sprintf("Policy template %s was updated successfully", tName)
 
-			// Handle cluster scoped objects
-			if isClusterScoped {
-				addFinalizer = true
+				// Handle cluster scoped objects
+				if isClusterScoped {
+					addFinalizer = true
 
-				reqLogger.V(2).Info("Finalizer required for " + gvk.Kind)
+					reqLogger.V(2).Info("Finalizer required for " + gvk.Kind)
 
-				if isGkObj {
-					r.setCreatedGkConstraint(true)
-				}
-				// The ConstraintTemplate does not generate status, so we need to generate an event for it
-				if isGkConstraintTemplate {
-					tLogger.Info("Emitting status event for " + gvk.Kind)
-					msg := fmt.Sprintf("%s %s was updated successfully", gvk.Kind, tName)
+					if isGkObj {
+						r.setCreatedGkConstraint(true)
+					}
+					// The ConstraintTemplate does not generate status, so we need to generate an event for it
+					if isGkConstraintTemplate {
+						tLogger.Info("Emitting status event for " + gvk.Kind)
+						msg := fmt.Sprintf("%s %s was updated successfully", gvk.Kind, tName)
 
-					emitErr := r.emitTemplateSuccess(ctx, instance, tIndex, tName, isClusterScoped, msg)
-					if emitErr != nil {
-						resultError = emitErr
+						emitErr := r.emitTemplateSuccess(ctx, instance, tIndex, tName, isClusterScoped, msg)
+						if emitErr != nil {
+							resultError = emitErr
+						}
 					}
 				}
+
+				err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res, gvk.GroupVersion(), eObject)
+				if err != nil {
+					resultError = err
+					tLogger.Error(resultError, "Error after updating template (will requeue)")
+
+					policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
+				}
+
+				tLogger.Info("Existing object has been updated")
 			}
-
-			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, successMsg, res, gvk.GroupVersion(), eObject)
-			if err != nil {
-				resultError = err
-				tLogger.Error(resultError, "Error after updating template (will requeue)")
-
-				policySystemErrorsCounter.WithLabelValues(instance.Name, tName, "patch-error").Inc()
-			}
-
-			tLogger.Info("Existing object has been updated")
 		} else {
 			err = r.handleSyncSuccess(ctx, instance, tIndex, tName, "", res, gvk.GroupVersion(), eObject)
 			if err != nil {
@@ -1044,7 +1047,10 @@ func equivalentTemplates(eObject *unstructured.Unstructured, tObject *unstructur
 		}
 	}
 
-	if !equality.Semantic.DeepEqual(eObject.UnstructuredContent()["spec"], tObject.Object["spec"]) {
+	eJSON, e1 := json.Marshal(eObject.UnstructuredContent()["spec"])
+	tJSON, e2 := json.Marshal(tObject.Object["spec"])
+
+	if !bytes.Equal(eJSON, tJSON) || e1 != nil || e2 != nil {
 		return false
 	}
 
