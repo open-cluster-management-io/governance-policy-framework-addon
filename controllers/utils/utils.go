@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -13,6 +14,8 @@ import (
 	"k8s.io/client-go/discovery"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 var (
@@ -154,4 +157,14 @@ func GVRFromGVK(
 	return schema.GroupVersionResource{}, false, fmt.Errorf(
 		"%w: no matching kind was found: %s", ErrNoVersionedResource, gvk.String(),
 	)
+}
+
+func LogConstructor(controllerName string, kind string, req *reconcile.Request) logr.Logger {
+	log := ctrl.Log.WithName(controllerName)
+
+	if req != nil {
+		log = log.WithValues("kind", kind, "namespace", req.Namespace, "name", req.Name)
+	}
+
+	return log
 }

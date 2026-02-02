@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -30,14 +30,15 @@ import (
 
 const ControllerName string = "policy-spec-sync"
 
-var log = logf.Log.WithName(ControllerName)
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSource source.Source) error {
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&policiesv1.Policy{}).
 		Named(ControllerName).
-		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles})
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
+		WithLogConstructor(func(req *reconcile.Request) logr.Logger {
+			return utils.LogConstructor(ControllerName, "Policy", req)
+		})
 
 	if additionalSource != nil {
 		builder = builder.WatchesRawSource(additionalSource)
@@ -77,8 +78,8 @@ type PolicyReconciler struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues(
-		"Request.Namespace", request.Namespace, "Request.Name", request.Name, "TargetNamespace", r.TargetNamespace,
+	reqLogger := ctrl.LoggerFrom(ctx).WithValues(
+		"TargetNamespace", r.TargetNamespace,
 	)
 
 	if uninstall.DeploymentIsUninstalling {
