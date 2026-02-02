@@ -8,6 +8,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -16,7 +17,8 @@ func eventMapper(ctx context.Context, obj client.Object) []reconcile.Request {
 	//nolint:forcetypeassert
 	event := obj.(*corev1.Event)
 
-	log := logFromCtx(ctx).WithValues("eventName", event.GetName(), "eventNamespace", event.GetNamespace())
+	log := ctrl.LoggerFrom(ctx).WithName(ControllerName).
+		WithValues("eventName", event.GetName(), "eventNamespace", event.GetNamespace())
 
 	log.V(2).Info("Reconcile Request")
 
