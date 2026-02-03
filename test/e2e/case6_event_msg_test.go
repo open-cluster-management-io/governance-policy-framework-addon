@@ -64,7 +64,7 @@ var _ = Describe("Test event message handling", func() {
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 	})
-	It("Should remove `(combined from similar events):` prefix but still noncompliant", func() {
+	It("Should remove `(combined from similar events):` prefix but still noncompliant", func(ctx SpecContext) {
 		By("Generating an event in ns:" + clusterNamespace + " that contains `(combined from similar events):` prefix")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
@@ -114,9 +114,9 @@ var _ = Describe("Test event message handling", func() {
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant; Violation detected"))
 		By("Checking if policy status is noncompliant")
-		Eventually(checkCompliance(case6PolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, case6PolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 	})
-	It("Should remove `(combined from similar events):` prefix but still compliant", func() {
+	It("Should remove `(combined from similar events):` prefix but still compliant", func(ctx SpecContext) {
 		By("Generating an event in ns:" + clusterNamespace + " that contains `(combined from similar events):` prefix")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
@@ -166,9 +166,9 @@ var _ = Describe("Test event message handling", func() {
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant; no violation detected"))
 		By("Checking if policy status is compliant")
-		Eventually(checkCompliance(case6PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case6PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 	})
-	It("Should handle violation msg with just NonCompliant", func() {
+	It("Should handle violation msg with just NonCompliant", func(ctx SpecContext) {
 		By("Generating an event in ns:" + clusterNamespace + " that only contains `NonCompliant`")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
@@ -218,9 +218,9 @@ var _ = Describe("Test event message handling", func() {
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 		By("Checking if policy status is noncompliant")
-		Eventually(checkCompliance(case6PolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, case6PolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 	})
-	It("Should handle violation msg with just Compliant", func() {
+	It("Should handle violation msg with just Compliant", func(ctx SpecContext) {
 		By("Generating an event in ns:" + clusterNamespace + " that only contains `Compliant`")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
@@ -270,6 +270,6 @@ var _ = Describe("Test event message handling", func() {
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("Checking if policy status is compliant")
-		Eventually(checkCompliance(case6PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case6PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 	})
 })

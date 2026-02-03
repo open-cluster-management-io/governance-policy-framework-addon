@@ -36,7 +36,7 @@ var _ = Describe("Test spec sync", func() {
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
 	})
-	It("should update policy on the hub", func() {
+	It("should update policy on the hub", func(ctx SpecContext) {
 		By("Patching " + case7PolicyYaml + " on hub with spec.remediationAction = enforce")
 		hubPlc := utils.GetWithTimeout(
 			clientHubDynamic,
@@ -47,7 +47,7 @@ var _ = Describe("Test spec sync", func() {
 			defaultTimeoutSeconds)
 		Expect(hubPlc).NotTo(BeNil())
 		Expect(hubPlc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("inform"))
-		hubPlc, err := patchRemediationAction(clientHubDynamic, hubPlc, "enforce")
+		hubPlc, err := patchRemediationAction(ctx, clientHubDynamic, hubPlc, "enforce")
 		Expect(err).ToNot(HaveOccurred())
 		Eventually(func() interface{} {
 			managedPlc := utils.GetWithTimeout(

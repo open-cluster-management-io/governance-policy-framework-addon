@@ -63,12 +63,12 @@ var _ = Describe("Test template sync", func() {
 			return trustedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
 	})
-	It("should override remediationAction in spec", func() {
+	It("should override remediationAction in spec", func(ctx SpecContext) {
 		By("Patching policy remediationAction=enforce")
 		plc := utils.GetWithTimeout(
 			clientHubDynamic, gvrPolicy, case9PolicyName, clusterNamespaceOnHub, true, defaultTimeoutSeconds,
 		)
-		plc, err := patchRemediationAction(clientHubDynamic, plc, "enforce")
+		plc, err := patchRemediationAction(ctx, clientHubDynamic, plc, "enforce")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(plc.Object["spec"].(map[string]interface{})["remediationAction"]).To(Equal("enforce"))
 		By("Checking template policy remediationAction")
