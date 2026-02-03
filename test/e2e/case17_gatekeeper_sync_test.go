@@ -56,7 +56,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		Resource: caseNumber + "constrainttemplate",
 	}
 
-	BeforeAll(func() {
+	BeforeAll(func(ctx SpecContext) {
 		if gkSyncDisabled {
 			Skip("Gatekeeper sync is disabled--skipping Gatekeeper tests")
 		}
@@ -72,12 +72,12 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 			},
 		}
 
-		_, err := clientManaged.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
+		_, err := clientManaged.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func(g Gomega) {
 			deployments, err := clientManaged.AppsV1().Deployments("gatekeeper-system").
-				List(context.TODO(), metav1.ListOptions{})
+				List(ctx, metav1.ListOptions{})
 			g.Expect(err).ShouldNot(HaveOccurred())
 			g.Expect(deployments.Items).ToNot(BeEmpty())
 
@@ -93,9 +93,9 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		}, defaultTimeoutSeconds, 1).Should(Succeed())
 	})
 
-	AfterAll(func() {
+	AfterAll(func(ctx SpecContext) {
 		By("Deleting the namespace " + configMapNamespace)
-		err := clientManaged.CoreV1().Namespaces().Delete(context.TODO(), configMapNamespace, metav1.DeleteOptions{})
+		err := clientManaged.CoreV1().Namespaces().Delete(ctx, configMapNamespace, metav1.DeleteOptions{})
 		if !k8serrors.IsNotFound(err) {
 			Expect(err).ToNot(HaveOccurred())
 		}
@@ -103,7 +103,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		for _, pName := range []string{policyName, policyName2, maxIAMPolicyName} {
 			By("Deleting policy " + pName + " on the hub in ns:" + clusterNamespaceOnHub)
 			err := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub).Delete(
-				context.TODO(), pName, metav1.DeleteOptions{},
+				ctx, pName, metav1.DeleteOptions{},
 			)
 			if !k8serrors.IsNotFound(err) {
 				Expect(err).ToNot(HaveOccurred())
@@ -128,7 +128,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		Eventually(
 			func(g Gomega) {
 				webhook, err := clientManaged.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(
-					context.TODO(), gatekeepersync.GatekeeperWebhookName, metav1.GetOptions{},
+					ctx, gatekeepersync.GatekeeperWebhookName, metav1.GetOptions{},
 				)
 				g.Expect(err).ToNot(HaveOccurred())
 
@@ -147,7 +147,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 
 				By("Updating the Gatekeeper webhook")
 				_, err = clientManaged.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(
-					context.TODO(), webhook, metav1.UpdateOptions{},
+					ctx, webhook, metav1.UpdateOptions{},
 				)
 				g.Expect(err).ToNot(HaveOccurred())
 			},
@@ -159,7 +159,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		Eventually(
 			func(g Gomega) {
 				_, err := clientManaged.CoreV1().Namespaces().Get(
-					context.TODO(), configMapNamespace, metav1.GetOptions{},
+					ctx, configMapNamespace, metav1.GetOptions{},
 				)
 				g.Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 			},
@@ -229,7 +229,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 	})
 
-	It("should return Gatekeeper audit results", func() {
+	It("should return Gatekeeper audit results", func(ctx SpecContext) {
 		By("Checking if policy status is compliant for the constraint")
 		Eventually(func(g Gomega) {
 			managedPolicyUnstructured := propagatorutils.GetWithTimeout(
@@ -267,7 +267,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 			}
 
 			_, err := clientManaged.CoreV1().ConfigMaps(configMapNamespace).Create(
-				context.TODO(), configMap, metav1.CreateOptions{},
+				ctx, configMap, metav1.CreateOptions{},
 			)
 			Expect(err).ToNot(HaveOccurred())
 		}
@@ -310,14 +310,14 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		}, gkAuditFrequency*3, 1).Should(Succeed())
 	})
 
-	It("should deny an invalid ConfigMap when remediationAction=enforce", func() {
+	It("should deny an invalid ConfigMap when remediationAction=enforce", func(ctx SpecContext) {
 		By("Patching the remediationAction to enforce")
 		Eventually(
 			func() interface{} {
 				managedPlc := propagatorutils.GetWithTimeout(
 					clientHubDynamic, gvrPolicy, policyName, clusterNamespaceOnHub, true, defaultTimeoutSeconds,
 				)
-				_, err := patchRemediationAction(clientHubDynamic, managedPlc, "enforce")
+				_, err := patchRemediationAction(ctx, clientHubDynamic, managedPlc, "enforce")
 
 				return err
 			},
@@ -329,7 +329,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		Eventually(
 			func(g Gomega) {
 				constraint, err := clientManagedDynamic.Resource(gvrConstraint).Get(
-					context.TODO(), gkConstraintName, metav1.GetOptions{},
+					ctx, gkConstraintName, metav1.GetOptions{},
 				)
 				g.Expect(err).ToNot(HaveOccurred())
 
@@ -353,7 +353,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		}
 
 		_, err := clientManaged.CoreV1().ConfigMaps(configMapNamespace).Create(
-			context.TODO(), configMap, metav1.CreateOptions{},
+			ctx, configMap, metav1.CreateOptions{},
 		)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(
@@ -364,79 +364,80 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 		)
 	})
 
-	It("should have an error if the remediationAction=enforce and the Gatekeeper webhook is not enabled", func() {
-		By("Renaming the Gatekeeper webhook")
-		Eventually(
-			func(g Gomega) {
-				webhook, err := clientManaged.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(
-					context.TODO(), gatekeepersync.GatekeeperWebhookName, metav1.GetOptions{},
+	It("should have an error if the remediationAction=enforce and the Gatekeeper webhook is not enabled",
+		func(ctx SpecContext) {
+			By("Renaming the Gatekeeper webhook")
+			Eventually(
+				func(g Gomega) {
+					webhook, err := clientManaged.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(
+						ctx, gatekeepersync.GatekeeperWebhookName, metav1.GetOptions{},
+					)
+					g.Expect(err).ToNot(HaveOccurred())
+
+					for i := range webhook.Webhooks {
+						webhook.Webhooks[i].Name = "not-" + webhook.Webhooks[i].Name
+					}
+
+					_, err = clientManaged.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(
+						ctx, webhook, metav1.UpdateOptions{},
+					)
+					g.Expect(err).ToNot(HaveOccurred())
+				},
+				defaultTimeoutSeconds,
+				1,
+			).Should(Succeed())
+
+			By("Checking if policy status is noncompliant for the constraint")
+			Eventually(func(g Gomega) {
+				managedPolicyUnstructured := propagatorutils.GetWithTimeout(
+					clientManagedDynamic, gvrPolicy, policyName, clusterNamespace, true, defaultTimeoutSeconds,
+				)
+
+				managedPolicy := policyv1.Policy{}
+				err := runtime.DefaultUnstructuredConverter.FromUnstructured(
+					managedPolicyUnstructured.Object, &managedPolicy,
 				)
 				g.Expect(err).ToNot(HaveOccurred())
 
-				for i := range webhook.Webhooks {
-					webhook.Webhooks[i].Name = "not-" + webhook.Webhooks[i].Name
+				history := managedPolicy.Status.Details[1].History
+				g.Expect((history)).ToNot(BeEmpty())
+				validMsgs := []string{
+					`NonCompliant; The Gatekeeper validating webhook is disabled but the constraint's ` +
+						`spec.enforcementAction is deny. deny - All configmaps must have a 'my-gk-test' label ` +
+						`(on ConfigMap case17-gk-test/case17-test); deny - All configmaps must have a 'my-gk-test' ` +
+						`label (on ConfigMap case17-gk-test/case17-test2)`,
+					`NonCompliant; The Gatekeeper validating webhook is disabled but the constraint's ` +
+						`spec.enforcementAction is deny. deny - All configmaps must have a 'my-gk-test' label ` +
+						`(on ConfigMap case17-gk-test/case17-test2); deny - All configmaps must have a 'my-gk-test' ` +
+						`label (on ConfigMap case17-gk-test/case17-test)`,
 				}
-
-				_, err = clientManaged.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(
-					context.TODO(), webhook, metav1.UpdateOptions{},
+				g.Expect(validMsgs).To(
+					ContainElement(history[0].Message),
+					fmt.Sprintf("Got %s but expected one of %v", history[0].Message, validMsgs),
 				)
-				g.Expect(err).ToNot(HaveOccurred())
-			},
-			defaultTimeoutSeconds,
-			1,
-		).Should(Succeed())
+			}, gkAuditFrequency*3, 1).Should(Succeed())
 
-		By("Checking if policy status is noncompliant for the constraint")
-		Eventually(func(g Gomega) {
-			managedPolicyUnstructured := propagatorutils.GetWithTimeout(
-				clientManagedDynamic, gvrPolicy, policyName, clusterNamespace, true, defaultTimeoutSeconds,
-			)
+			By("Restoring the Gatekeeper webhook")
+			Eventually(
+				func(g Gomega) {
+					webhook, err := clientManaged.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(
+						ctx, gatekeepersync.GatekeeperWebhookName, metav1.GetOptions{},
+					)
+					g.Expect(err).ToNot(HaveOccurred())
 
-			managedPolicy := policyv1.Policy{}
-			err := runtime.DefaultUnstructuredConverter.FromUnstructured(
-				managedPolicyUnstructured.Object, &managedPolicy,
-			)
-			g.Expect(err).ToNot(HaveOccurred())
+					for i := range webhook.Webhooks {
+						webhook.Webhooks[i].Name = strings.TrimPrefix(webhook.Webhooks[i].Name, "not-")
+					}
 
-			history := managedPolicy.Status.Details[1].History
-			g.Expect((history)).ToNot(BeEmpty())
-			validMsgs := []string{
-				`NonCompliant; The Gatekeeper validating webhook is disabled but the constraint's ` +
-					`spec.enforcementAction is deny. deny - All configmaps must have a 'my-gk-test' label ` +
-					`(on ConfigMap case17-gk-test/case17-test); deny - All configmaps must have a 'my-gk-test' ` +
-					`label (on ConfigMap case17-gk-test/case17-test2)`,
-				`NonCompliant; The Gatekeeper validating webhook is disabled but the constraint's ` +
-					`spec.enforcementAction is deny. deny - All configmaps must have a 'my-gk-test' label ` +
-					`(on ConfigMap case17-gk-test/case17-test2); deny - All configmaps must have a 'my-gk-test' ` +
-					`label (on ConfigMap case17-gk-test/case17-test)`,
-			}
-			g.Expect(validMsgs).To(
-				ContainElement(history[0].Message),
-				fmt.Sprintf("Got %s but expected one of %v", history[0].Message, validMsgs),
-			)
-		}, gkAuditFrequency*3, 1).Should(Succeed())
-
-		By("Restoring the Gatekeeper webhook")
-		Eventually(
-			func(g Gomega) {
-				webhook, err := clientManaged.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(
-					context.TODO(), gatekeepersync.GatekeeperWebhookName, metav1.GetOptions{},
-				)
-				g.Expect(err).ToNot(HaveOccurred())
-
-				for i := range webhook.Webhooks {
-					webhook.Webhooks[i].Name = strings.TrimPrefix(webhook.Webhooks[i].Name, "not-")
-				}
-
-				_, err = clientManaged.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(
-					context.TODO(), webhook, metav1.UpdateOptions{},
-				)
-				g.Expect(err).ToNot(HaveOccurred())
-			},
-			defaultTimeoutSeconds,
-			1,
-		).Should(Succeed())
-	})
+					_, err = clientManaged.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(
+						ctx, webhook, metav1.UpdateOptions{},
+					)
+					g.Expect(err).ToNot(HaveOccurred())
+				},
+				defaultTimeoutSeconds,
+				1,
+			).Should(Succeed())
+		})
 
 	It("should add a Constraint and ConstraintTemplate when added to policy-templates", func() {
 		By("Adding a Constraint and ConstraintTemplate to the policy-templates array")
@@ -574,11 +575,11 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		AfterAll(func() {
+		AfterAll(func(ctx SpecContext) {
 			for _, pName := range []string{waitForTemplateName, waitForConstraintName} {
 				By("Deleting policy " + pName + " on the hub in ns:" + clusterNamespaceOnHub)
 				err := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub).Delete(
-					context.TODO(), pName, metav1.DeleteOptions{},
+					ctx, pName, metav1.DeleteOptions{},
 				)
 				if !k8serrors.IsNotFound(err) {
 					Expect(err).ToNot(HaveOccurred())
@@ -685,7 +686,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 			)).NotTo(BeNil())
 		})
 
-		It("should become Pending when there are violations on the constraint", func() {
+		It("should become Pending when there are violations on the constraint", func(ctx SpecContext) {
 			By("Adding a ConfigMap that violates the constraint")
 			configMap := &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
@@ -699,7 +700,7 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 			}
 
 			_, err := clientManaged.CoreV1().ConfigMaps(configMapNamespace).Create(
-				context.TODO(), configMap, metav1.CreateOptions{},
+				ctx, configMap, metav1.CreateOptions{},
 			)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -731,10 +732,10 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate and constraint sync", Order
 			)).To(BeNil())
 		})
 
-		It("should progress again when the violations are addressed", func() {
+		It("should progress again when the violations are addressed", func(ctx SpecContext) {
 			By("Deleting the ConfigMap causing the violation")
 			err := clientManaged.CoreV1().ConfigMaps(configMapNamespace).Delete(
-				context.TODO(), configMapName, metav1.DeleteOptions{},
+				ctx, configMapName, metav1.DeleteOptions{},
 			)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -775,14 +776,14 @@ var _ = Describe("Test Gatekeeper ConstraintTemplate error", Ordered, Label("ski
 		policyName   string = "case17-invalid-syntax"
 	)
 
-	BeforeAll(func() {
+	BeforeAll(func(ctx SpecContext) {
 		if gkSyncDisabled {
 			Skip("Gatekeeper sync is disabled--skipping Gatekeeper tests")
 		}
 
 		Eventually(func(g Gomega) {
 			deployments, err := clientManaged.AppsV1().Deployments("gatekeeper-system").
-				List(context.TODO(), metav1.ListOptions{})
+				List(ctx, metav1.ListOptions{})
 			g.Expect(err).ShouldNot(HaveOccurred())
 			g.Expect(deployments.Items).ToNot(BeEmpty())
 
