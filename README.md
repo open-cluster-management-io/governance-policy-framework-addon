@@ -75,6 +75,18 @@ make e2e-dependencies
 make e2e-test
 ```
 
+#### Running e2e tests related to metrics
+
+To run the metrics e2e tests locally, set up port forwarding 
+to the `metrics-bind-address` before running the tests.
+This example uses port 8383.
+
+```
+kubectl port-forward -n open-cluster-management-agent-addon deployment/governance-policy-framework-addon 8383:8383
+
+make e2e-test
+```
+
 ### Clean up
 
 ```
