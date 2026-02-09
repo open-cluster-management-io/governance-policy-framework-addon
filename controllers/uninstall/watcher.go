@@ -18,10 +18,7 @@ const (
 	ControllerName = "uninstall-watcher"
 )
 
-var (
-	log                      = logf.Log.WithName(ControllerName)
-	DeploymentIsUninstalling = false
-)
+var DeploymentIsUninstalling = false
 
 type reconciler struct {
 	*kubernetes.Clientset
@@ -30,7 +27,7 @@ type reconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,resourceNames=governance-policy-framework-addon,verbs=get;list;watch;patch;update
 
 func (r *reconciler) Reconcile(ctx context.Context, obj client.ObjectIdentifier) (reconcile.Result, error) {
-	log := log.WithValues("name", obj.Name, "namespace", obj.Namespace)
+	log := logf.FromContext(ctx).WithName(ControllerName).WithValues("name", obj.Name, "namespace", obj.Namespace)
 
 	log.Info("Checking the deployment for the annotation " + AnnotationKey)
 

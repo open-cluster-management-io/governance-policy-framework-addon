@@ -4,7 +4,6 @@
 package e2e
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -83,7 +82,7 @@ func init() {
 		"Location of the kubeconfig to use; defaults to KUBECONFIG if not set")
 }
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(ctx SpecContext) {
 	By("Setup Hub and Managed client")
 	gvrPolicy = schema.GroupVersionResource{
 		Group:    "policy.open-cluster-management.io",
@@ -133,10 +132,10 @@ var _ = BeforeSuite(func() {
 
 	namespacesHub := clientHub.CoreV1().Namespaces()
 	if _, err := namespacesHub.Get(
-		context.TODO(),
+		ctx,
 		clusterNamespaceOnHub,
 		metav1.GetOptions{}); err != nil && k8serrors.IsNotFound(err) {
-		Expect(namespacesHub.Create(context.TODO(), &corev1.Namespace{
+		Expect(namespacesHub.Create(ctx, &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterNamespaceOnHub,
 			},
@@ -144,10 +143,10 @@ var _ = BeforeSuite(func() {
 	}
 	namespacesManaged := clientHub.CoreV1().Namespaces()
 	if _, err := namespacesManaged.Get(
-		context.TODO(),
+		ctx,
 		testNamespace,
 		metav1.GetOptions{}); err != nil && k8serrors.IsNotFound(err) {
-		Expect(namespacesManaged.Create(context.TODO(), &corev1.Namespace{
+		Expect(namespacesManaged.Create(ctx, &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testNamespace,
 			},
@@ -162,7 +161,7 @@ var _ = BeforeSuite(func() {
 		clusterNamespace = os.Getenv("E2E_CLUSTER_NAMESPACE")
 
 		_, err := clientManaged.CoreV1().Namespaces().Create(
-			context.TODO(),
+			ctx,
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterNamespace}},
 			metav1.CreateOptions{},
 		)
@@ -195,15 +194,15 @@ var _ = BeforeSuite(func() {
 
 		By("Deleting the constrainttemplate CRD to simulate uninstalling Gatekeeper")
 
-		originalCRD, err := clientManagedDynamic.Resource(gvrCRD).Get(context.TODO(), gkCRDName, metav1.GetOptions{})
+		originalCRD, err := clientManagedDynamic.Resource(gvrCRD).Get(ctx, gkCRDName, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
-		err = clientManagedDynamic.Resource(gvrCRD).Delete(context.TODO(), gkCRDName, metav1.DeleteOptions{})
+		err = clientManagedDynamic.Resource(gvrCRD).Delete(ctx, gkCRDName, metav1.DeleteOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() bool {
 			_, err := clientManagedDynamic.Resource(gvrCRD).Get(
-				context.TODO(), gkCRDName, metav1.GetOptions{},
+				ctx, gkCRDName, metav1.GetOptions{},
 			)
 
 			return k8serrors.IsNotFound(err)
@@ -220,7 +219,7 @@ var _ = BeforeSuite(func() {
 		unstructured.RemoveNestedField(originalCRD.Object, "status")
 
 		By("Re-creating the constrainttemplate CRD to simulate re-installing Gatekeeper")
-		_, err = clientManagedDynamic.Resource(gvrCRD).Create(context.TODO(), originalCRD, metav1.CreateOptions{})
+		_, err = clientManagedDynamic.Resource(gvrCRD).Create(ctx, originalCRD, metav1.CreateOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Waiting 10 seconds for the manager to detect the fresh CRD")
@@ -311,22 +310,25 @@ func kubectlManaged(args ...string) (string, error) {
 
 //nolint:unparam
 func patchRemediationAction(
-	client dynamic.Interface, plc *unstructured.Unstructured, remediationAction string,
+	ctx SpecContext,
+	client dynamic.Interface,
+	plc *unstructured.Unstructured,
+	remediationAction string,
 ) (
 	*unstructured.Unstructured, error,
 ) {
 	patch := []byte(`[{"op": "replace", "path": "/spec/remediationAction", "value": "` + remediationAction + `"}]`)
 
 	return client.Resource(gvrPolicy).Namespace(plc.GetNamespace()).Patch(
-		context.TODO(), plc.GetName(), types.JSONPatchType, patch, metav1.PatchOptions{},
+		ctx, plc.GetName(), types.JSONPatchType, patch, metav1.PatchOptions{},
 	)
 }
 
-func checkCompliance(name string) func() string {
+func checkCompliance(ctx SpecContext, name string) func() string {
 	return func() string {
 		getter := clientManagedDynamic.Resource(gvrPolicy).Namespace(clusterNamespace)
 
-		policy, err := getter.Get(context.TODO(), name, metav1.GetOptions{})
+		policy, err := getter.Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return "policy not found"
 		}

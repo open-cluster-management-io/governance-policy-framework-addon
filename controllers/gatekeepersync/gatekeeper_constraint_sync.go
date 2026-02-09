@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,7 +27,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -39,14 +39,11 @@ const (
 	GatekeeperWebhookName = "gatekeeper-validating-webhook-configuration"
 )
 
-var (
-	log    = logf.Log.WithName(ControllerName)
-	crdGVK = schema.GroupVersionKind{
-		Group:   "apiextensions.k8s.io",
-		Version: "v1",
-		Kind:    "CustomResourceDefinition",
-	}
-)
+var crdGVK = schema.GroupVersionKind{
+	Group:   "apiextensions.k8s.io",
+	Version: "v1",
+	Kind:    "CustomResourceDefinition",
+}
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *GatekeeperConstraintReconciler) SetupWithManager(mgr ctrl.Manager, constraintEvents source.Source) error {
@@ -61,6 +58,9 @@ func (r *GatekeeperConstraintReconciler) SetupWithManager(mgr ctrl.Manager, cons
 		}).
 		WatchesRawSource(constraintEvents).
 		Named(ControllerName).
+		WithLogConstructor(func(req *reconcile.Request) logr.Logger {
+			return utils.LogConstructor(ControllerName, "Policy", req)
+		}).
 		Complete(r)
 }
 
@@ -99,7 +99,7 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 ) (
 	reconcile.Result, error,
 ) {
-	log := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	log := ctrl.LoggerFrom(ctx)
 
 	if uninstall.DeploymentIsUninstalling {
 		log.Info("Skipping reconcile because the deployment is in uninstallation mode")
@@ -333,6 +333,8 @@ func (r *GatekeeperConstraintReconciler) sendComplianceEvent(
 	msg string,
 	compliance policyv1.ComplianceState,
 ) error {
+	log := ctrl.LoggerFrom(ctx)
+
 	enforcementAction, err := getEnforcementAction(constraint)
 	if err != nil {
 		log.Error(err, "The enforcementAction is invalid. Assuming it's not deny.")

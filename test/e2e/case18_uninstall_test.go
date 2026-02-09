@@ -4,8 +4,6 @@
 package e2e
 
 import (
-	"context"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -43,7 +41,7 @@ var _ = Describe("Test uninstallation procedure", Ordered, Label("uninstall"), f
 		Resource: constraintResource,
 	}
 
-	BeforeAll(func() {
+	BeforeAll(func(ctx SpecContext) {
 		By("Creating the namespace " + configMapNamespace)
 		ns := &corev1.Namespace{
 			TypeMeta: metav1.TypeMeta{
@@ -55,14 +53,14 @@ var _ = Describe("Test uninstallation procedure", Ordered, Label("uninstall"), f
 			},
 		}
 
-		_, err := clientManaged.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
+		_, err := clientManaged.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	AfterAll(func() {
+	AfterAll(func(ctx SpecContext) {
 		By("Deleting policy " + policyName + " on the hub in ns:" + clusterNamespaceOnHub)
 		err := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub).Delete(
-			context.TODO(), policyName, metav1.DeleteOptions{},
+			ctx, policyName, metav1.DeleteOptions{},
 		)
 		if !k8serrors.IsNotFound(err) {
 			Expect(err).ToNot(HaveOccurred())
@@ -83,7 +81,7 @@ var _ = Describe("Test uninstallation procedure", Ordered, Label("uninstall"), f
 		propagatorutils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 
 		By("Deleting the namespace " + configMapNamespace)
-		err = clientManaged.CoreV1().Namespaces().Delete(context.TODO(), configMapNamespace, metav1.DeleteOptions{})
+		err = clientManaged.CoreV1().Namespaces().Delete(ctx, configMapNamespace, metav1.DeleteOptions{})
 		if !k8serrors.IsNotFound(err) {
 			Expect(err).ToNot(HaveOccurred())
 		}

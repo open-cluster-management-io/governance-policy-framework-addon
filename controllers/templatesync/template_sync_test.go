@@ -130,7 +130,7 @@ func TestGetDupName(t *testing.T) {
 
 	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &x)
 
-	dupName := getDupName(&policy)
+	dupName := getDupName(t.Context(), &policy)
 	if dupName != "" {
 		t.Fatal("Unexpected duplicate policy template names")
 	}
@@ -159,7 +159,7 @@ func TestGetDupName(t *testing.T) {
 
 	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &y)
 
-	dupName = getDupName(&policy)
+	dupName = getDupName(t.Context(), &policy)
 	if dupName != "test-configpolicy" {
 		t.Fatal("Duplicate names for templates not detected")
 	}
@@ -188,7 +188,7 @@ func TestGetDupName(t *testing.T) {
 
 	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &z)
 
-	dupName = getDupName(&policy)
+	dupName = getDupName(t.Context(), &policy)
 	if dupName != "test-configpolicy" {
 		t.Fatal("Duplicate names for templates not detected")
 	}
@@ -207,7 +207,7 @@ func TestGetDupName(t *testing.T) {
 
 	policy.Spec.PolicyTemplates = append(policy.Spec.PolicyTemplates, &x2)
 
-	dupName = getDupName(&policy)
+	dupName = getDupName(t.Context(), &policy)
 	if dupName != "test-configpolicy" { // expect duplicate detection to return true
 		t.Fatal("Duplicate name not detected")
 	}
@@ -268,7 +268,7 @@ func TestEquivalentTemplatesRecreateOption(t *testing.T) {
 		},
 	}
 
-	if !equivalentTemplates(existing, template) {
+	if !equivalentTemplates(t.Context(), existing, template) {
 		t.Fatal("Expected the templates to be equivalent")
 	}
 }
@@ -327,7 +327,7 @@ func TestEquivalentTemplatesOperatorPolicyComplianceConfig(t *testing.T) {
 		},
 	}
 
-	if !equivalentTemplates(existing, template) {
+	if !equivalentTemplates(t.Context(), existing, template) {
 		t.Fatal("Expected the templates to be equivalent")
 	}
 }
@@ -366,12 +366,12 @@ func TestEquivalentTemplatesExtraMetadata(t *testing.T) {
 		},
 	}
 
-	if !equivalentTemplates(existing, template) {
+	if !equivalentTemplates(t.Context(), existing, template) {
 		t.Fatal("Expected the templates to be equivalent - the existing object has extra metadata")
 	}
 
 	// Note the positions have swapped!
-	if equivalentTemplates(template, existing) {
+	if equivalentTemplates(t.Context(), template, existing) {
 		t.Fatal("Expected the templates not to be equivalent - the template has extra metadata")
 	}
 }

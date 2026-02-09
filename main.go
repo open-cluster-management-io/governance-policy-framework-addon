@@ -202,7 +202,7 @@ func main() {
 	// to the addon framework. This can be seen in the "status" section of the ManagedClusterAddOn
 	// resource objects.
 	if tool.Options.EnableLease {
-		ctx := context.TODO()
+		ctx := context.Background()
 
 		operatorNs, err := tool.GetOperatorNamespace()
 		if err != nil {

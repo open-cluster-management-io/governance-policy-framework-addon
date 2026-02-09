@@ -7,6 +7,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -16,10 +17,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall"
+	"open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 )
 
 const (
@@ -28,14 +29,15 @@ const (
 	SecretName = "policy-encryption-key"
 )
 
-var log = logf.Log.WithName(ControllerName)
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *SecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Secret{}).
 		Named(ControllerName).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
+		WithLogConstructor(func(req *reconcile.Request) logr.Logger {
+			return utils.LogConstructor(ControllerName, "Secret", req)
+		}).
 		Complete(r)
 }
 
@@ -58,8 +60,8 @@ type SecretReconciler struct {
 // Reconcile handles updates to the "policy-encryption-key" Secret in the managed cluster namespace on the Hub.
 // The method is responsible for synchronizing the Secret to the managed cluster namespace on the managed cluster.
 func (r *SecretReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues(
-		"Request.Namespace", request.Namespace, "Request.Name", request.Name, "TargetNamespace", r.TargetNamespace,
+	reqLogger := ctrl.LoggerFrom(ctx).WithValues(
+		"TargetNamespace", r.TargetNamespace,
 	)
 
 	if uninstall.DeploymentIsUninstalling {

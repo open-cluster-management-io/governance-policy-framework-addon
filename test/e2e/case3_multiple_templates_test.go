@@ -463,7 +463,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			return hubPlc.Object["status"]
 		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
 	})
-	It("Should remove status when template is removed", func() {
+	It("Should remove status when template is removed", func(ctx SpecContext) {
 		By("Generating events belong to both template")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
@@ -484,7 +484,7 @@ var _ = Describe("Test status sync with multiple templates", func() {
 			"policy: managed/case3-test-policy-configurationpolicy2",
 			"Compliant; there is no violation")
 		By("Checking if policy overall status is compliant")
-		Eventually(checkCompliance(case3PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case3PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("Patching policy template to remove template: case3-test-policy-configurationpolicy2")
 		_, err := kubectlHub(
 			"apply",

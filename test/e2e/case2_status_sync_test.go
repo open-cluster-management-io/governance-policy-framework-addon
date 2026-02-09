@@ -72,7 +72,7 @@ var _ = Describe("Test status sync", func() {
 			return hubPlc.Object["status"]
 		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
 	})
-	It("Should set status to NonCompliant", func() {
+	It("Should set status to NonCompliant", func(ctx SpecContext) {
 		By("Generating a noncompliant event on the policy")
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
@@ -89,7 +89,7 @@ var _ = Describe("Test status sync", func() {
 			"NonCompliant; there is violation")
 
 		By("Checking if policy status is noncompliant")
-		Eventually(checkCompliance(case2PolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, case2PolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		By("Checking if policy history is correct")
 		managedPlc = utils.GetWithTimeout(
@@ -135,7 +135,7 @@ var _ = Describe("Test status sync", func() {
 			"Compliant; No violation detected")
 
 		By("Checking if policy status is compliant")
-		Eventually(checkCompliance(case2PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case2PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Checking if policy history is correct")
 		managedPlc = utils.GetWithTimeout(

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"github.com/spf13/pflag"
 	"github.com/stolostron/go-log-utils/zaputil"
@@ -28,8 +29,6 @@ var (
 	timeoutSeconds      uint32
 )
 
-var triggerLog = ctrl.Log.WithName("trigger-uninstall")
-
 const AnnotationKey = "policy.open-cluster-management.io/uninstalling"
 
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=deletecollection;
@@ -38,16 +37,19 @@ const AnnotationKey = "policy.open-cluster-management.io/uninstalling"
 // It will return nil only when all the policies are gone.
 // It takes command line arguments to configure itself.
 func Trigger(args []string) error {
-	if err := parseUninstallFlags(args); err != nil {
+	terminatingCtx := ctrl.SetupSignalHandler()
+	triggerLog := ctrl.LoggerFrom(terminatingCtx).WithName("trigger-uninstall")
+
+	if err := parseUninstallFlags(args, triggerLog); err != nil {
 		return err
 	}
 
-	triggerLog.Info("Triggering uninstallation preparation")
-
-	terminatingCtx := ctrl.SetupSignalHandler()
 	ctx, cancelCtx := context.WithTimeout(terminatingCtx, time.Duration(timeoutSeconds)*time.Second)
-
 	defer cancelCtx()
+
+	ctx = ctrl.LoggerInto(ctx, triggerLog)
+
+	triggerLog.Info("Triggering uninstallation preparation")
 
 	// Get a config to talk to the apiserver
 	config, err := config.GetConfig()
@@ -77,7 +79,7 @@ func Trigger(args []string) error {
 	return nil
 }
 
-func parseUninstallFlags(args []string) error {
+func parseUninstallFlags(args []string, triggerLog logr.Logger) error {
 	triggerUninstallFlagSet := pflag.NewFlagSet("trigger-uninstall", pflag.ExitOnError)
 
 	triggerUninstallFlagSet.StringVar(
@@ -139,6 +141,8 @@ func parseUninstallFlags(args []string) error {
 }
 
 func setUninstallAnnotation(ctx context.Context, client *kubernetes.Clientset) error {
+	triggerLog := ctrl.LoggerFrom(ctx)
+
 	triggerLog.Info("Annotating the deployment with " + AnnotationKey + " = true")
 
 	for {
@@ -179,6 +183,8 @@ func setUninstallAnnotation(ctx context.Context, client *kubernetes.Clientset) e
 }
 
 func deletePolicies(ctx context.Context, dynamicClient dynamic.Interface) error {
+	triggerLog := ctrl.LoggerFrom(ctx)
+
 	policyGVR := schema.GroupVersionResource{
 		Group:    policyv1.GroupVersion.Group,
 		Version:  policyv1.GroupVersion.Version,

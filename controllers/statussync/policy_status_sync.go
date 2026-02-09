@@ -43,16 +43,6 @@ const (
 	ControllerName string = "policy-status-sync"
 )
 
-func logFromCtx(ctx context.Context) logr.Logger {
-	l, err := logr.FromContext(ctx)
-	if err != nil {
-		// fallback to the controller-runtime logger, which will have less info
-		l = ctrl.Log
-	}
-
-	return l.WithName(ControllerName)
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSources ...source.Source) error {
 	builder := ctrl.NewControllerManagedBy(mgr).
@@ -63,7 +53,10 @@ func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSources 
 			builder.WithPredicates(eventPredicateFuncs),
 		).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
-		Named(ControllerName)
+		Named(ControllerName).
+		WithLogConstructor(func(req *reconcile.Request) logr.Logger {
+			return utils.LogConstructor(ControllerName, "Policy", req)
+		})
 
 	for _, addlSource := range additionalSources {
 		if addlSource != nil {
@@ -107,7 +100,7 @@ type PolicyReconciler struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
+	reqLogger := ctrl.LoggerFrom(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
 
 	if uninstall.DeploymentIsUninstalling {
 		reqLogger.Info("Skipping reconcile because the deployment is in uninstallation mode")
@@ -164,7 +157,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 func (r *PolicyReconciler) getInstances(
 	ctx context.Context, request reconcile.Request,
 ) (managedInstance, hubInstance *policiesv1.Policy, err error) {
-	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
+	reqLogger := ctrl.LoggerFrom(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
 	managedInstance = &policiesv1.Policy{}
 
 	err = r.ManagedClient.Get(ctx, request.NamespacedName, managedInstance)
@@ -351,7 +344,7 @@ func (r *PolicyReconciler) getEventsInTemplate(
 func (r *PolicyReconciler) getDetails(
 	ctx context.Context, instance *policiesv1.Policy,
 ) (allDetails []*policiesv1.DetailsPerTemplate, err error) {
-	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
+	reqLogger := ctrl.LoggerFrom(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
 
 	eventForPolicyMap, err := r.getEventsInCluster(ctx, instance)
 	if err != nil {
@@ -515,7 +508,7 @@ func timestampsWithin(ts1, ts2 metav1.Time, threshold time.Duration) bool {
 func (r *PolicyReconciler) updateStatuses(
 	ctx context.Context, instance, hubInstance *policiesv1.Policy, oldStatus policiesv1.PolicyStatus,
 ) (err error) {
-	reqLogger := logFromCtx(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
+	reqLogger := ctrl.LoggerFrom(ctx).WithValues("HubNamespace", r.ClusterNamespaceOnHub)
 
 	// one violation found in status of one template, set overall compliancy to NonCompliant
 	isCompliant := true

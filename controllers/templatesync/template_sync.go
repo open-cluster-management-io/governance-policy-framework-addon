@@ -53,8 +53,6 @@ const (
 	hubTmplErrorKey = "policy.open-cluster-management.io/hub-templates-error"
 )
 
-var log = ctrl.Log.WithName(ControllerName)
-
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=*,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=templates.gatekeeper.sh,resources=constrainttemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=constraints.gatekeeper.sh,resources=*,verbs=get;list;watch;create;update;patch;delete
@@ -69,6 +67,9 @@ func (r *PolicyReconciler) Setup(mgr ctrl.Manager, depEvents source.Source) erro
 		WithEventFilter(templatePredicates()).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.ConcurrentReconciles}).
 		WatchesRawSource(depEvents).
+		WithLogConstructor(func(req *reconcile.Request) logr.Logger {
+			return utils.LogConstructor(ControllerName, "Policy", req)
+		}).
 		Complete(r)
 }
 
@@ -98,7 +99,7 @@ type PolicyReconciler struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	reqLogger := ctrl.LoggerFrom(ctx)
 	reqLogger.V(1).Info("Reconciling the Policy")
 
 	// Fetch the Policy instance
@@ -173,7 +174,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	// Check duplicate names in configuration-policies
-	dupName := getDupName(instance)
+	dupName := getDupName(ctx, instance)
 	if dupName != "" {
 		msg := "All policy-template names must be unique within a policy"
 		reqLogger.Info(msg)
@@ -794,7 +795,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		if isGkConstraintTemplate {
 			err := utils.ApplyObjectDefaults(*r.Scheme, tObjectUnstructured)
 			if err != nil {
-				log.Error(err, "Failed to apply defaults to the ConstraintTemplate for comparison. Continuing.")
+				reqLogger.Error(err, "Failed to apply defaults to the ConstraintTemplate for comparison. Continuing.")
 			}
 		}
 		// set default labels for template processing on the template object
@@ -805,7 +806,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 		// got object, need to compare both spec and annotation and update
 		eObjectUnstructured := eObject.UnstructuredContent()
 
-		if !equivalentTemplates(eObject, tObjectUnstructured) {
+		if !equivalentTemplates(ctx, eObject, tObjectUnstructured) {
 			// doesn't match
 			tLogger.Info("Existing object and template didn't match, will update")
 
@@ -974,7 +975,11 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 // equivalentTemplates determines whether the template existing on the cluster and the policy template are the same.
 // Any missing defaults this function is aware of will be set on tObject.
-func equivalentTemplates(eObject *unstructured.Unstructured, tObject *unstructured.Unstructured) bool {
+func equivalentTemplates(
+	ctx context.Context, eObject *unstructured.Unstructured, tObject *unstructured.Unstructured,
+) bool {
+	log := ctrl.LoggerFrom(ctx)
+
 	if tObject.GetKind() == "ConfigurationPolicy" {
 		pruneObjectBehavior, _, _ := unstructured.NestedString(tObject.Object, "spec", "pruneObjectBehavior")
 		if pruneObjectBehavior == "" {
@@ -1108,7 +1113,7 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 ) error {
 	var errorList utils.ErrList
 
-	reqLogger := log.WithValues("Request.Namespace", instance.Namespace, "Request.Name", instance.Name)
+	reqLogger := ctrl.LoggerFrom(ctx)
 
 	// GVR with scope specified
 	type gvrScoped struct {
@@ -1194,7 +1199,7 @@ func (r *PolicyReconciler) cleanUpExcessTemplates(
 
 			// Log and ignore other errors to allow cleanup to continue since Gatekeeper may not be installed
 			case apimeta.IsNoMatchError(err):
-				log.Info("The ConstraintTemplate CRD is not installed")
+				reqLogger.Info("The ConstraintTemplate CRD is not installed")
 				r.setCreatedGkConstraint(false)
 
 			default:
@@ -1480,6 +1485,8 @@ func overrideRemediationAction(instance *policiesv1.Policy, tObjectUnstructured 
 func (r *PolicyReconciler) emitTemplateSuccess(
 	ctx context.Context, pol *policiesv1.Policy, tIndex int, tName string, clusterScoped bool, msg string,
 ) error {
+	log := ctrl.LoggerFrom(ctx)
+
 	err := r.emitTemplateEvent(ctx, pol, tIndex, tName, clusterScoped, "Normal", policiesv1.Compliant, msg)
 	if err != nil {
 		tlog := log.WithValues("Policy.Namespace", pol.Namespace, "Policy.Name", pol.Name, "template", tName)
@@ -1495,6 +1502,8 @@ func (r *PolicyReconciler) emitTemplateSuccess(
 func (r *PolicyReconciler) emitTemplateError(
 	ctx context.Context, pol *policiesv1.Policy, tIndex int, tName string, clusterScoped bool, errMsg string,
 ) error {
+	log := ctrl.LoggerFrom(ctx)
+
 	err := r.emitTemplateEvent(ctx, pol, tIndex, tName, clusterScoped,
 		"Warning", policiesv1.NonCompliant, "template-error; "+errMsg)
 	if err != nil {
@@ -1511,6 +1520,8 @@ func (r *PolicyReconciler) emitTemplateError(
 func (r *PolicyReconciler) emitTemplatePending(
 	ctx context.Context, pol *policiesv1.Policy, tIndex int, tName string, clusterScoped bool, msg string,
 ) error {
+	log := ctrl.LoggerFrom(ctx)
+
 	compliance := policiesv1.Pending
 	eventType := "Warning"
 
@@ -1773,13 +1784,13 @@ func (r *PolicyReconciler) setCreatedGkConstraint(b bool) {
 }
 
 // Check duplicate names in policy-templates and return the first duplicate name found, if any.
-func getDupName(pol *policiesv1.Policy) string {
+func getDupName(ctx context.Context, pol *policiesv1.Policy) string {
 	templates := pol.Spec.PolicyTemplates
 
 	foundNames := make(map[string]bool, len(templates))
 
 	for _, v := range templates {
-		unstructured, err := unmarshalFromJSON(v.ObjectDefinition.Raw)
+		unstructured, err := unmarshalFromJSON(ctx, v.ObjectDefinition.Raw)
 		if err != nil {
 			// Skip unmarshal error here, template error should appear later
 			return ""

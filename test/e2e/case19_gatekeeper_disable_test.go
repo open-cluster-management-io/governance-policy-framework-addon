@@ -4,8 +4,6 @@
 package e2e
 
 import (
-	"context"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,11 +26,11 @@ var _ = Describe("Test disabled Gatekeeper sync", Ordered, Label("skip-minimum")
 		}
 	})
 
-	AfterAll(func() {
+	AfterAll(func(ctx SpecContext) {
 		for _, pName := range []string{policyName} {
 			By("Deleting policy " + pName + " on the hub in ns:" + clusterNamespaceOnHub)
 			err := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub).Delete(
-				context.TODO(), pName, metav1.DeleteOptions{},
+				ctx, pName, metav1.DeleteOptions{},
 			)
 			if !k8serrors.IsNotFound(err) {
 				Expect(err).ToNot(HaveOccurred())

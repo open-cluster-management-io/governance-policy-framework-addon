@@ -29,14 +29,14 @@ var _ = Describe("Test mutation recovery", func() {
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 	})
-	It("Should recover policy on managed if spec.remediationAction being modified", func() {
+	It("Should recover policy on managed if spec.remediationAction being modified", func(ctx SpecContext) {
 		By("Patching " + case1PolicyYaml + " on managed with spec.remediationAction = enforce")
 		Eventually(
 			func() interface{} {
 				managedPlc := utils.GetWithTimeout(
 					clientManagedDynamic, gvrPolicy, case1PolicyName, clusterNamespace, true, defaultTimeoutSeconds,
 				)
-				_, err := patchRemediationAction(clientManagedDynamic, managedPlc, "enforce")
+				_, err := patchRemediationAction(ctx, clientManagedDynamic, managedPlc, "enforce")
 
 				return err
 			},
@@ -147,7 +147,7 @@ var _ = Describe("Test mutation recovery", func() {
 			"policy: managed/case1-test-policy-configurationpolicy",
 			"Compliant; No violation detected")
 		By("Checking if policy status is compliant")
-		Eventually(checkCompliance(case1PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case1PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Update status to NonCompliant")
 		Eventually(
@@ -167,7 +167,7 @@ var _ = Describe("Test mutation recovery", func() {
 		).Should(BeNil())
 		Expect(getCompliant(managedPlc)).To(Equal("NonCompliant"))
 		By("Checking if policy status was recovered to compliant")
-		Eventually(checkCompliance(case1PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case1PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("clean up all events")
 		_, err := kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
 		Expect(err).ShouldNot(HaveOccurred())

@@ -116,9 +116,9 @@ var _ = Describe("Test event sorting by name when timestamps collide at seconds 
 			time.Date(2022, 10, 3, 14, 40, 47, 111111, time.UTC),
 		)).Should(Succeed())
 
-		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
+		Eventually(checkCompliance(ctx, case11PolicyName), defaultTimeoutSeconds, 1).
 			Should(Equal("Compliant"))
-		Consistently(checkCompliance(case11PolicyName), "15s", 1).
+		Consistently(checkCompliance(ctx, case11PolicyName), "15s", 1).
 			Should(Equal("Compliant"))
 	})
 
@@ -132,9 +132,9 @@ var _ = Describe("Test event sorting by name when timestamps collide at seconds 
 			time.Date(2022, 10, 3, 14, 40, 47, 222222, time.UTC),
 		)).Should(Succeed())
 
-		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
+		Eventually(checkCompliance(ctx, case11PolicyName), defaultTimeoutSeconds, 1).
 			Should(Equal("NonCompliant"))
-		Consistently(checkCompliance(case11PolicyName), "15s", 1).
+		Consistently(checkCompliance(ctx, case11PolicyName), "15s", 1).
 			Should(Equal("NonCompliant"))
 	})
 
@@ -148,9 +148,9 @@ var _ = Describe("Test event sorting by name when timestamps collide at seconds 
 			time.Date(2022, 10, 3, 14, 40, 47, 333333, time.UTC),
 		)).Should(Succeed())
 
-		Eventually(checkCompliance(case11PolicyName), defaultTimeoutSeconds, 1).
+		Eventually(checkCompliance(ctx, case11PolicyName), defaultTimeoutSeconds, 1).
 			Should(Equal("Compliant"))
-		Consistently(checkCompliance(case11PolicyName), "15s", 1).
+		Consistently(checkCompliance(ctx, case11PolicyName), "15s", 1).
 			Should(Equal("Compliant"))
 	})
 

@@ -4,7 +4,6 @@
 package e2e
 
 import (
-	"context"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -36,13 +35,13 @@ var _ = Describe("Test error handling", func() {
 		_, err = kubectlManaged("delete", "events", "--all", "-A")
 		Expect(err).ToNot(HaveOccurred())
 	})
-	It("should not reconcile the policy when there are same names in policy-template", func() {
+	It("should not reconcile the policy when there are same names in policy-template", func(ctx SpecContext) {
 		By("Creating policy")
 		hubApplyPolicy(dupNamePolicyName, dupNamePolicyYaml)
 
 		By("Should generate warning events")
 		Eventually(
-			checkForEvent(dupNamePolicyName, "All policy-template names must be unique within a policy"),
+			checkForEvent(ctx, dupNamePolicyName, "All policy-template names must be unique within a policy"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
@@ -95,40 +94,40 @@ var _ = Describe("Test error handling", func() {
 			return trustedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlTrustedPlc.Object["spec"]))
 	})
-	It("should generate decode err event", func() {
+	It("should generate decode err event", func(ctx SpecContext) {
 		hubApplyPolicy("case10-template-decode-error",
 			yamlBasePath+"template-decode-error.yaml")
 
 		By("Checking for event with decode err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
-			checkForEvent("case10-template-decode-error", "template-error; Failed to decode policy template"),
+			checkForEvent(ctx, "case10-template-decode-error", "template-error; Failed to decode policy template"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
 	})
-	It("should generate missing name err event", func() {
+	It("should generate missing name err event", func(ctx SpecContext) {
 		hubApplyPolicy("case10-template-name-error",
 			yamlBasePath+"template-name-error.yaml")
 
 		By("Checking for event with missing name err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
-			checkForEvent("case10-template-name-error", "template-error; Failed to parse or get name from policy"),
+			checkForEvent(ctx, "case10-template-name-error", "template-error; Failed to parse or get name from policy"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
 	})
-	It("should generate mapping err event", func() {
+	It("should generate mapping err event", func(ctx SpecContext) {
 		hubApplyPolicy("case10-template-mapping-error",
 			yamlBasePath+"template-mapping-error.yaml")
 
 		By("Checking for event with decode err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
-			checkForEvent("case10-template-mapping-error", "template-error; Mapping not found"),
+			checkForEvent(ctx, "case10-template-mapping-error", "template-error; Mapping not found"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
 	})
-	It("should generate creation err event", func() {
+	It("should generate creation err event", func(ctx SpecContext) {
 		policyName := "case10-invalid-name-error"
 		statusMsg := "template-error; Failed to create policy template:"
 
@@ -137,7 +136,7 @@ var _ = Describe("Test error handling", func() {
 
 		By("Checking for event with creation err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
-			checkForEvent(policyName, statusMsg),
+			checkForEvent(ctx, policyName, statusMsg),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
@@ -159,18 +158,18 @@ var _ = Describe("Test error handling", func() {
 			g.Expect(plc.Status.Details[0].History[0].Message).To(ContainSubstring(statusMsg))
 		}, defaultTimeoutSeconds, 1).Should(Succeed())
 	})
-	It("should generate unsupported object err event", func() {
+	It("should generate unsupported object err event", func(ctx SpecContext) {
 		hubApplyPolicy("case10-unsupported-object",
 			yamlBasePath+"unsupported-object-error.yaml")
 
 		By("Checking for event with unsupported CRD err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
-			checkForEvent("case10-unsupported-object", "template-error; policy-template kind is not supported"),
+			checkForEvent(ctx, "case10-unsupported-object", "template-error; policy-template kind is not supported"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
 	})
-	It("should generate duplicate policy template err event", func() {
+	It("should generate duplicate policy template err event", func(ctx SpecContext) {
 		hubApplyPolicy("case10-test-policy",
 			yamlBasePath+"working-policy.yaml")
 
@@ -183,12 +182,12 @@ var _ = Describe("Test error handling", func() {
 
 		By("Checking for event with duplicate err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
-			checkForEvent("case10-test-policy-duplicate", "Template name must be unique"),
+			checkForEvent(ctx, "case10-test-policy-duplicate", "Template name must be unique"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
 	})
-	It("should create other objects, even when one is invalid", func() {
+	It("should create other objects, even when one is invalid", func(ctx SpecContext) {
 		hubApplyPolicy("case10-middle-tmpl",
 			yamlBasePath+"middle-template-error.yaml")
 
@@ -200,12 +199,12 @@ var _ = Describe("Test error handling", func() {
 
 		By("Checking for the error event")
 		Eventually(
-			checkForEvent("case10-middle-tmpl", "template-error;"),
+			checkForEvent(ctx, "case10-middle-tmpl", "template-error;"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
 	})
-	It("should remove the complianceState on a template only after an error is resolved", func() {
+	It("should remove the complianceState on a template only after an error is resolved", func(ctx SpecContext) {
 		hubApplyPolicy("case10-test-policy",
 			yamlBasePath+"working-policy.yaml")
 
@@ -216,7 +215,7 @@ var _ = Describe("Test error handling", func() {
 		compliancePatch := []byte(`[{"op":"add","path":"/status","value":{"compliant":"Pending"}}]`)
 		// can't just use kubectl - status is a sub-resource
 		cfgInt := clientManagedDynamic.Resource(gvrConfigurationPolicy).Namespace(clusterNamespace)
-		_, err := cfgInt.Patch(context.TODO(), "case10-config-policy", types.JSONPatchType,
+		_, err := cfgInt.Patch(ctx, "case10-config-policy", types.JSONPatchType,
 			compliancePatch, metav1.PatchOptions{}, "status")
 		Expect(err).ShouldNot(HaveOccurred())
 
@@ -227,13 +226,13 @@ var _ = Describe("Test error handling", func() {
 			`"value":"PretendPolicy"}]`)
 		polInt := clientHubDynamic.Resource(gvrPolicy).Namespace(clusterNamespaceOnHub)
 		_, err = polInt.Patch(
-			context.TODO(), "case10-test-policy", types.JSONPatchType, errorPatch, metav1.PatchOptions{},
+			ctx, "case10-test-policy", types.JSONPatchType, errorPatch, metav1.PatchOptions{},
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 
 		By("Checking for the error event")
 		Eventually(
-			checkForEvent("case10-test-policy", "template-error;"),
+			checkForEvent(ctx, "case10-test-policy", "template-error;"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
@@ -243,12 +242,12 @@ var _ = Describe("Test error handling", func() {
 			`"op":"add",` +
 			`"path":"/status",` +
 			`"value":{"details":[{"history":[{"message":"template-error;"}]}]}}]`)
-		_, err = polInt.Patch(context.TODO(), "case10-test-policy", types.JSONPatchType,
+		_, err = polInt.Patch(ctx, "case10-test-policy", types.JSONPatchType,
 			statusPatch, metav1.PatchOptions{}, "status")
 		Expect(err).ShouldNot(HaveOccurred())
 
 		By("Checking that the complianceState is still on the configuration policy")
-		cfgPolicy, err := cfgInt.Get(context.TODO(), "case10-config-policy", metav1.GetOptions{}, "status")
+		cfgPolicy, err := cfgInt.Get(ctx, "case10-config-policy", metav1.GetOptions{}, "status")
 		Expect(err).ToNot(HaveOccurred())
 		compState, found, err := unstructured.NestedString(cfgPolicy.Object, "status", "compliant")
 		Expect(err).ToNot(HaveOccurred())
@@ -261,7 +260,7 @@ var _ = Describe("Test error handling", func() {
 
 		By("Checking that the complianceState is removed on the configuration policy")
 		Eventually(func() bool {
-			cfgPolicy, err := cfgInt.Get(context.TODO(), "case10-config-policy", metav1.GetOptions{}, "status")
+			cfgPolicy, err := cfgInt.Get(ctx, "case10-config-policy", metav1.GetOptions{}, "status")
 			if err != nil {
 				return false
 			}
@@ -286,20 +285,20 @@ var _ = Describe("Test error handling", func() {
 			}, defaultTimeoutSeconds, 1).ShouldNot(HaveOccurred())
 		})
 
-		It("should throw a noncompliance event for hub template errors", func() {
+		It("should throw a noncompliance event for hub template errors", func(ctx SpecContext) {
 			hubApplyPolicy("case10-bad-hubtemplate",
 				yamlBasePath+"error-hubtemplate.yaml")
 
 			By("Checking for the error event")
 			Eventually(
-				checkForEvent("case10-bad-hubtemplate", "must be aboveground"),
+				checkForEvent(ctx, "case10-bad-hubtemplate", "must be aboveground"),
 				defaultTimeoutSeconds,
 				1,
 			).Should(BeTrue())
 
 			By("Checking for the compliance message formatting")
 			Eventually(
-				checkForEvent("case10-bad-hubtemplate", nonCompliantPrefix+nonCompliantPrefix),
+				checkForEvent(ctx, "case10-bad-hubtemplate", nonCompliantPrefix+nonCompliantPrefix),
 				defaultTimeoutSeconds,
 				1,
 			).Should(BeFalse())
@@ -349,7 +348,7 @@ var _ = Describe("Test error handling", func() {
 
 			By("Checking for the error event")
 			Eventually(
-				checkForEvent("case10-bad-hubtemplate-notyet", "must be aboveground"),
+				checkForEvent(ctx, "case10-bad-hubtemplate-notyet", "must be aboveground"),
 				defaultTimeoutSeconds,
 				1,
 			).Should(BeTrue())
@@ -369,44 +368,44 @@ var _ = Describe("Test error handling", func() {
 				return prune
 			}, defaultTimeoutSeconds, 1).Should(Equal("None"))
 		})
-		It("should mark the policy as pending instead of throwing a hub-template error event", func() {
+		It("should mark the policy as pending instead of throwing a hub-template error event", func(ctx SpecContext) {
 			hubApplyPolicy("case10-bad-hubtemplate-pending",
 				yamlBasePath+"error-hubtemplate-pending.yaml")
 
-			Eventually(checkCompliance("case10-bad-hubtemplate-pending"),
+			Eventually(checkCompliance(ctx, "case10-bad-hubtemplate-pending"),
 				defaultTimeoutSeconds, 1).Should(Equal("Pending"))
 		})
 	})
-	It("should throw a noncompliance event if the template object is invalid", func() {
+	It("should throw a noncompliance event if the template object is invalid", func(ctx SpecContext) {
 		hubApplyPolicy("case10-invalid-severity",
 			yamlBasePath+"invalid-severity-template.yaml")
 
 		By("Checking for the error event")
 		Eventually(
-			checkForEvent("case10-invalid-severity", "Failed to create policy"),
+			checkForEvent(ctx, "case10-invalid-severity", "Failed to create policy"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
 
 		By("Checking for the compliance message formatting")
 		Eventually(
-			checkForEvent("case10-invalid-severity", nonCompliantPrefix+nonCompliantPrefix),
+			checkForEvent(ctx, "case10-invalid-severity", nonCompliantPrefix+nonCompliantPrefix),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeFalse())
 	})
-	It("should not throw a noncompliance event if the policy-templates array is empty", func() {
+	It("should not throw a noncompliance event if the policy-templates array is empty", func(ctx SpecContext) {
 		hubApplyPolicy("case10-empty-templates",
 			yamlBasePath+"empty-templates.yaml")
 
 		By("Checking for the error event")
 		Eventually(
-			checkForEvent("case10-empty-templates", "Failed to create policy template"),
+			checkForEvent(ctx, "case10-empty-templates", "Failed to create policy template"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeFalse())
 	})
-	It("should throw a noncompliance event if the template already exists outside of a policy", func() {
+	It("should throw a noncompliance event if the template already exists outside of a policy", func(ctx SpecContext) {
 		By("Creating the ConfigurationPolicy on the managed cluster directly")
 		_, err := kubectlManaged(
 			"apply",
@@ -429,41 +428,43 @@ var _ = Describe("Test error handling", func() {
 
 		By("Checking for the error event")
 		Eventually(
-			checkForEvent("case10-test-policy", "already exists outside of a Policy"),
+			checkForEvent(ctx, "case10-test-policy", "already exists outside of a Policy"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
 	})
-	It("should throw a noncompliance event if the both object-templates and object-templates-raw are set", func() {
-		hubApplyPolicy("case10-obj-template-conflict",
-			yamlBasePath+"multiple-obj-template-arrays.yaml")
+	It("should throw a noncompliance event if the both object-templates and object-templates-raw are set",
+		func(ctx SpecContext) {
+			hubApplyPolicy("case10-obj-template-conflict",
+				yamlBasePath+"multiple-obj-template-arrays.yaml")
 
-		By("Checking for the error event")
-		Eventually(
-			checkForEvent(
-				"case10-obj-template-conflict",
-				"spec may only contain one of object-templates and object-templates-raw",
-			),
-			defaultTimeoutSeconds,
-			1,
-		).Should(BeTrue())
-	})
-	It("should only generate a limited number of events for a missing kind", func() {
+			By("Checking for the error event")
+			Eventually(
+				checkForEvent(
+					ctx,
+					"case10-obj-template-conflict",
+					"spec may only contain one of object-templates and object-templates-raw",
+				),
+				defaultTimeoutSeconds,
+				1,
+			).Should(BeTrue())
+		})
+	It("should only generate a limited number of events for a missing kind", func(ctx SpecContext) {
 		policyName := "case10-missing-kind"
 		hubApplyPolicy(policyName,
 			yamlBasePath+"missing-kind.yaml")
 
 		By("Checking for the error event and ensuring it only occurs once")
 		Eventually(
-			checkForEvent(policyName, "Object 'Kind' is missing in"), defaultTimeoutSeconds, 1,
+			checkForEvent(ctx, policyName, "Object 'Kind' is missing in"), defaultTimeoutSeconds, 1,
 		).Should(BeTrue())
 		Consistently(
-			getMatchingEvents(policyName, "Object 'Kind' is missing in"), defaultTimeoutSeconds, 1,
+			getMatchingEvents(ctx, policyName, "Object 'Kind' is missing in"), defaultTimeoutSeconds, 1,
 			// Some duplication might be unavoidable,
 			// but note that one of the matching events here is *not* a compliance event
 		).Should(Or(HaveLen(2), HaveLen(3)))
 	})
-	It("should generate template error when template has unknown fields", func() {
+	It("should generate template error when template has unknown fields", func(ctx SpecContext) {
 		const (
 			policyName        = "case10-template-field-validation-error"
 			validPolicyYAML   = yamlBasePath + "field-validation-template.yaml"
@@ -476,7 +477,7 @@ var _ = Describe("Test error handling", func() {
 
 		By("Checking for template-error event due to field validation")
 		Eventually(
-			checkForEvent(policyName, "Failed to create policy template"),
+			checkForEvent(ctx, policyName, "Failed to create policy template"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
@@ -524,7 +525,7 @@ var _ = Describe("Test error handling", func() {
 
 		By("Checking for template-error event due to field validation on update")
 		Eventually(
-			checkForEvent(policyName, "Failed to create policy template"),
+			checkForEvent(ctx, policyName, "Failed to create policy template"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
@@ -554,11 +555,11 @@ var _ = Describe("Test error handling", func() {
 })
 
 // Checks for an event on the managed cluster
-func checkForEvent(policyName, msgSubStr string) func() bool {
+func checkForEvent(ctx SpecContext, policyName, msgSubStr string) func() bool {
 	return func() bool {
 		eventInterface := clientManagedDynamic.Resource(gvrEvent).Namespace(clusterNamespace)
 
-		eventList, err := eventInterface.List(context.TODO(), metav1.ListOptions{
+		eventList, err := eventInterface.List(ctx, metav1.ListOptions{
 			FieldSelector: "involvedObject.name=" + policyName,
 		})
 		if err != nil {
@@ -581,11 +582,11 @@ func checkForEvent(policyName, msgSubStr string) func() bool {
 }
 
 // Checks for an event on the managed cluster
-func getMatchingEvents(policyName, msgSubStr string) func() []string {
+func getMatchingEvents(ctx SpecContext, policyName, msgSubStr string) func() []string {
 	return func() []string {
 		eventInterface := clientManagedDynamic.Resource(gvrEvent).Namespace(clusterNamespace)
 
-		eventList, err := eventInterface.List(context.TODO(), metav1.ListOptions{
+		eventList, err := eventInterface.List(ctx, metav1.ListOptions{
 			FieldSelector: "involvedObject.name=" + policyName,
 		})
 		if err != nil {

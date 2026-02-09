@@ -4,7 +4,6 @@
 package e2e
 
 import (
-	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -19,7 +18,7 @@ import (
 )
 
 // Helper function to create events
-func generateEventOnPolicy(plcName string, cfgPlcName string, msg string, complianceState string) {
+func generateEventOnPolicy(ctx SpecContext, plcName string, cfgPlcName string, msg string, complianceState string) {
 	managedPlc := utils.GetWithTimeout(
 		clientManagedDynamic,
 		gvrPolicy,
@@ -42,7 +41,7 @@ func generateEventOnPolicy(plcName string, cfgPlcName string, msg string, compli
 	}
 
 	err := managedEventSender.SendEvent(
-		context.TODO(),
+		ctx,
 		&configPlc,
 		metav1.OwnerReference{
 			APIVersion: managedPlc.GetAPIVersion(),
@@ -91,7 +90,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 
-	It("Should set to compliant when dep status is compliant", func() {
+	It("Should set to compliant when dep status is compliant", func(ctx SpecContext) {
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
 		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
@@ -100,6 +99,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Generating a compliant event on the dependency")
 		generateEventOnPolicy(
+			ctx,
 			case12DepName,
 			"namespace-foo-setup-configpolicy",
 			"No violation detected",
@@ -107,10 +107,11 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is compliant")
-		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case12DepName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Generating a compliant event on the policy")
 		generateEventOnPolicy(
+			ctx,
 			case12PolicyName,
 			"case12-config-policy",
 			"No violation detected",
@@ -118,9 +119,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if policy status is compliant")
-		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 	})
-	It("Should set to Pending when dep status is NonCompliant", func() {
+	It("Should set to Pending when dep status is NonCompliant", func(ctx SpecContext) {
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
 		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
@@ -129,6 +130,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Generating a noncompliant event on the dependency")
 		generateEventOnPolicy(
+			ctx,
 			case12DepName,
 			"namespace-foo-setup-configpolicy",
 			"there is violation",
@@ -136,12 +138,12 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is noncompliant")
-		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		By("Checking if policy status is pending")
-		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
+		Eventually(checkCompliance(ctx, case12PolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
 	})
-	It("Should set to Compliant when dep status is NonCompliant and ignorePending is true", func() {
+	It("Should set to Compliant when dep status is NonCompliant and ignorePending is true", func(ctx SpecContext) {
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
 		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
@@ -150,6 +152,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Generating a noncompliant event on the dependency")
 		generateEventOnPolicy(
+			ctx,
 			case12DepName,
 			"namespace-foo-setup-configpolicy",
 			"there is violation",
@@ -157,13 +160,13 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is noncompliant")
-		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		By("Checking if policy status is pending")
-		Eventually(checkCompliance(case12PolicyIgnorePendingName),
+		Eventually(checkCompliance(ctx, case12PolicyIgnorePendingName),
 			defaultTimeoutSeconds*2, 1).Should(Equal("Compliant"))
 	})
-	It("Should set to Compliant when dep status is resolved", func() {
+	It("Should set to Compliant when dep status is resolved", func(ctx SpecContext) {
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
 		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
@@ -172,6 +175,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Generating a non compliant event on the dep")
 		generateEventOnPolicy(
+			ctx,
 			case12DepName,
 			"namespace-foo-setup-configpolicy",
 			"there is violation",
@@ -179,13 +183,14 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is noncompliant")
-		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		By("Checking if policy status is pending")
-		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
+		Eventually(checkCompliance(ctx, case12PolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
 
 		By("Generating a compliant event on the dependency")
 		generateEventOnPolicy(
+			ctx,
 			case12DepName,
 			"namespace-foo-setup-configpolicy",
 			"No violation detected",
@@ -193,10 +198,11 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is compliant")
-		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case12DepName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Generating a compliant event on the policy")
 		generateEventOnPolicy(
+			ctx,
 			case12PolicyName,
 			"case12-config-policy",
 			"No violation detected",
@@ -204,15 +210,15 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if policy status is compliant")
-		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Creating a policy with an invalid dep on hub cluster in ns:" + clusterNamespaceOnHub)
 		hubPolicyApplyAndDeferCleanup(case12PolicyYamlInvalid, case12PolicyNameInvalid)
 
 		By("Checking if policy status is pending")
-		Eventually(checkCompliance(case12PolicyNameInvalid), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
+		Eventually(checkCompliance(ctx, case12PolicyNameInvalid), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
 	})
-	It("Should remove template if dependency changes", func() {
+	It("Should remove template if dependency changes", func(ctx SpecContext) {
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
 		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
@@ -221,6 +227,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Generating a compliant event on the dependency")
 		generateEventOnPolicy(
+			ctx,
 			case12DepName,
 			"namespace-foo-setup-configpolicy",
 			"No violation detected",
@@ -228,10 +235,11 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is compliant")
-		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case12DepName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Generating a compliant event on the policy")
 		generateEventOnPolicy(
+			ctx,
 			case12PolicyName,
 			"case12-config-policy",
 			"No violation detected",
@@ -239,10 +247,11 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if policy status is compliant")
-		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Generating a non compliant event on the dep")
 		generateEventOnPolicy(
+			ctx,
 			case12DepName,
 			"namespace-foo-setup-configpolicy",
 			"there is violation",
@@ -250,12 +259,12 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is noncompliant")
-		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		By("Checking if policy status is pending")
-		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
+		Eventually(checkCompliance(ctx, case12PolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
 	})
-	It("Should process extra dependencies properly", func() {
+	It("Should process extra dependencies properly", func(ctx SpecContext) {
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		hubPolicyApplyAndDeferCleanup(case12ExtraDepsPolicyYaml, case12ExtraDepsPolicyName)
 
@@ -267,6 +276,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Generating a non compliant event on the dep b")
 		generateEventOnPolicy(
+			ctx,
 			case12DepBName,
 			"namespace-foo-setup-configpolicy-b",
 			"there is violation",
@@ -274,10 +284,11 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is noncompliant")
-		Eventually(checkCompliance(case12DepBName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, case12DepBName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		By("Generating a compliant event on the dependency")
 		generateEventOnPolicy(
+			ctx,
 			case12DepName,
 			"namespace-foo-setup-configpolicy",
 			"No violation detected",
@@ -285,10 +296,11 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is compliant")
-		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case12DepName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Generating a compliant event on the policy")
 		generateEventOnPolicy(
+			ctx,
 			case12ExtraDepsPolicyName,
 			"case12-config-policy-multi",
 			"No violation detected",
@@ -296,9 +308,9 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if policy status is pending")
-		Eventually(checkCompliance(case12ExtraDepsPolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
+		Eventually(checkCompliance(ctx, case12ExtraDepsPolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
 	})
-	It("Should handle policies with multiple templates (with different dependencies) properly", func() {
+	It("Should handle policies with multiple templates (with different dependencies) properly", func(ctx SpecContext) {
 		By("Creating a policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		hubPolicyApplyAndDeferCleanup(case12Plc2TemplatesYaml, case12Plc2TemplatesName)
 
@@ -310,6 +322,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Generating a non compliant event on the dep a")
 		generateEventOnPolicy(
+			ctx,
 			case12DepName,
 			"namespace-foo-setup-configpolicy",
 			"there is violation",
@@ -317,10 +330,11 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is noncompliant")
-		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		By("Generating a compliant event on the dependency b")
 		generateEventOnPolicy(
+			ctx,
 			case12DepBName,
 			"namespace-foo-setup-configpolicy-b",
 			"No violation detected",
@@ -328,10 +342,11 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is compliant")
-		Eventually(checkCompliance(case12DepBName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, case12DepBName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Generating a noncompliant event on the non-pending template")
 		generateEventOnPolicy(
+			ctx,
 			case12Plc2TemplatesName,
 			"case12-config-policy-2-templates-b",
 			"there is violation",
@@ -340,9 +355,10 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		// should be noncompliant - template A is pending and B is noncompliant
 		By("Checking if policy status is noncompliant")
-		Eventually(checkCompliance(case12Plc2TemplatesName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(
+			checkCompliance(ctx, case12Plc2TemplatesName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 	})
-	It("Should correct a late compliance event while the policy is pending", func() {
+	It("Should correct a late compliance event while the policy is pending", func(ctx SpecContext) {
 		By("Creating a dep on hub cluster in ns:" + clusterNamespaceOnHub)
 		hubPolicyApplyAndDeferCleanup(case12DepYaml, case12DepName)
 
@@ -351,6 +367,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 		By("Generating a noncompliant event on the dependency")
 		generateEventOnPolicy(
+			ctx,
 			case12DepName,
 			"namespace-foo-setup-configpolicy",
 			"there is violation",
@@ -358,13 +375,14 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		)
 
 		By("Checking if dependency status is noncompliant")
-		Eventually(checkCompliance(case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, case12DepName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		By("Checking if policy status is pending")
-		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
+		Eventually(checkCompliance(ctx, case12PolicyName), defaultTimeoutSeconds*2, 1).Should(Equal("Pending"))
 
 		By("Generating an (incorrect, late) compliance event on the policy")
 		generateEventOnPolicy(
+			ctx,
 			case12PolicyName,
 			"case12-config-policy",
 			"No violation detected",
@@ -376,13 +394,13 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		time.Sleep(5 * time.Second)
 
 		By("Checking if policy status is pending")
-		Eventually(checkCompliance(case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Pending"))
+		Eventually(checkCompliance(ctx, case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Pending"))
 
 		By("Checking if policy status is consistently pending")
-		Consistently(checkCompliance(case12PolicyName), "15s", 1).Should(Equal("Pending"))
+		Consistently(checkCompliance(ctx, case12PolicyName), "15s", 1).Should(Equal("Pending"))
 	})
 	// This test case is meant for a specific panic that was being caused by some Policies.
-	It("Should function properly despite a nonexistent dependency kind", func() {
+	It("Should function properly despite a nonexistent dependency kind", func(ctx SpecContext) {
 		const (
 			testPolicyName string = "case12-test-nonexist-dep"
 			testPolicyYaml string = "../resources/case12_ordering/case12-plc-nonexist-dep.yaml"
@@ -393,19 +411,19 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		hubPolicyApplyAndDeferCleanup(testPolicyYaml, testPolicyName)
 
 		By("Generating a noncompliant event on the first template")
-		generateEventOnPolicy(testPolicyName, templateName, "not yet successful", "NonCompliant")
+		generateEventOnPolicy(ctx, testPolicyName, templateName, "not yet successful", "NonCompliant")
 
 		By("Checking if policy status is noncompliant")
-		Eventually(checkCompliance(testPolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
+		Eventually(checkCompliance(ctx, testPolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		// Sleep to avoid the status-sync from reconciling again before the template-sync has a
 		// chance to reconcile and (possibly) panic.
 		time.Sleep(5 * time.Second)
 
 		By("Generating a compliant event on the first template")
-		generateEventOnPolicy(testPolicyName, templateName, "all systems go", "Compliant")
+		generateEventOnPolicy(ctx, testPolicyName, templateName, "all systems go", "Compliant")
 
 		By("Checking if policy status is Compliant")
-		Eventually(checkCompliance(testPolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
+		Eventually(checkCompliance(ctx, testPolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 	})
 })
