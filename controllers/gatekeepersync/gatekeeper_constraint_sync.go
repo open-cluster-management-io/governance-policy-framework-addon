@@ -90,7 +90,7 @@ type GatekeeperConstraintReconciler struct {
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=get;list;watch
 //+kubebuilder:rbac:groups=constraints.gatekeeper.sh,resources=*,verbs=create;get;list;watch
 //+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,resourceNames=gatekeeper-validating-webhook-configuration,verbs=get;list;watch
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create;delete;get;list;patch;update;watch
+//+kubebuilder:rbac:groups=core;events.k8s.io,resources=events,verbs=create;delete;get;list;patch;update;watch
 
 // Reconcile handles Policy objects that contain a Gatekeeper constraint and relays status messages from Gatekeeper
 // audit results. Every time a Gatekeeper constraint in a Policy is updated, a reconcile on the Policy is triggered.

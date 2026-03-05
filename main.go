@@ -35,11 +35,11 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	apiCache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/tools/watch"
 	"k8s.io/klog/v2"
@@ -697,13 +697,15 @@ func addControllers(
 	}
 
 	var kubeClientHub kubernetes.Interface = kubernetes.NewForConfigOrDie(hubCfg)
+	eventBroadcasterHub := events.NewBroadcaster(&events.EventSinkImpl{Interface: kubeClientHub.EventsV1()})
 
-	eventBroadcasterHub := record.NewBroadcaster()
-	eventBroadcasterHub.StartRecordingToSink(
-		&corev1.EventSinkImpl{Interface: kubeClientHub.CoreV1().Events(tool.Options.ClusterNamespaceOnHub)},
-	)
+	err := eventBroadcasterHub.StartRecordingToSinkWithContext(ctx)
+	if err != nil {
+		log.Error(err, "Unable to start event broadcaster to the hub cluster")
+		os.Exit(1)
+	}
 
-	hubRecorder := eventBroadcasterHub.NewRecorder(eventsScheme, v1.EventSource{Component: statussync.ControllerName})
+	hubRecorder := eventBroadcasterHub.NewRecorder(eventsScheme, statussync.ControllerName)
 
 	statusDepReconciler, statusDepEvents := depclient.NewControllerRuntimeSource()
 
@@ -721,7 +723,7 @@ func addControllers(
 		HubClient:             hubClient,
 		HubRecorder:           hubRecorder,
 		ManagedClient:         managedMgr.GetClient(),
-		ManagedRecorder:       managedMgr.GetEventRecorderFor(statussync.ControllerName),
+		ManagedRecorder:       managedMgr.GetEventRecorder(statussync.ControllerName),
 		DynamicWatcher:        statusDepWatcher,
 		Scheme:                managedMgr.GetScheme(),
 		ConcurrentReconciles:  int(tool.Options.EvaluationConcurrency),
@@ -759,7 +761,7 @@ func addControllers(
 		DynamicWatcher:       watcher,
 		Scheme:               managedMgr.GetScheme(),
 		Config:               managedMgr.GetConfig(),
-		Recorder:             managedMgr.GetEventRecorderFor(templatesync.ControllerName),
+		Recorder:             managedMgr.GetEventRecorder(templatesync.ControllerName),
 		ClusterNamespace:     tool.Options.ClusterNamespace,
 		Clientset:            kubernetes.NewForConfigOrDie(managedMgr.GetConfig()),
 		InstanceName:         instanceName,
@@ -788,13 +790,15 @@ func addControllers(
 	}
 
 	var kubeClient kubernetes.Interface = kubernetes.NewForConfigOrDie(managedMgr.GetConfig())
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: kubeClient.EventsV1()})
 
-	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartRecordingToSink(
-		&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events(tool.Options.ClusterNamespace)},
-	)
+	err = eventBroadcaster.StartRecordingToSinkWithContext(ctx)
+	if err != nil {
+		log.Error(err, "Unable to start event broadcaster to the managed cluster")
+		os.Exit(1)
+	}
 
-	managedRecorder := eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: specsync.ControllerName})
+	managedRecorder := eventBroadcaster.NewRecorder(eventsScheme, specsync.ControllerName)
 
 	if err = (&specsync.PolicyReconciler{
 		HubClient:            hubClient,

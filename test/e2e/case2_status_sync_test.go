@@ -8,6 +8,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,9 +43,9 @@ var _ = Describe("Test status sync", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Normal",
+			corev1.EventTypeNormal,
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"Compliant; No violation detected")
 		By("Checking if policy status is compliant")
@@ -82,9 +83,9 @@ var _ = Describe("Test status sync", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Warning",
+			corev1.EventTypeWarning,
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"NonCompliant; there is violation")
 
@@ -128,9 +129,9 @@ var _ = Describe("Test status sync", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Normal",
+			corev1.EventTypeNormal,
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"Compliant; No violation detected")
 
@@ -203,15 +204,15 @@ var _ = Describe("Test status sync", func() {
 		historyIndex := 1
 		for historyIndex < 12 {
 			if historyIndex%2 == 0 {
-				managedRecorder.Event(
+				managedRecorder.Eventf(
 					managedPlc,
-					"Normal",
+					corev1.EventTypeNormal,
 					"policy: managed/case2-test-policy-configurationpolicy",
 					fmt.Sprintf("Compliant; No violation detected %d", historyIndex))
 			} else {
-				managedRecorder.Event(
+				managedRecorder.Eventf(
 					managedPlc,
-					"Warning",
+					corev1.EventTypeWarning,
 					"policy: managed/case2-test-policy-configurationpolicy",
 					fmt.Sprintf("NonCompliant; there is violation %d", historyIndex))
 			}
@@ -220,9 +221,9 @@ var _ = Describe("Test status sync", func() {
 		}
 		var plc *policiesv1.Policy
 		By("Generating a no violation event")
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Normal",
+			corev1.EventTypeNormal,
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"Compliant; No violation assert")
 		Eventually(func(g Gomega) interface{} {
@@ -236,12 +237,8 @@ var _ = Describe("Test status sync", func() {
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
 			g.Expect(err).ToNot(HaveOccurred())
 
-			if len(plc.Status.Details) == 0 {
-				return "status.details[] is empty"
-			}
-			if len(plc.Status.Details[0].History) == 0 {
-				return "status.details[0].history[] is empty"
-			}
+			g.Expect(plc.Status.Details).ToNot(BeEmpty())
+			g.Expect(plc.Status.Details[0].History).ToNot(BeEmpty())
 
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant; No violation assert"))
@@ -254,9 +251,9 @@ var _ = Describe("Test status sync", func() {
 		Expect(plc.Status.Details[0].History).To(HaveLen(10))
 		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case2-test-policy-configurationpolicy"))
 		By("Generating a violation event")
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Warning",
+			corev1.EventTypeWarning,
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"NonCompliant; Violation assert")
 		Eventually(func(g Gomega) interface{} {
