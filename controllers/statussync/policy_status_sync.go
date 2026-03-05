@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -76,8 +76,8 @@ type PolicyReconciler struct {
 	// that reads objects from the cache and writes to the apiserver
 	HubClient             client.Client
 	ManagedClient         client.Client
-	HubRecorder           record.EventRecorder
-	ManagedRecorder       record.EventRecorder
+	HubRecorder           events.EventRecorder
+	ManagedRecorder       events.EventRecorder
 	DynamicWatcher        depclient.DynamicWatcher
 	Scheme                *runtime.Scheme
 	ClusterNamespaceOnHub string
@@ -89,7 +89,7 @@ type PolicyReconciler struct {
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/finalizers,verbs=update
-//+kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core;events.k8s.io,resources=events,verbs=get;list;watch;create;update;patch;delete
 // This is required for the status lease for the addon framework
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list
 
@@ -549,7 +549,7 @@ Loop:
 			return err
 		}
 
-		r.ManagedRecorder.Event(instance, "Normal", "PolicyStatusSync",
+		r.ManagedRecorder.Eventf(instance, nil, corev1.EventTypeNormal, "PolicyStatusSync", "PolicyStatusSync",
 			fmt.Sprintf("Policy %s status was updated in cluster namespace %s", instance.GetName(),
 				instance.GetNamespace()))
 	} else {
@@ -580,7 +580,7 @@ Loop:
 				return err
 			}
 
-			r.HubRecorder.Event(hubInstance, "Normal", "PolicyStatusSync",
+			r.HubRecorder.Eventf(hubInstance, nil, corev1.EventTypeNormal, "PolicyStatusSync", "PolicyStatusSync",
 				fmt.Sprintf("Policy %s status was updated to %s in cluster namespace %s", hubInstance.GetName(),
 					hubInstance.Status.ComplianceState, hubInstance.GetNamespace()))
 		} else {

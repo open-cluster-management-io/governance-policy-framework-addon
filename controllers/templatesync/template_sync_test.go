@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	configpoliciesv1 "open-cluster-management.io/config-policy-controller/api/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 )
@@ -61,7 +61,7 @@ func TestHandleSyncSuccessNoDoubleRemoveStatus(t *testing.T) {
 		t.Fatalf("Failed to set up the scheme: %s", err)
 	}
 
-	recorder := record.NewFakeRecorder(10)
+	recorder := events.NewFakeRecorder(10)
 	client := fake.NewSimpleDynamicClient(scheme, &policy, &configPolicy)
 	gvr := schema.GroupVersionResource{
 		Group:    configpoliciesv1.GroupVersion.Group,

@@ -6,6 +6,7 @@ package e2e
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
@@ -74,9 +75,9 @@ var _ = Describe("Test event message handling", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Warning",
+			corev1.EventTypeWarning,
 			"policy: managed/case6-test-policy-configurationpolicy",
 			"(combined from similar events): NonCompliant; Violation detected")
 		By("Checking if violation message contains the prefix")
@@ -126,9 +127,9 @@ var _ = Describe("Test event message handling", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Normal",
+			corev1.EventTypeNormal,
 			"policy: managed/case6-test-policy-configurationpolicy",
 			"(combined from similar events): Compliant; no violation detected")
 		By("Checking if violation message contains the prefix")
@@ -178,9 +179,9 @@ var _ = Describe("Test event message handling", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Warning",
+			corev1.EventTypeWarning,
 			"policy: managed/case6-test-policy-configurationpolicy",
 			"NonCompliant")
 		By("Checking if violation message is in history")
@@ -230,9 +231,9 @@ var _ = Describe("Test event message handling", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Normal",
+			corev1.EventTypeNormal,
 			"policy: managed/case6-test-policy-configurationpolicy",
 			"Compliant")
 		By("Checking if violation message is in history")

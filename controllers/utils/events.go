@@ -76,9 +76,9 @@ func (c *ComplianceEventSender) SendEvent(
 	}
 
 	if compliance == policyv1.Compliant {
-		event.Type = "Normal"
+		event.Type = corev1.EventTypeNormal
 	} else {
-		event.Type = "Warning"
+		event.Type = corev1.EventTypeWarning
 	}
 
 	eventClient := c.ClientSet.CoreV1().Events(c.ClusterNamespace)

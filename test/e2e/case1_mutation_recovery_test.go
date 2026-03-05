@@ -6,6 +6,7 @@ package e2e
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
@@ -141,9 +142,9 @@ var _ = Describe("Test mutation recovery", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Normal",
+			corev1.EventTypeNormal,
 			"policy: managed/case1-test-policy-configurationpolicy",
 			"Compliant; No violation detected")
 		By("Checking if policy status is compliant")
