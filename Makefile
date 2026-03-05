@@ -267,7 +267,7 @@ e2e-run-instrumented: e2e-build-instrumented
 
 .PHONY: e2e-stop-instrumented
 e2e-stop-instrumented:
-	ps -ef | grep '$(IMG)' | grep -v grep | awk '{print $$2}' | xargs kill
+	ps -ef | grep '$(IMG)-instrumented' | grep -v grep | awk '{print $$2}' | xargs kill
 
 .PHONY: e2e-debug
 e2e-debug:
