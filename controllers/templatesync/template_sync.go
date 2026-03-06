@@ -19,6 +19,7 @@ import (
 	gktemplatesv1beta1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1beta1"
 	"github.com/prometheus/client_golang/prometheus"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
+	corev1 "k8s.io/api/core/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -34,7 +35,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -56,7 +57,7 @@ const (
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=*,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=templates.gatekeeper.sh,resources=constrainttemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=constraints.gatekeeper.sh,resources=*,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core;events.k8s.io,resources=events,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=list;watch
 
 // Setup sets up the controller
@@ -84,7 +85,7 @@ type PolicyReconciler struct {
 	DynamicWatcher       depclient.DynamicWatcher
 	Scheme               *runtime.Scheme
 	Config               *rest.Config
-	Recorder             record.EventRecorder
+	Recorder             events.EventRecorder
 	ClusterNamespace     string
 	Clientset            *kubernetes.Clientset
 	InstanceName         string
@@ -1528,7 +1529,7 @@ func (r *PolicyReconciler) emitTemplatePending(
 	if pol.Spec.PolicyTemplates[tIndex].IgnorePending {
 		compliance = policiesv1.Compliant
 		msg += " but ignorePending is true"
-		eventType = "Normal"
+		eventType = corev1.EventTypeNormal
 	}
 
 	err := r.emitTemplateEvent(ctx, pol, tIndex, tName, clusterScoped, eventType, compliance, msg)
@@ -1560,7 +1561,7 @@ func (r *PolicyReconciler) emitTemplateEvent(
 	}
 
 	// emit an informational event
-	r.Recorder.Event(pol, eventType, "PolicyTemplateSync", msg)
+	r.Recorder.Eventf(pol, nil, eventType, "PolicyTemplateSync", "PolicyTemplateSync", msg)
 
 	// emit the compliance event
 	var policyComplianceReason string
@@ -1612,7 +1613,7 @@ func (r *PolicyReconciler) handleSyncSuccess(
 	template *unstructured.Unstructured,
 ) error {
 	if msg != "" {
-		r.Recorder.Event(pol, "Normal", "PolicyTemplateSync", msg)
+		r.Recorder.Eventf(pol, nil, corev1.EventTypeNormal, "PolicyTemplateSync", "PolicyTemplateSync", msg)
 	}
 
 	if gv.Group != policiesv1.GroupVersion.Group {

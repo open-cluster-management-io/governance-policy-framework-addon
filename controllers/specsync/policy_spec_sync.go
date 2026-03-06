@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"open-cluster-management.io/governance-policy-propagator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -56,7 +57,7 @@ type PolicyReconciler struct {
 	// that reads objects from the cache and writes to the apiserver
 	HubClient       client.Client
 	ManagedClient   client.Client
-	ManagedRecorder record.EventRecorder
+	ManagedRecorder events.EventRecorder
 	Scheme          *runtime.Scheme
 	// The namespace that the replicated policies should be synced to.
 	TargetNamespace      string
@@ -68,7 +69,7 @@ type PolicyReconciler struct {
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=create;delete;get;list;patch;update;watch
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies/finalizers,verbs=update
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create;delete;get;list;patch;update;watch
+//+kubebuilder:rbac:groups=core;events.k8s.io,resources=events,verbs=create;delete;get;list;patch;update;watch
 // This is required for the status lease for the addon framework
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list
 
@@ -151,7 +152,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 				return reconcile.Result{}, err
 			}
 
-			r.ManagedRecorder.Event(managedPlc, "Normal", "PolicySpecSync",
+			r.ManagedRecorder.Eventf(managedPlc, nil, corev1.EventTypeNormal, "PolicySpecSync", "PolicySpecSync",
 				fmt.Sprintf("Policy %s was synchronized to cluster namespace %s", instance.GetName(),
 					r.TargetNamespace))
 		} else {
@@ -174,7 +175,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			return reconcile.Result{}, err
 		}
 
-		r.ManagedRecorder.Event(managedPlc, "Normal", "PolicySpecSync",
+		r.ManagedRecorder.Eventf(managedPlc, nil, corev1.EventTypeNormal, "PolicySpecSync", "PolicySpecSync",
 			fmt.Sprintf("Policy %s was updated in cluster namespace %s", instance.GetName(),
 				r.TargetNamespace))
 	} else if !equality.Semantic.DeepEqual(instance.Status, managedPlc.Status) {

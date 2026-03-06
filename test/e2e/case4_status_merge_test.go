@@ -131,9 +131,9 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 			clusterNamespace,
 			true,
 			defaultTimeoutSeconds)
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Normal",
+			corev1.EventTypeNormal,
 			"policy: managed/case4-test-policy-configurationpolicy",
 			"Compliant; No violation detected")
 
@@ -171,14 +171,14 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 			defaultTimeoutSeconds)
 
 		By("Generating some new events in ns:" + clusterNamespace)
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Warning",
+			corev1.EventTypeWarning,
 			"policy: managed/case4-test-policy-configurationpolicy",
 			"NonCompliant; Violation detected")
-		managedRecorder.Event(
+		managedRecorder.Eventf(
 			managedPlc,
-			"Normal",
+			corev1.EventTypeNormal,
 			"policy: managed/case4-test-policy-configurationpolicy",
 			"Compliant; Violation no longer detected")
 

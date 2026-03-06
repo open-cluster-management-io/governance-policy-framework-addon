@@ -7,18 +7,6 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - events
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - pods
   verbs:
   - get
@@ -32,14 +20,6 @@ rules:
 - apiGroups:
   - ""
   resourceNames:
-  - open-cluster-management-compliance-history-api-recorder
-  resources:
-  - secrets
-  verbs:
-  - get
-- apiGroups:
-  - ""
-  resourceNames:
   - policy-encryption-key
   resources:
   - secrets
@@ -47,6 +27,19 @@ rules:
   - delete
   - get
   - list
+  - update
+  - watch
+- apiGroups:
+  - ""
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
   - update
   - watch
 - apiGroups:
