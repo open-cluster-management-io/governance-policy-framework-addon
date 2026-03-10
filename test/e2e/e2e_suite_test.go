@@ -354,10 +354,12 @@ func checkCompliance(ctx SpecContext, name string) func() string {
 }
 
 func hubApplyPolicy(name, path string) {
+	GinkgoHelper()
+
 	By("Applying policy " + path + " to the hub in ns: " + clusterNamespaceOnHub)
 
 	_, err := kubectlHub("apply", "-f", path, "-n", clusterNamespaceOnHub)
-	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
+	Expect(err).ShouldNot(HaveOccurred())
 
 	hubPlc := propagatorutils.GetWithTimeout(
 		clientHubDynamic,
@@ -366,5 +368,5 @@ func hubApplyPolicy(name, path string) {
 		clusterNamespaceOnHub,
 		true,
 		defaultTimeoutSeconds)
-	ExpectWithOffset(1, hubPlc).NotTo(BeNil())
+	Expect(hubPlc).NotTo(BeNil())
 }
