@@ -1,11 +1,11 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: case12-test-policy-invalid
+  name: case12-policy-invalid
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: case12-test-policy
+    policy.open-cluster-management.io/root-policy: case12-policy-invalid
 spec:
   remediationAction: inform
   disabled: false

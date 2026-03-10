@@ -1,11 +1,11 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: case12-test-nonexist-dep
+  name: case12-policy-nonexist-dep
   labels:
     policy.open-cluster-management.io/cluster-name: managed
     policy.open-cluster-management.io/cluster-namespace: managed
-    policy.open-cluster-management.io/root-policy: case12-test-policy-nonexist-dep
+    policy.open-cluster-management.io/root-policy: case12-policy-nonexist-dep
 spec:
   remediationAction: inform
   disabled: false
@@ -58,4 +58,3 @@ spec:
                 spec:
                   containers:
                     - name: nginx
-
