@@ -19,8 +19,6 @@ LOCAL_BIN ?= $(PWD)/bin
 export PATH := $(LOCAL_BIN):$(PATH)
 GOARCH = $(shell go env GOARCH)
 GOOS = $(shell go env GOOS)
-TESTARGS_DEFAULT := -v
-export TESTARGS ?= $(TESTARGS_DEFAULT)
 
 # Get the branch of the PR target or Push in Github Action
 ifeq ($(GITHUB_EVENT_NAME), pull_request) # pull request
@@ -57,7 +55,7 @@ else
 endif
 # Test coverage threshold
 export COVERAGE_MIN ?= 69
-COVERAGE_E2E_OUT ?= coverage_e2e.out
+COVERAGE_E2E_OUT ?= coverage_e2e_basic.out
 
 export OSDK_FORCE_RUN_MODE ?= local
 
@@ -98,16 +96,15 @@ lint:
 # test section
 ############################################################
 
+TEST_PKGS ?= ./controllers/statussync ./controllers/secretsync ./controllers/templatesync
+
 .PHONY: test
-test: test-dependencies
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test $(TESTARGS) `go list ./... | grep -v test/e2e`
+test: envtest kubebuilder gotestsum
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" $(GOTESTSUM) $(GOTST_FMT) --junitfile report_unit.xml -- $(TESTARGS) $(TEST_PKGS)
 
 .PHONY: test-coverage
-test-coverage: TESTARGS = -json -cover -covermode=atomic -coverprofile=coverage_unit.out
+test-coverage: TESTARGS = -coverpkg=./... -covermode=atomic -coverprofile=coverage_unit.out
 test-coverage: test
-
-.PHONY: test-dependencies
-test-dependencies: envtest kubebuilder
 
 ############################################################
 # build section
@@ -232,23 +229,35 @@ install-resources:
 		kubectl -n gatekeeper-system wait --for=condition=Available deployment/gatekeeper-audit --kubeconfig=$(MANAGED_CONFIG)_e2e; \
 	fi
 
+E2E_JSON = --json-report=report_e2e.json
+E2E_JUNIT = --junit-report=report_e2e.xml
+
 .PHONY: e2e-test
 e2e-test: e2e-dependencies
-	$(GINKGO) -v --fail-fast $(E2E_TEST_ARGS) $(E2E_FILTER) test/e2e
+	$(GINKGO) -v $(E2E_TEST_ARGS) $(E2E_FILTER) --output-dir=. $(E2E_JSON) $(E2E_JUNIT) test/e2e
 
 .PHONY: e2e-test-coverage
-e2e-test-coverage: E2E_TEST_ARGS = --json-report=report_e2e.json --output-dir=.
 e2e-test-coverage: e2e-run-instrumented e2e-test e2e-stop-instrumented
 
 .PHONY: e2e-test-uninistall
-e2e-test-uninistall:
-	$(GINKGO) -v --fail-fast --json-report=report_e2e_uninstall.json --output-dir=. --label-filter='uninstall' \
-	 --covermode=atomic --coverprofile=coverage_e2e_uninstall_trigger.out \
-	 --coverpkg=open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall test/e2e
+e2e-test-uninistall: E2E_JSON = --json-report=report_e2e_uninstall.json
+e2e-test-uninistall: E2E_JUNIT = --junit-report=report_e2e_uninstall.xml
+e2e-test-uninistall: E2E_FILTER = --label-filter='uninstall'
+e2e-test-uninistall: E2E_TEST_ARGS = --covermode=atomic --coverprofile=coverage_e2e_uninstall_trigger.out --coverpkg=open-cluster-management.io/governance-policy-framework-addon/controllers/uninstall
+e2e-test-uninistall: e2e-test
 
 .PHONY: e2e-test-uninstall-coverage
 e2e-test-uninstall-coverage: COVERAGE_E2E_OUT = coverage_e2e_uninstall_controller.out
 e2e-test-uninstall-coverage: e2e-run-instrumented scale-down-deployment e2e-test-uninistall e2e-stop-instrumented
+
+.PHONY: e2e-test-hosted-coverage
+e2e-test-hosted-coverage: DISABLE_GK_SYNC=true
+e2e-test-hosted-coverage: E2E_CLUSTER_NAMESPACE="other-namespace"
+e2e-test-hosted-coverage: E2E_CLUSTER_NAMESPACE_ON_HUB="other-namespace-on-hub"
+e2e-test-hosted-coverage: COVERAGE_E2E_OUT = coverage_e2e_hosted_mode.out
+e2e-test-hosted-coverage: E2E_JSON = --json-report=report_e2e_hosted.json
+e2e-test-hosted-coverage: E2E_JUNIT = --junit-report=report_e2e_hosted.xml
+e2e-test-hosted-coverage: e2e-run-instrumented e2e-test e2e-stop-instrumented
 
 .PHONY: scale-down-deployment
 scale-down-deployment:
@@ -256,7 +265,7 @@ scale-down-deployment:
 
 .PHONY: e2e-build-instrumented
 e2e-build-instrumented:
-	go test -covermode=atomic -coverpkg=$(shell cat go.mod | head -1 | cut -d ' ' -f 2)/... -c -tags e2e ./ -o build/_output/bin/$(IMG)-instrumented
+	go test -covermode=atomic -coverpkg=./... -c -tags e2e ./ -o build/_output/bin/$(IMG)-instrumented
 
 .PHONY: e2e-run-instrumented
 LOG_REDIRECT ?= &>build/_output/controller.log
@@ -288,13 +297,16 @@ e2e-debug:
 ############################################################
 # test coverage
 ############################################################
-COVERAGE_FILE = coverage.out
-
 .PHONY: coverage-merge
 coverage-merge: coverage-dependencies
-	@echo Merging the coverage reports into $(COVERAGE_FILE)
-	$(GOCOVMERGE) $(PWD)/coverage_* > $(COVERAGE_FILE)
+	@echo Merging the coverage reports into coverage.out
+	$(GOCOVMERGE) $(PWD)/coverage_* > coverage.out
+
+.PHONY: coverage-merge-e2e
+coverage-merge-e2e: coverage-dependencies
+	@echo Merging the e2e coverage reports into coverage_e2e.out
+	$(GOCOVMERGE) $(PWD)/coverage_e2e* > coverage_e2e.out
 
 .PHONY: coverage-verify
-coverage-verify:
+coverage-verify: coverage-merge-e2e
 	./build/common/scripts/coverage_calc.sh
