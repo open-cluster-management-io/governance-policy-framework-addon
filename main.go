@@ -233,8 +233,8 @@ func main() {
 	}
 
 	healthAddressesLock.Lock()
-	healthAddresses[mgrHealthAddr] = true
 
+	healthAddresses[mgrHealthAddr] = true
 	mainCtx := ctrl.SetupSignalHandler()
 	mgrCtx, mgrCtxCancel := context.WithCancel(mainCtx)
 
@@ -394,9 +394,9 @@ func getManager(
 								InvolvedObject: event.InvolvedObject,
 								TypeMeta:       event.TypeMeta,
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      event.ObjectMeta.Name,
-									Namespace: event.ObjectMeta.Namespace,
-									UID:       event.ObjectMeta.UID,
+									Name:      event.Name,
+									Namespace: event.Namespace,
+									UID:       event.UID,
 								},
 								LastTimestamp: event.LastTimestamp,
 								Message:       event.Message,
@@ -427,8 +427,8 @@ func getManager(
 
 	configFiles := []string{tool.Options.HubConfigFilePathName}
 
-	if hubCfg.TLSClientConfig.CertFile != "" {
-		configFiles = append(configFiles, hubCfg.TLSClientConfig.CertFile)
+	if hubCfg.CertFile != "" {
+		configFiles = append(configFiles, hubCfg.CertFile)
 	}
 
 	// use config check
@@ -490,8 +490,8 @@ func getHubManager(
 
 	configFiles := []string{tool.Options.HubConfigFilePathName}
 
-	if hubCfg.TLSClientConfig.CertFile != "" {
-		configFiles = append(configFiles, hubCfg.TLSClientConfig.CertFile)
+	if hubCfg.CertFile != "" {
+		configFiles = append(configFiles, hubCfg.CertFile)
 	}
 
 	// use config check
@@ -528,9 +528,9 @@ func startHealthProxy(ctx context.Context, wg *sync.WaitGroup) error {
 	for _, endpoint := range []string{"/healthz", "/readyz"} {
 		http.HandleFunc(endpoint, func(w http.ResponseWriter, _ *http.Request) {
 			healthAddressesLock.RLock()
-			addresses := make([]string, 0, len(healthAddresses))
 
 			// Populate a separate slice to avoid holding the lock too long.
+			addresses := make([]string, 0, len(healthAddresses))
 			for address := range healthAddresses {
 				addresses = append(addresses, address)
 			}
@@ -946,9 +946,11 @@ func manageGatekeeperSyncManager(
 			watcher = nil
 		case result := <-watcher.ResultChan():
 			// If the CRD is added, then Gatekeeper is installed.
-			if result.Type == apiWatch.Added {
+			//nolint:exhaustive
+			switch result.Type {
+			case apiWatch.Added:
 				gatekeeperInstalled = true
-			} else if result.Type == apiWatch.Deleted {
+			case apiWatch.Deleted:
 				gatekeeperInstalled = false
 			}
 		}
@@ -1055,7 +1057,9 @@ func runGatekeeperSyncManager(ctx context.Context, managedCfg *rest.Config, mgrO
 
 	// Add the health bind address to be considered by the health proxy.
 	healthAddressesLock.Lock()
+
 	healthAddresses[healthAddress] = true
+
 	healthAddressesLock.Unlock()
 
 	// This blocks until the manager stops.

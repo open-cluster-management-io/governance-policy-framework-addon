@@ -11,7 +11,7 @@ import (
 )
 
 var _ = Describe("Test metrics are exposed", Ordered, func() {
-	It("Should expose the controller runtime reconcile total for each controller", func() {
+	It("Should expose the controller runtime reconcile total for each controller", func(ctx SpecContext) {
 		controllers := []string{
 			"policy-spec-sync",
 			"policy-status-sync",
@@ -21,7 +21,7 @@ var _ = Describe("Test metrics are exposed", Ordered, func() {
 
 		for _, ctrl := range controllers {
 			By("Checking for the " + ctrl + " controller metric")
-			matches := utils.GetMetrics("controller_runtime_reconcile_total", "success", ctrl)
+			matches := utils.GetMetrics(ctx, "controller_runtime_reconcile_total", "success", ctrl)
 			Expect(matches).To(HaveLen(1))
 		}
 	})

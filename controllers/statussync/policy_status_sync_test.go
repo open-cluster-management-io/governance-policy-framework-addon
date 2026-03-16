@@ -9,8 +9,8 @@ func TestParseTimestampFromEventName(t *testing.T) {
 	output, err := parseTimestampFromEventName("event.17b80d88a995e12c")
 	if err != nil {
 		t.Errorf("Expected no error but got: %v", err)
-	} else if output.Time.UnixNano() != 1709130939198988588 {
-		t.Errorf("Expected 1709130939198988588 but got: %d", output.Time.UnixNano())
+	} else if output.UnixNano() != 1709130939198988588 {
+		t.Errorf("Expected 1709130939198988588 but got: %d", output.UnixNano())
 	}
 
 	output, err = parseTimestampFromEventName("event.with-no-timestamp")

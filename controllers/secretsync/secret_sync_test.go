@@ -103,7 +103,7 @@ func TestReconcileSecretAlreadySynced(t *testing.T) {
 	err := managedClient.Get(t.Context(), request.NamespacedName, managedEncryptionSecret)
 	Expect(err).ToNot(HaveOccurred())
 
-	version := managedEncryptionSecret.ObjectMeta.ResourceVersion
+	version := managedEncryptionSecret.ResourceVersion
 
 	r := SecretReconciler{
 		Client: hubClient, ManagedClient: managedClient, Scheme: scheme.Scheme, TargetNamespace: clusterName,
@@ -171,7 +171,7 @@ func TestReconcileInvalidSecretName(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	encryptionSecret := getTestSecret()
-	encryptionSecret.ObjectMeta.Name = "not-the-secret"
+	encryptionSecret.Name = "not-the-secret"
 	hubClient := fake.NewClientBuilder().WithObjects(encryptionSecret).Build()
 	managedClient := fake.NewClientBuilder().Build()
 
