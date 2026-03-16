@@ -30,20 +30,20 @@ var _ = Describe("Test user error metrics", Ordered, func() {
 
 	AfterAll(cleanup)
 
-	It("Should increment user error metric on user error", func() {
+	It("Should increment user error metric on user error", func(ctx SpecContext) {
 		hubApplyPolicy(policyName, policyFile)
 
 		By("Checking for the " + metricName + " metric on the template-sync controller")
 		values := []string{}
 		Eventually(func() []string {
-			values = utils.GetMetrics(metricName, policyName)
+			values = utils.GetMetrics(ctx, metricName, policyName)
 
 			return values
 		}, defaultTimeoutSeconds, 1).Should(HaveLen(1))
 		Expect(strconv.Atoi(values[0])).To(BeNumerically(">=", 1))
 	})
 
-	It("Should clean up user error metric on policy deletion", func() {
+	It("Should clean up user error metric on policy deletion", func(ctx SpecContext) {
 		By(
 			"Deleting policy " + policyName + " on hub cluster " +
 				"in ns:" + clusterNamespaceOnHub,
@@ -52,7 +52,7 @@ var _ = Describe("Test user error metrics", Ordered, func() {
 		By("Checking for the " + metricName + " metric on the template-sync controller")
 		values := []string{}
 		Eventually(func() []string {
-			values = utils.GetMetrics(metricName, policyName)
+			values = utils.GetMetrics(ctx, metricName, policyName)
 
 			return values
 		}, defaultTimeoutSeconds, 1).Should(BeEmpty())

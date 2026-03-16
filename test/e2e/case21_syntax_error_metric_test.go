@@ -32,32 +32,32 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 
 	AfterAll(cleanup)
 
-	It("Should increment user error metric when attempting to apply policy with syntax error", func() {
+	It("Should increment user error metric when attempting to apply policy with syntax error", func(ctx SpecContext) {
 		hubApplyPolicy(policyName, errPolicyFile)
 
 		By("Checking for the " + userMetricName + " metric on the template-sync controller")
 		values := []string{}
 		Eventually(func() []string {
-			values = utils.GetMetrics(userMetricName, policyName)
+			values = utils.GetMetrics(ctx, userMetricName, policyName)
 
 			return values
 		}, defaultTimeoutSeconds, 1).Should(HaveLen(1))
 		Expect(strconv.Atoi(values[0])).To(BeNumerically(">=", 1))
 	})
 
-	It("Should not increment system error metric", func() {
+	It("Should not increment system error metric", func(ctx SpecContext) {
 		hubApplyPolicy(policyName, errPolicyFile)
 
 		By("Checking for the " + systemMetricName + " metric on the template-sync controller")
 		values := []string{}
 		Eventually(func() []string {
-			values = utils.GetMetrics(systemMetricName, policyName)
+			values = utils.GetMetrics(ctx, systemMetricName, policyName)
 
 			return values
 		}, defaultTimeoutSeconds, 1).Should(BeEmpty())
 	})
 
-	It("Should clean up user error metric on policy deletion", func() {
+	It("Should clean up user error metric on policy deletion", func(ctx SpecContext) {
 		By(
 			"Deleting policy " + policyName + " on hub cluster " +
 				"in ns:" + clusterNamespaceOnHub,
@@ -66,33 +66,33 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 		By("Checking for the " + userMetricName + " metric on the template-sync controller")
 		values := []string{}
 		Eventually(func() []string {
-			values = utils.GetMetrics(userMetricName, policyName)
+			values = utils.GetMetrics(ctx, userMetricName, policyName)
 
 			return values
 		}, defaultTimeoutSeconds, 1).Should(BeEmpty())
 	})
 
-	It("Should increment user error metric when patching a syntax error onto a correct policy", func() {
+	It("Should increment user error metric when patching a syntax error onto a correct policy", func(ctx SpecContext) {
 		hubApplyPolicy(policyName, correctPolicyFile)
 		hubApplyPolicy(policyName, errPolicyFile)
 
 		By("Checking for the " + userMetricName + " metric on the template-sync controller")
 		values := []string{}
 		Eventually(func() []string {
-			values = utils.GetMetrics(userMetricName, policyName)
+			values = utils.GetMetrics(ctx, userMetricName, policyName)
 
 			return values
 		}, defaultTimeoutSeconds, 1).Should(HaveLen(1))
 		Expect(strconv.Atoi(values[0])).To(BeNumerically(">=", 1))
 	})
 
-	It("Should not increment system error metric", func() {
+	It("Should not increment system error metric", func(ctx SpecContext) {
 		hubApplyPolicy(policyName, errPolicyFile)
 
 		By("Checking for the " + systemMetricName + " metric on the template-sync controller")
 		values := []string{}
 		Eventually(func() []string {
-			values = utils.GetMetrics(systemMetricName, policyName)
+			values = utils.GetMetrics(ctx, systemMetricName, policyName)
 
 			return values
 		}, defaultTimeoutSeconds, 1).Should(BeEmpty())

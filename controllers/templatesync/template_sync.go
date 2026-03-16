@@ -1622,7 +1622,7 @@ func (r *PolicyReconciler) handleSyncSuccess(
 	}
 
 	latestMessage := getLatestStatusMessage(pol, tIndex)
-	if !(strings.Contains(latestMessage, "template-error;") || strings.Contains(latestMessage, "Pending;")) {
+	if !strings.Contains(latestMessage, "template-error;") && !strings.Contains(latestMessage, "Pending;") {
 		// A status reset isn't necessary when the last status is a 'normal' compliant or noncompliant state.
 		return nil
 	}
