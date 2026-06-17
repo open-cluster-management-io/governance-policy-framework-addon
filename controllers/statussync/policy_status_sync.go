@@ -22,7 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
@@ -284,27 +283,17 @@ func (r *PolicyReconciler) getEventsInCluster(
 // using the Policy name and nanosecond timestamp, matching the client-go
 // convention. If the template's status field is not found or is not in the
 // correct format, it returns an empty list.
-func (r *PolicyReconciler) getEventsInTemplate(
-	tmplGVK schema.GroupVersionKind, name, namespace string, policyObjID depclient.ObjectIdentifier,
-) ([]policiesv1.ComplianceHistory, error) {
-	tmplUnstruct, err := r.DynamicWatcher.Get(policyObjID, tmplGVK, namespace, name)
-	if err != nil {
-		if errors.Is(err, depclient.ErrNoVersionedResource) || errors.Is(err, depclient.ErrResourceUnwatchable) {
-			// If the kind isn't found, or isn't compatible with watches, just return an empty list.
-			return []policiesv1.ComplianceHistory{}, nil
-		}
-
-		return []policiesv1.ComplianceHistory{}, err
-	}
-
+func getEventsInTemplate(
+	tmplUnstruct *unstructured.Unstructured, policyName string,
+) []policiesv1.ComplianceHistory {
 	if tmplUnstruct == nil {
-		return []policiesv1.ComplianceHistory{}, nil
+		return []policiesv1.ComplianceHistory{}
 	}
 
 	events, found, err := unstructured.NestedSlice(tmplUnstruct.Object, "status", "history")
 	if !found || err != nil {
 		// If there's an error or the field isn't found, just return an empty list.
-		return []policiesv1.ComplianceHistory{}, nil //nolint:nilerr
+		return []policiesv1.ComplianceHistory{}
 	}
 
 	historyEvents := make([]policiesv1.ComplianceHistory, 0, len(events))
@@ -329,11 +318,36 @@ func (r *PolicyReconciler) getEventsInTemplate(
 		historyEvents = append(historyEvents, policiesv1.ComplianceHistory{
 			LastTimestamp: metav1.Time(event.LastTimestamp),
 			Message:       strings.TrimSpace(event.Message),
-			EventName:     fmt.Sprintf("%v.%x", policyObjID.Name, event.LastTimestamp.UnixNano()),
+			EventName:     fmt.Sprintf("%v.%x", policyName, event.LastTimestamp.UnixNano()),
 		})
 	}
 
-	return historyEvents, nil
+	return historyEvents
+}
+
+// templateOwnedByPolicy reports whether obj belongs to policyName.
+// A nil obj returns false.
+func templateOwnedByPolicy(obj *unstructured.Unstructured, policyName string) bool {
+	refName := ""
+
+	if obj == nil {
+		return false
+	}
+
+	for _, ownerRef := range obj.GetOwnerReferences() {
+		if ownerRef.Kind == policiesv1.Kind {
+			refName = ownerRef.Name
+
+			break
+		}
+	}
+
+	// fallback to parent policy label
+	if refName == "" {
+		refName = obj.GetLabels()[utils.ParentPolicyLabel]
+	}
+
+	return refName != "" && refName == policyName
 }
 
 // getDetails collects and processes compliance events for each policy template,
@@ -357,6 +371,8 @@ func (r *PolicyReconciler) getDetails(
 	for i, policyT := range instance.Spec.PolicyTemplates {
 		var tName string
 
+		existingDPTs := instance.Status.Details
+
 		object, tmplGVK, err := unstructured.UnstructuredJSONScheme.Decode(policyT.ObjectDefinition.Raw, nil, nil)
 		if err != nil {
 			reqLogger.Error(err, "Failed to decode policy template", "TemplateIdx", i)
@@ -371,20 +387,36 @@ func (r *PolicyReconciler) getDetails(
 			} else {
 				tName = obj.GetName()
 
-				templateEvents, err := r.getEventsInTemplate(*tmplGVK, tName, instance.Namespace, policyObjID)
+				tmplUnstruct, err := r.DynamicWatcher.Get(policyObjID, *tmplGVK, instance.Namespace, tName)
 				if err != nil {
-					reqLogger.Error(err, "Error getting template, will requeue the request",
-						"TemplateName", tName, "TemplateIdx", i)
+					// Kind not found, or not compatible with watches
+					shouldReturnErr := !errors.Is(err, depclient.ErrNoVersionedResource) &&
+						!errors.Is(err, depclient.ErrResourceUnwatchable)
 
-					return nil, err
+					if shouldReturnErr {
+						reqLogger.Error(err, "Error getting template, will requeue the request",
+							"TemplateName", tName, "TemplateIdx", i)
+
+						return nil, err
+					}
 				}
 
-				eventForPolicyMap[tName] = append(eventForPolicyMap[tName], templateEvents...)
+				tmplOwnedByPolicy := templateOwnedByPolicy(tmplUnstruct, policyObjID.Name)
+
+				if tmplOwnedByPolicy {
+					templateEvents := getEventsInTemplate(tmplUnstruct, policyObjID.Name)
+					eventForPolicyMap[tName] = append(eventForPolicyMap[tName], templateEvents...)
+				}
+
+				if tmplUnstruct != nil && !tmplOwnedByPolicy {
+					// If the template exists AND belongs to another policy, skip this DPT.
+					existingDPTs = nil
+				}
 			}
 		}
 
 		detailLogger := reqLogger.WithValues("TemplateName", tName, "TemplateIdx", i)
-		templateDetails := mergeDetails(eventForPolicyMap[tName], instance.Status.Details, tName, detailLogger)
+		templateDetails := mergeDetails(eventForPolicyMap[tName], existingDPTs, tName, detailLogger)
 
 		allDetails = append(allDetails, templateDetails)
 

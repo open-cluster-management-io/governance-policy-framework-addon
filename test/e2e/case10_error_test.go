@@ -170,22 +170,84 @@ var _ = Describe("Test error handling", func() {
 		).Should(BeTrue())
 	})
 	It("should generate duplicate policy template err event", func(ctx SpecContext) {
+		const (
+			duplicatePolicyName = "case10-test-policy-duplicate"
+			configPolicyName    = "case10-config-policy"
+			foreignHistoryMsg   = "Compliant; history message for case10-test-policy"
+		)
+
 		hubApplyPolicy("case10-test-policy",
 			yamlBasePath+"working-policy.yaml")
 
 		// wait for original policy to be processed before creating duplicate policy
 		utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
-			"case10-config-policy", clusterNamespace, true, defaultTimeoutSeconds)
+			configPolicyName, clusterNamespace, true, defaultTimeoutSeconds)
 
-		hubApplyPolicy("case10-test-policy-duplicate",
+		By("Adding compliance history to the existing configuration policy")
+		historyPatch := `{"status": {"history": [{"lastTimestamp": "2024-12-23T17:01:23.456789Z", "message": "` +
+			foreignHistoryMsg + `"}]}}`
+		_, err := kubectlManaged("patch", "configurationpolicy", configPolicyName, "-n="+clusterNamespace,
+			"--type=merge", "--subresource=status", "-p="+historyPatch)
+		Expect(err).ToNot(HaveOccurred())
+
+		hubApplyPolicy(duplicatePolicyName,
 			yamlBasePath+"working-policy-duplicate.yaml")
 
 		By("Checking for event with duplicate err on managed cluster in ns:" + clusterNamespace)
 		Eventually(
-			checkForEvent(ctx, "case10-test-policy-duplicate", "Template name must be unique"),
+			checkForEvent(ctx, duplicatePolicyName, "Template name must be unique"),
 			defaultTimeoutSeconds,
 			1,
 		).Should(BeTrue())
+
+		By("Checking duplicate policy status does not contain foreign template history")
+		Eventually(func(g Gomega) {
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				duplicatePolicyName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds)
+
+			var plc *policiesv1.Policy
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(plc.Status.Details).To(HaveLen(1))
+			g.Expect(plc.Status.Details[0].History).ToNot(BeEmpty())
+
+			for _, hist := range plc.Status.Details[0].History {
+				g.Expect(hist.Message).ToNot(ContainSubstring(foreignHistoryMsg))
+			}
+		}, defaultTimeoutSeconds, 1).Should(Succeed())
+
+		By("Checking stale leaked history is removed after duplicate template conflict is detected")
+		leakedHistoryPatch := `[{"op":"add","path":"/status/details/0/history/-","value":{` +
+			`"eventName":"` + duplicatePolicyName + `.18ad64b95843ed60",` +
+			`"lastTimestamp":"2026-05-07T21:09:35Z",` +
+			`"message":"` + foreignHistoryMsg + `"}}]`
+		policyInt := clientManagedDynamic.Resource(gvrPolicy).Namespace(clusterNamespace)
+		_, err = policyInt.Patch(ctx, duplicatePolicyName, types.JSONPatchType,
+			[]byte(leakedHistoryPatch), metav1.PatchOptions{}, "status")
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func(g Gomega) {
+			managedPlc := utils.GetWithTimeout(
+				clientManagedDynamic,
+				gvrPolicy,
+				duplicatePolicyName,
+				clusterNamespace,
+				true,
+				defaultTimeoutSeconds)
+
+			var plc *policiesv1.Policy
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
+			g.Expect(err).ToNot(HaveOccurred())
+
+			for _, hist := range plc.Status.Details[0].History {
+				g.Expect(hist.Message).ToNot(ContainSubstring(foreignHistoryMsg))
+			}
+		}, defaultTimeoutSeconds, 1).Should(Succeed())
 	})
 	It("should create other objects, even when one is invalid", func(ctx SpecContext) {
 		hubApplyPolicy("case10-middle-tmpl",
