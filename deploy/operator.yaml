@@ -210,12 +210,6 @@ spec:
         command:
         - governance-policy-framework-addon
         env:
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: OPERATOR_NAME
-          value: governance-policy-framework-addon
         - name: DEPLOYMENT_NAME
           valueFrom:
             fieldRef:
