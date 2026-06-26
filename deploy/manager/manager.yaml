@@ -34,12 +34,6 @@ spec:
             - name: klusterlet-config
               mountPath: /var/run/klusterlet
           env:
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: OPERATOR_NAME
-              value: governance-policy-framework-addon
             - name: DEPLOYMENT_NAME
               valueFrom:
                 fieldRef:
