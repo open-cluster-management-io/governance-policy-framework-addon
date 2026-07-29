@@ -44,10 +44,10 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		Expect(managedPlc).NotTo(BeNil())
 
 		configPlc := unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": gvrConfigurationPolicy.GroupVersion().String(),
 				"kind":       "ConfigurationPolicy",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      templateName,
 					"namespace": clusterNamespace,
 					"uid":       uuid.NewUUID(),
@@ -94,6 +94,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 	AfterEach(func() {
 		By("Clean up all events")
+
 		_, err := kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
 		Expect(err).ShouldNot(HaveOccurred())
 	})
@@ -129,6 +130,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 
 	Context("With ignorePending", func() {
 		policyName := case12PolicyName + "-ignorepending"
+
 		It("Should set to Compliant when dep status is NonCompliant and ignorePending is true", func(ctx SpecContext) {
 			applyDepAndPolicy(case12DepYaml, case12DepName, resourcePath+"case12-plc-ignorepending.yaml", policyName)
 
@@ -162,6 +164,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 			Eventually(checkCompliance(ctx, case12PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 			policyInvalidName := case12PolicyName + "-invalid"
+
 			By("Creating policy with invalid dependency on hub in ns: " + clusterNamespaceOnHub)
 			applyHubPolicyWithCleanup(resourcePath+"case12-plc-invalid-dep.yaml", policyInvalidName)
 			By("Checking that policy status is Pending")
@@ -194,6 +197,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 	Context("Multiple dependencies", func() {
 		It("Should process extra dependencies properly", func(ctx SpecContext) {
 			policyName := case12PolicyName + "-multi"
+
 			By("Creating policy on hub in ns: " + clusterNamespaceOnHub)
 			applyHubPolicyWithCleanup(resourcePath+"case12-plc-multiple-deps.yaml", policyName)
 			By("Creating dependency on hub in ns: " + clusterNamespaceOnHub)
@@ -220,6 +224,7 @@ var _ = Describe("Test dependency logic in template sync", Ordered, func() {
 		It("Should handle policies with multiple templates (with different dependencies) properly",
 			func(ctx SpecContext) {
 				policyName := case12PolicyName + "-2-templates"
+
 				By("Creating policy on hub in ns: " + clusterNamespaceOnHub)
 				applyHubPolicyWithCleanup(resourcePath+"case12-plc-2-template.yaml", policyName)
 				By("Creating dependency on hub in ns: " + clusterNamespaceOnHub)

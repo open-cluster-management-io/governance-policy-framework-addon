@@ -34,7 +34,9 @@ var _ = Describe("Test user error metrics", Ordered, func() {
 		hubApplyPolicy(policyName, policyFile)
 
 		By("Checking for the " + metricName + " metric on the template-sync controller")
+
 		values := []string{}
+
 		Eventually(func() []string {
 			values = utils.GetMetrics(ctx, metricName, policyName)
 
@@ -50,7 +52,9 @@ var _ = Describe("Test user error metrics", Ordered, func() {
 		)
 		cleanup()
 		By("Checking for the " + metricName + " metric on the template-sync controller")
+
 		values := []string{}
+
 		Eventually(func() []string {
 			values = utils.GetMetrics(ctx, metricName, policyName)
 

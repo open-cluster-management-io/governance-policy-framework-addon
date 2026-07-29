@@ -25,8 +25,7 @@ import (
 
 const (
 	ControllerName = "secret-sync"
-	// #nosec G101
-	SecretName = "policy-encryption-key"
+	SecretName     = "policy-encryption-key" // #nosec G101
 )
 
 // SetupWithManager sets up the controller with the Manager.

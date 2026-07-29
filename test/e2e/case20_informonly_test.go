@@ -25,11 +25,11 @@ const (
 
 func checkInformAction(cfplc string, compliance string) {
 	By("Checking template policy remediationAction")
-	Eventually(func() interface{} {
+	Eventually(func() any {
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 			cfplc, clusterNamespace, true, defaultTimeoutSeconds)
 
-		return plc.Object["spec"].(map[string]interface{})["remediationAction"]
+		return plc.Object["spec"].(map[string]any)["remediationAction"]
 	}, defaultTimeoutSeconds, 1).Should(Equal(compliance))
 }
 

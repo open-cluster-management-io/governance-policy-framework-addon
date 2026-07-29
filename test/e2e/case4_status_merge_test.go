@@ -65,6 +65,7 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 			clusterNamespaceOnHub,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
+
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(
 			clientHubDynamic,
@@ -81,6 +82,7 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 			true,
 			defaultTimeoutSeconds)
 		By("clean up all events")
+
 		_, err = kubectlManaged(
 			"delete",
 			"events",
@@ -183,7 +185,9 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 			"Compliant; Violation no longer detected")
 
 		By("Checking if history size = 3")
+
 		var plc *policiesv1.Policy
+
 		Eventually(func(g Gomega) any {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
@@ -217,7 +221,9 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 		Expect(evs).To(HaveLen(2))
 
 		By("Checking if history size = 5")
+
 		var plc *policiesv1.Policy
+
 		Eventually(func(g Gomega) any {
 			managedPlc := utils.GetWithTimeout(
 				clientManagedDynamic,
@@ -246,6 +252,7 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 		Expect(configpol).ToNot(BeNil())
 
 		By("Emitting the 'future' event that is already in the template status")
+
 		future, err := time.Parse(time.RFC3339Nano, futureTimeStr)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -253,7 +260,9 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Checking if history size remains constant")
+
 		var plc *policiesv1.Policy
+
 		Consistently(func(g Gomega) any {
 			managedPlc := utils.GetWithTimeout(
 				clientManagedDynamic,
@@ -272,13 +281,16 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 
 	It("Should preserve history properly when event sources disappear", func() {
 		By("Adding an additional event to the template")
+
 		_, err := kubectlManaged("patch", "configurationpolicy", case4ConfigPolicyName, "-n="+clusterNamespace,
 			"--type=merge", "--subresource=status",
 			`-p={"status": {"history": [`+ev1String+","+ev2String+","+extra1String+`]}}`)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Waiting for the event to appear in the history")
+
 		var plc *policiesv1.Policy
+
 		Eventually(func(g Gomega) any {
 			managedPlc := utils.GetWithTimeout(
 				clientManagedDynamic,
@@ -297,6 +309,7 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 		Expect(plc.Status.Details[0].History[1].Message).Should(ContainSubstring("this bug was annoying"))
 
 		By("Removing the event from the template")
+
 		_, err = kubectlManaged("patch", "configurationpolicy", case4ConfigPolicyName, "-n="+clusterNamespace,
 			"--type=merge", "--subresource=status", `-p={"status": {"history": [`+ev1String+","+ev2String+`]}}`)
 
@@ -319,6 +332,7 @@ var _ = Describe("Test status sync with multiple templates", Ordered, func() {
 		}, defaultTimeoutSeconds/2, 1).Should(HaveLen(6))
 
 		By("Adding yet another event to the template, very similar to the one just removed")
+
 		_, err = kubectlManaged("patch", "configurationpolicy", case4ConfigPolicyName, "-n="+clusterNamespace,
 			"--type=merge", "--subresource=status",
 			`-p={"status": {"history": [`+ev1String+","+ev2String+","+extra2String+`]}}`)

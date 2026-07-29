@@ -22,6 +22,7 @@ var _ = Describe("Test owner reference recovery", func() {
 		By("Creating a policy on the hub in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("apply", "-f", case16PolicyYaml, "-n", clusterNamespaceOnHub)
 		Expect(err).ShouldNot(HaveOccurred())
+
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case16PolicyName, clusterNamespace, true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
@@ -30,9 +31,12 @@ var _ = Describe("Test owner reference recovery", func() {
 		By("Deleting a policy on the hub in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("delete", "-f", case16PolicyYaml, "-n", clusterNamespaceOnHub, "--ignore-not-found=true")
 		Expect(err).ToNot(HaveOccurred())
+
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
+
 		By("clean up all events")
+
 		_, err = kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
 		Expect(err).ShouldNot(HaveOccurred())
 	})
@@ -45,20 +49,21 @@ var _ = Describe("Test owner reference recovery", func() {
 			return err
 		}, defaultTimeoutSeconds, 1).Should(Succeed())
 
-		Eventually(func() interface{} {
+		Eventually(func() any {
 			configPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 				case16ConfigPolicyName, clusterNamespace, true, defaultTimeoutSeconds)
 
-			md, ok := configPlc.Object["metadata"].(map[string]interface{})
+			md, ok := configPlc.Object["metadata"].(map[string]any)
 			if !ok {
 				return nil
 			}
+
 			ownerRefs, ok := md["ownerReferences"]
 			if !ok {
 				return nil
 			}
 
-			return ownerRefs.([]interface{})[0].(map[string]interface{})["name"]
+			return ownerRefs.([]any)[0].(map[string]any)["name"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(case16PolicyName))
 	})
 })

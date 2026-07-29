@@ -387,7 +387,7 @@ func getManager(
 							`reason!="PolicyTemplateSync",` +
 							`reason!="PolicyStatusSync"`,
 						),
-						Transform: func(obj interface{}) (interface{}, error) {
+						Transform: func(obj any) (any, error) {
 							event := obj.(*v1.Event)
 							// Only cache fields that are utilized by the controllers.
 							return &v1.Event{

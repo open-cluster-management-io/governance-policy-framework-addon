@@ -86,6 +86,7 @@ func init() {
 
 var _ = BeforeSuite(func(ctx SpecContext) {
 	By("Setup Hub and Managed client")
+
 	gvrPolicy = schema.GroupVersionResource{
 		Group:    "policy.open-cluster-management.io",
 		Version:  "v1",
@@ -122,6 +123,7 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	defaultImageRegistry = "quay.io/open-cluster-management"
 	testNamespace = "managed"
 	defaultTimeoutSeconds = 30
+
 	By("Create Namespace if needed")
 
 	if os.Getenv("E2E_CLUSTER_NAMESPACE_ON_HUB") == "" {
@@ -143,6 +145,7 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 			},
 		}, metav1.CreateOptions{})).NotTo(BeNil())
 	}
+
 	namespacesManaged := clientHub.CoreV1().Namespaces()
 	if _, err := namespacesManaged.Get(
 		ctx,
@@ -154,12 +157,16 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 			},
 		}, metav1.CreateOptions{})).NotTo(BeNil())
 	}
+
 	By("Create EventRecorder")
+
 	var err error
 	eventCtx = context.TODO()
+
 	DeferCleanup(func() {
 		eventCtx.Done()
 	})
+
 	managedRecorder, err = testutils.CreateRecorder(clientManaged, "status-sync-controller-test")
 	Expect(err).ToNot(HaveOccurred())
 
@@ -195,7 +202,6 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 		// ensuring that there is not a bug in the restart procedure.
 
 		// AI-ASSISTED: The code in this block was based on output from Cursor using claude-4-sonnet.
-
 		gkCRDName := "constrainttemplates.templates.gatekeeper.sh"
 
 		By("Deleting the constrainttemplate CRD to simulate uninstalling Gatekeeper")
@@ -225,6 +231,7 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 		unstructured.RemoveNestedField(originalCRD.Object, "status")
 
 		By("Re-creating the constrainttemplate CRD to simulate re-installing Gatekeeper")
+
 		_, err = clientManagedDynamic.Resource(gvrCRD).Create(ctx, originalCRD, metav1.CreateOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
@@ -339,7 +346,7 @@ func checkCompliance(ctx SpecContext, name string) func() string {
 			return "policy not found"
 		}
 
-		status, statusOk := policy.Object["status"].(map[string]interface{})
+		status, statusOk := policy.Object["status"].(map[string]any)
 		if !statusOk {
 			return "policy has no status"
 		}

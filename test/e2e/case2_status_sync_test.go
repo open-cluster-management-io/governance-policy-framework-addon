@@ -29,12 +29,14 @@ var _ = Describe("Test status sync", func() {
 		By("Deleting a policy on hub cluster in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("delete", "-f", case2PolicyYaml, "-n", clusterNamespaceOnHub)
 		Expect(err).ToNot(HaveOccurred())
+
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientHubDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 	})
 	It("Should set status to compliant", func() {
 		By("Generating an compliant event on the policy")
+
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
@@ -49,7 +51,7 @@ var _ = Describe("Test status sync", func() {
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"Compliant; No violation detected")
 		By("Checking if policy status is compliant")
-		Eventually(func() interface{} {
+		Eventually(func() any {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -61,7 +63,7 @@ var _ = Describe("Test status sync", func() {
 			return getCompliant(managedPlc)
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 		By("Checking if hub policy status is in sync")
-		Eventually(func() interface{} {
+		Eventually(func() any {
 			hubPlc := utils.GetWithTimeout(
 				clientHubDynamic,
 				gvrPolicy,
@@ -75,6 +77,7 @@ var _ = Describe("Test status sync", func() {
 	})
 	It("Should set status to NonCompliant", func(ctx SpecContext) {
 		By("Generating a noncompliant event on the policy")
+
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
@@ -93,6 +96,7 @@ var _ = Describe("Test status sync", func() {
 		Eventually(checkCompliance(ctx, case2PolicyName), defaultTimeoutSeconds, 1).Should(Equal("NonCompliant"))
 
 		By("Checking if policy history is correct")
+
 		managedPlc = utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
@@ -107,7 +111,7 @@ var _ = Describe("Test status sync", func() {
 		Expect((plc.Status.Details[0].History)).To(HaveLen(1))
 		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case2-test-policy-configurationpolicy"))
 		By("Checking if hub policy status is in sync")
-		Eventually(func() interface{} {
+		Eventually(func() any {
 			hubPlc := utils.GetWithTimeout(
 				clientHubDynamic,
 				gvrPolicy,
@@ -121,6 +125,7 @@ var _ = Describe("Test status sync", func() {
 	})
 	It("Should set status to Compliant again", func(ctx SpecContext) {
 		By("Generating an compliant event on the policy")
+
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
@@ -139,6 +144,7 @@ var _ = Describe("Test status sync", func() {
 		Eventually(checkCompliance(ctx, case2PolicyName), defaultTimeoutSeconds, 1).Should(Equal("Compliant"))
 
 		By("Checking if policy history is correct")
+
 		managedPlc = utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
@@ -156,7 +162,7 @@ var _ = Describe("Test status sync", func() {
 		By("Checking if the hub policy status is in sync")
 		var hubPlc *unstructured.Unstructured
 
-		Eventually(func() interface{} {
+		Eventually(func() any {
 			hubPlc = utils.GetWithTimeout(
 				clientHubDynamic,
 				gvrPolicy,
@@ -175,7 +181,7 @@ var _ = Describe("Test status sync", func() {
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		Eventually(func() interface{} {
+		Eventually(func() any {
 			hubPlc = utils.GetWithTimeout(
 				clientHubDynamic,
 				gvrPolicy,
@@ -188,11 +194,13 @@ var _ = Describe("Test status sync", func() {
 		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
 
 		By("clean up all events")
+
 		_, err = kubectlManaged("delete", "events", "-n", clusterNamespace, "--all")
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 	It("Should hold up to last 10 history", func() {
 		By("Generating an a lot of event on the policy")
+
 		managedPlc := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrPolicy,
@@ -201,6 +209,7 @@ var _ = Describe("Test status sync", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(managedPlc).NotTo(BeNil())
+
 		historyIndex := 1
 		for historyIndex < 12 {
 			if historyIndex%2 == 0 {
@@ -216,17 +225,20 @@ var _ = Describe("Test status sync", func() {
 					"policy: managed/case2-test-policy-configurationpolicy",
 					fmt.Sprintf("NonCompliant; there is violation %d", historyIndex))
 			}
+
 			historyIndex++
+
 			utils.Pause(1)
 		}
 		var plc *policiesv1.Policy
+
 		By("Generating a no violation event")
 		managedRecorder.Eventf(
 			managedPlc,
 			corev1.EventTypeNormal,
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"Compliant; No violation assert")
-		Eventually(func(g Gomega) interface{} {
+		Eventually(func(g Gomega) any {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -242,6 +254,7 @@ var _ = Describe("Test status sync", func() {
 
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("Compliant; No violation assert"))
+
 		err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
 		Expect(err).ToNot(HaveOccurred())
 		By("Checking no violation event is the first one in history")
@@ -256,7 +269,7 @@ var _ = Describe("Test status sync", func() {
 			corev1.EventTypeWarning,
 			"policy: managed/case2-test-policy-configurationpolicy",
 			"NonCompliant; Violation assert")
-		Eventually(func(g Gomega) interface{} {
+		Eventually(func(g Gomega) any {
 			managedPlc = utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -269,6 +282,7 @@ var _ = Describe("Test status sync", func() {
 
 			return plc.Status.Details[0].History[0].Message
 		}, defaultTimeoutSeconds, 1).Should(Equal("NonCompliant; Violation assert"))
+
 		err = runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
 		Expect(err).ToNot(HaveOccurred())
 		By("Checking violation event is the first one in history")
@@ -278,7 +292,7 @@ var _ = Describe("Test status sync", func() {
 		Expect(plc.Status.Details[0].History).To(HaveLen(10))
 		Expect(plc.Status.Details[0].TemplateMeta.GetName()).To(Equal("case2-test-policy-configurationpolicy"))
 		By("Checking if hub policy status is in sync")
-		Eventually(func() interface{} {
+		Eventually(func() any {
 			hubPlc := utils.GetWithTimeout(
 				clientHubDynamic,
 				gvrPolicy,
@@ -290,6 +304,7 @@ var _ = Describe("Test status sync", func() {
 			return hubPlc.Object["status"]
 		}, defaultTimeoutSeconds, 1).Should(Equal(managedPlc.Object["status"]))
 		By("clean up all events")
+
 		_, err = kubectlManaged(
 			"delete",
 			"events",

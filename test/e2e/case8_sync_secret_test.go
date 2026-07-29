@@ -21,6 +21,7 @@ var _ = Describe("Test secret sync", func() {
 
 	AfterEach(func() {
 		By("Deleting the test secrets on the Hub")
+
 		_, _ = kubectlHub("delete", "-f", case8SecretYAML, "-n", clusterNamespaceOnHub)
 		_, _ = kubectlHub("delete", "-f", case8UnrelatedSecretYAML, "-n", clusterNamespaceOnHub)
 	})
@@ -42,6 +43,7 @@ var _ = Describe("Test secret sync", func() {
 		_, _ = kubectlHub("apply", "-f", case8UnrelatedSecretYAML, "-n", clusterNamespaceOnHub)
 		// Sleep 5 seconds to ensure the secret isn't synced.
 		time.Sleep(5 * time.Second)
+
 		managedSecret := utils.GetWithTimeout(
 			clientManagedDynamic,
 			gvrSecret,

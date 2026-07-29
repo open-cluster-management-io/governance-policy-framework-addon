@@ -105,6 +105,7 @@ var _ = Describe("Test event sorting by name when timestamps collide at seconds 
 			ctx, case11PolicyName, metav1.GetOptions{},
 		)
 		Expect(err).ShouldNot(HaveOccurred())
+
 		managedUID = managedPlc.GetUID()
 
 		Expect(case11Event(

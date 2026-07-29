@@ -215,23 +215,23 @@ func TestGetDupName(t *testing.T) {
 
 func TestEquivalentTemplatesRecreateOption(t *testing.T) {
 	existing := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "policy.open-cluster-management.io/v1",
 			"kind":       "ConfigurationPolicy",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      "my-policy",
 				"namespace": "local-cluster",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"pruneObjectBehavior": "None",
-				"object-templates": []interface{}{
-					map[string]interface{}{
+				"object-templates": []any{
+					map[string]any{
 						"complianceType": "musthave",
 						"recreateOption": "None",
-						"objectDefinition": map[string]interface{}{
+						"objectDefinition": map[string]any{
 							"apiVersion": "v1",
 							"kind":       "Pod",
-							"metadata": map[string]interface{}{
+							"metadata": map[string]any{
 								"name":      "nginx-pod-e2e",
 								"namespace": "default",
 							},
@@ -243,21 +243,21 @@ func TestEquivalentTemplatesRecreateOption(t *testing.T) {
 	}
 
 	template := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "policy.open-cluster-management.io/v1",
 			"kind":       "ConfigurationPolicy",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      "my-policy",
 				"namespace": "local-cluster",
 			},
-			"spec": map[string]interface{}{
-				"object-templates": []interface{}{
-					map[string]interface{}{
+			"spec": map[string]any{
+				"object-templates": []any{
+					map[string]any{
 						"complianceType": "musthave",
-						"objectDefinition": map[string]interface{}{
+						"objectDefinition": map[string]any{
 							"apiVersion": "v1",
 							"kind":       "Pod",
-							"metadata": map[string]interface{}{
+							"metadata": map[string]any{
 								"name":      "nginx-pod-e2e",
 								"namespace": "default",
 							},
@@ -275,17 +275,17 @@ func TestEquivalentTemplatesRecreateOption(t *testing.T) {
 
 func TestEquivalentTemplatesOperatorPolicyComplianceConfig(t *testing.T) {
 	existing := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "policy.open-cluster-management.io/v1beta1",
 			"kind":       "OperatorPolicy",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "test-policy",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"remediationAction": "inform",
 				"severity":          "medium",
 				"complianceType":    "musthave",
-				"subscription:": map[string]interface{}{
+				"subscription:": map[string]any{
 					"channel":         "stable-3.10",
 					"name":            "project-quay",
 					"namespace":       "operator-policy-testns",
@@ -294,7 +294,7 @@ func TestEquivalentTemplatesOperatorPolicyComplianceConfig(t *testing.T) {
 					"startingCSV":     "quay-operator.v3.10.0",
 				},
 				"upgradeApproval": "Automatic",
-				"complianceConfig": map[string]interface{}{
+				"complianceConfig": map[string]any{
 					"catalogSourceUnhealthy": "Compliant",
 					"deploymentsUnavailable": "NonCompliant",
 					"upgradesAvailable":      "Compliant",
@@ -304,17 +304,17 @@ func TestEquivalentTemplatesOperatorPolicyComplianceConfig(t *testing.T) {
 	}
 
 	template := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "policy.open-cluster-management.io/v1beta1",
 			"kind":       "OperatorPolicy",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "test-policy",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"remediationAction": "inform",
 				"severity":          "medium",
 				"complianceType":    "musthave",
-				"subscription:": map[string]interface{}{
+				"subscription:": map[string]any{
 					"channel":         "stable-3.10",
 					"name":            "project-quay",
 					"namespace":       "operator-policy-testns",
@@ -334,13 +334,13 @@ func TestEquivalentTemplatesOperatorPolicyComplianceConfig(t *testing.T) {
 
 func TestEquivalentTemplatesExtraMetadata(t *testing.T) {
 	existing := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "templates.gatekeeper.sh/v1",
 			"kind":       "ConstraintTemplate",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "k8srequiredlabels",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"crd": "fake",
 			},
 		},
@@ -354,13 +354,13 @@ func TestEquivalentTemplatesExtraMetadata(t *testing.T) {
 	})
 
 	template := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "templates.gatekeeper.sh/v1",
 			"kind":       "ConstraintTemplate",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "k8srequiredlabels",
 			},
-			"spec": map[string]interface{}{
+			"spec": map[string]any{
 				"crd": "fake",
 			},
 		},

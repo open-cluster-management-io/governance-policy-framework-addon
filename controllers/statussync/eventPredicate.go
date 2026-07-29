@@ -18,6 +18,7 @@ var eventPredicateFuncs = predicate.Funcs{
 		if !eventObjNewOK {
 			return false
 		}
+
 		if eventObjNew.InvolvedObject.Kind == policiesv1.Kind &&
 			eventObjNew.InvolvedObject.APIVersion == policiesv1APIVersion {
 			return true
@@ -30,6 +31,7 @@ var eventPredicateFuncs = predicate.Funcs{
 		if !eventObjOk {
 			return false
 		}
+
 		if eventObj.InvolvedObject.Kind == policiesv1.Kind &&
 			eventObj.InvolvedObject.APIVersion == policiesv1APIVersion {
 			return true
@@ -42,6 +44,7 @@ var eventPredicateFuncs = predicate.Funcs{
 		if !eventObjOk {
 			return false
 		}
+
 		if eventObj.InvolvedObject.Kind == policiesv1.Kind &&
 			eventObj.InvolvedObject.APIVersion == policiesv1APIVersion {
 			return true

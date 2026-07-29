@@ -35,7 +35,7 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 		hubApplyPolicy(case22ErrPolicyName, case22ErrYaml)
 
 		By("Waiting for " + case22ErrPolicyName + " to become NonCompliant")
-		Eventually(func() interface{} {
+		Eventually(func() any {
 			plc := utils.GetWithTimeout(
 				clientHubDynamic, gvrPolicy,
 				case22ErrPolicyName, clusterNamespaceOnHub,
@@ -49,7 +49,8 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 	It("Verifies that validation errors are shown", func() {
 		By("Checking message on " + case22ErrPolicyName)
 		var plc *policiesv1.Policy
-		Eventually(func(g Gomega) interface{} {
+
+		Eventually(func(g Gomega) any {
 			managedPlc := utils.GetWithTimeout(
 				clientManagedDynamic,
 				gvrPolicy,
@@ -59,6 +60,7 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 				defaultTimeoutSeconds)
 			err := runtime.DefaultUnstructuredConverter.FromUnstructured(managedPlc.Object, &plc)
 			g.Expect(err).ToNot(HaveOccurred())
+
 			if len(plc.Status.Details) < 1 {
 				return ""
 			}
@@ -75,7 +77,7 @@ var _ = Describe("Test proper metrics handling on syntax error", Ordered, func()
 		hubApplyPolicy(case22CorrectPolicyName, case22CorrectYaml)
 
 		By("Checking that " + case22CorrectPolicyName + " does not become NonCompliant")
-		Consistently(func() interface{} {
+		Consistently(func() any {
 			plc := utils.GetWithTimeout(
 				clientHubDynamic, gvrPolicy,
 				case22CorrectPolicyName, clusterNamespaceOnHub,

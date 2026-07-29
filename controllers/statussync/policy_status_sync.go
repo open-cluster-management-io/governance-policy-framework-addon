@@ -69,7 +69,7 @@ func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSources 
 // blank assignment to verify that ReconcilePolicy implements reconcile.Reconciler
 var _ reconcile.Reconciler = &PolicyReconciler{}
 
-// ReconcilePolicy reconciles a Policy object
+// PolicyReconciler reconciles a Policy object
 type PolicyReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver

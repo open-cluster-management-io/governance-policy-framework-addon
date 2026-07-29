@@ -25,6 +25,7 @@ var _ = Describe("Test template sync", func() {
 		By("Creating a policy on the hub in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("apply", "-f", case15PolicyYaml, "-n", clusterNamespaceOnHub)
 		Expect(err).ShouldNot(HaveOccurred())
+
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case15PolicyName, clusterNamespace, true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
@@ -33,20 +34,25 @@ var _ = Describe("Test template sync", func() {
 		By("Deleting a policy on the hub in ns:" + clusterNamespaceOnHub)
 		_, err := kubectlHub("delete", "-f", case15PolicyYaml, "-n", clusterNamespaceOnHub, "--ignore-not-found=true")
 		Expect(err).ToNot(HaveOccurred())
+
 		opt := metav1.ListOptions{}
 		utils.ListWithTimeout(clientManagedDynamic, gvrPolicy, opt, 0, true, defaultTimeoutSeconds)
 	})
 	It("should create policy template on managed cluster and remove it on rename", func() {
 		By("Checking the configpolicy CRs")
+
 		yamlPlc := utils.ParseYaml("../resources/case15_template_cleanup/case15-config-policy-rename.yaml")
-		Eventually(func() interface{} {
+
+		Eventually(func() any {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 				case15ConfigPolicyName, clusterNamespace, true, defaultTimeoutSeconds)
 
 			return trustedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlPlc.Object["spec"]))
+
 		yamlStablePlc := utils.ParseYaml("../resources/case15_template_cleanup/case15-config-policy-stable.yaml")
-		Eventually(func() interface{} {
+
+		Eventually(func() any {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 				case15ConfigPolicyNameStable, clusterNamespace, true, defaultTimeoutSeconds)
 
@@ -54,13 +60,16 @@ var _ = Describe("Test template sync", func() {
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlStablePlc.Object["spec"]))
 
 		By("Renaming one of the configurationpolicies")
+
 		_, err := kubectlHub("apply", "-f", case15PolicyYamlPatchRename, "-n", clusterNamespaceOnHub)
 		Expect(err).ShouldNot(HaveOccurred())
+
 		plc := utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case15PolicyName, clusterNamespace, true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
 
 		By("Verifying the changed config policy has been deleted and the stable one still exists")
+
 		cfgplc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy, case15ConfigPolicyNameStable,
 			clusterNamespace, true, defaultTimeoutSeconds)
 		Expect(cfgplc).NotTo(BeNil())
@@ -72,15 +81,19 @@ var _ = Describe("Test template sync", func() {
 		Expect(cfgplc).To(BeNil())
 
 		By("Verifying the spec is correct for both existing CRs")
+
 		yamlPlc = utils.ParseYaml("../resources/case15_template_cleanup/case15-config-policy-rename.yaml")
-		Eventually(func() interface{} {
+
+		Eventually(func() any {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 				case15ConfigPolicyRenamed, clusterNamespace, true, defaultTimeoutSeconds)
 
 			return trustedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlPlc.Object["spec"]))
+
 		yamlStablePlc = utils.ParseYaml("../resources/case15_template_cleanup/case15-config-policy-stable.yaml")
-		Eventually(func() interface{} {
+
+		Eventually(func() any {
 			trustedPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 				case15ConfigPolicyNameStable, clusterNamespace, true, defaultTimeoutSeconds)
 
@@ -88,13 +101,16 @@ var _ = Describe("Test template sync", func() {
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(yamlStablePlc.Object["spec"]))
 
 		By("Removing one of the configurationpolicies")
+
 		_, err = kubectlHub("apply", "-f", case15PolicyYamlPatchDelete, "-n", clusterNamespaceOnHub)
 		Expect(err).ShouldNot(HaveOccurred())
+
 		plc = utils.GetWithTimeout(clientManagedDynamic, gvrPolicy, case15PolicyName, clusterNamespace, true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
 
 		By("Verifying the removed config policy has been deleted and the stable one still exists")
+
 		cfgplc = utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy, case15ConfigPolicyNameStable,
 			clusterNamespace, true, defaultTimeoutSeconds)
 		Expect(cfgplc).NotTo(BeNil())
@@ -103,24 +119,26 @@ var _ = Describe("Test template sync", func() {
 		Expect(cfgplc).To(BeNil())
 
 		By("Verifying parent label can be set after template creation")
+
 		_, err = kubectlManaged("patch", "configurationpolicy", case15ConfigPolicyNameStable, "-n", clusterNamespace,
 			"--type", "merge", "--patch-file", "../resources/case15_template_cleanup/case15-patchlabel.yaml")
 		Expect(err).ShouldNot(HaveOccurred())
 
-		Eventually(func() interface{} {
+		Eventually(func() any {
 			configPlc := utils.GetWithTimeout(clientManagedDynamic, gvrConfigurationPolicy,
 				case15ConfigPolicyNameStable, clusterNamespace, true, defaultTimeoutSeconds)
 
-			md, ok := configPlc.Object["metadata"].(map[string]interface{})
+			md, ok := configPlc.Object["metadata"].(map[string]any)
 			if !ok {
 				return nil
 			}
+
 			labels, ok := md["labels"]
 			if !ok {
 				return nil
 			}
 
-			return labels.(map[string]interface{})["policy.open-cluster-management.io/policy"].(string)
+			return labels.(map[string]any)["policy.open-cluster-management.io/policy"].(string)
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(case15PolicyName))
 	})
 })

@@ -165,7 +165,7 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 	constraintsSet := map[policyKindName]bool{}
 
 	for templateIndex, template := range policy.Spec.PolicyTemplates {
-		templateMap := map[string]interface{}{}
+		templateMap := map[string]any{}
 
 		err := json.Unmarshal(template.ObjectDefinition.Raw, &templateMap)
 		if err != nil {
@@ -272,7 +272,7 @@ func (r *GatekeeperConstraintReconciler) Reconcile(
 		msg := ""
 
 		for _, violation := range violations {
-			violation, ok := violation.(map[string]interface{})
+			violation, ok := violation.(map[string]any)
 			if !ok {
 				log.Info(
 					"The Gatekeeper constraint's status.violations field is in an invalid format. Skipping for now.",
@@ -451,7 +451,7 @@ func getEnforcementAction(constraint *unstructured.Unstructured) (string, error)
 // Constraint.
 func hasGatekeeperConstraints(policy *policyv1.Policy) bool {
 	for _, template := range policy.Spec.PolicyTemplates {
-		templateMap := map[string]interface{}{}
+		templateMap := map[string]any{}
 
 		err := json.Unmarshal(template.ObjectDefinition.Raw, &templateMap)
 		if err != nil {

@@ -84,7 +84,7 @@ func ApplyObjectDefaults(scheme runtime.Scheme, object *unstructured.Unstructure
 		return fmt.Errorf(errDefault, err)
 	}
 
-	objectMap := map[string]interface{}{}
+	objectMap := map[string]any{}
 
 	err = json.Unmarshal(objectRaw, &objectMap)
 	if err != nil {
@@ -111,7 +111,7 @@ func IsAllowedPolicy(targetGVK schema.GroupKind) bool {
 
 type ErrList []error
 
-// (ErrList).Aggregate joins an ErrList into a single error separated by semicolons
+// Aggregate joins an ErrList into a single error separated by semicolons
 func (e ErrList) Aggregate() error {
 	var err error
 

@@ -28,7 +28,7 @@ func CreateRecorder(kubeClient kubernetes.Interface, componentName string) (reco
 	return eventBroadcaster.NewRecorder(eventsScheme, v1.EventSource{Component: componentName}), nil
 }
 
-// getMetrics curls the metrics endpoint, filters the response with the given patterns,
+// GetMetrics curls the metrics endpoint, filters the response with the given patterns,
 // and returns the value(s) for the matching metric(s).
 func GetMetrics(ctx context.Context, metricPatterns ...string) []string {
 	metricFilter := " | grep " + strings.Join(metricPatterns, " | grep ")
