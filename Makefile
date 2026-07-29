@@ -96,7 +96,7 @@ lint:
 # test section
 ############################################################
 
-TEST_PKGS ?= ./controllers/statussync ./controllers/secretsync ./controllers/templatesync
+TEST_PKGS ?= ./controllers/statussync ./controllers/secretsync ./controllers/templatesync ./controllers/utils
 
 .PHONY: test
 test: envtest kubebuilder gotestsum
