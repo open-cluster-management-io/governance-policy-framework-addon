@@ -564,7 +564,7 @@ var _ = Describe("Test error handling", func() {
 		}, defaultTimeoutSeconds, 1).Should(ContainSubstring(unknownFieldErr))
 
 		By("Cleaning up the policy")
-		utils.Kubectl("delete", "policy", policyName, "-n", clusterNamespaceOnHub, "--kubeconfig="+kubeconfigHub)
+		utils.Kubectl(ctx, "delete", "policy", policyName, "-n", clusterNamespaceOnHub, "--kubeconfig="+kubeconfigHub)
 
 		By("Creating a valid policy first")
 		hubApplyPolicy(policyName, validPolicyYAML)
@@ -612,7 +612,7 @@ var _ = Describe("Test error handling", func() {
 		}, defaultTimeoutSeconds, 1).Should(ContainSubstring(unknownFieldErr))
 
 		By("Final cleanup of the policy")
-		utils.Kubectl("delete", "policy", policyName, "-n", clusterNamespaceOnHub, "--kubeconfig="+kubeconfigHub)
+		utils.Kubectl(ctx, "delete", "policy", policyName, "-n", clusterNamespaceOnHub, "--kubeconfig="+kubeconfigHub)
 	})
 })
 

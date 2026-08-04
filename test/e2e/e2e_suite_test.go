@@ -305,13 +305,13 @@ func LoadConfig(url, kubeconfig, context string) (*rest.Config, error) {
 func kubectlHub(args ...string) (string, error) {
 	args = append(args, "--kubeconfig=../../kubeconfig_hub_e2e")
 
-	return propagatorutils.KubectlWithOutput(args...)
+	return propagatorutils.KubectlWithOutput(context.Background(), args...)
 }
 
 func kubectlManaged(args ...string) (string, error) {
 	args = append(args, "--kubeconfig=../../kubeconfig_managed_e2e")
 
-	return propagatorutils.KubectlWithOutput(args...)
+	return propagatorutils.KubectlWithOutput(context.Background(), args...)
 }
 
 //nolint:unparam
