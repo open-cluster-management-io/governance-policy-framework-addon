@@ -38,6 +38,16 @@ metadata:
 rules:
 - apiGroups:
   - ""
+  resourceNames:
+  - ocm-tls-profile
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
   resources:
   - pods
   verbs:

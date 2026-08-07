@@ -83,6 +83,11 @@ jobs:
         make build-images
         KUBECONFIG=${PWD}/kubeconfig_managed_e2e make kind-deploy-controller-dev
 
+    - name: E2E tests that require the controller running in a cluster
+      run: |
+        export GOPATH=$(go env GOPATH)
+        KUBECONFIG=${PWD}/kubeconfig_managed_e2e make e2e-test-running-in-cluster
+
     - name: Run E2E Uninstallation Tests
       if: ${{ matrix.kind == 'latest' }}
       run: |

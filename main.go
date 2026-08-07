@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -45,6 +46,7 @@ import (
 	"k8s.io/klog/v2"
 	"open-cluster-management.io/addon-framework/pkg/lease"
 	addonutils "open-cluster-management.io/addon-framework/pkg/utils"
+	sdktls "open-cluster-management.io/sdk-go/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -155,6 +157,10 @@ func main() {
 	managedCfg.QPS = tool.Options.ClientQPS
 	managedCfg.Burst = int(tool.Options.ClientBurst)
 
+	mainCtx := ctrl.SetupSignalHandler()
+
+	tlsCfg := resolveEffectiveTLSConfig(mainCtx, managedCfg)
+
 	metricsOptions := server.Options{
 		BindAddress: tool.Options.MetricsAddr,
 	}
@@ -163,6 +169,7 @@ func main() {
 		metricsOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
 		metricsOptions.SecureServing = true
 		metricsOptions.CertDir = "/var/run/metrics-cert"
+		metricsOptions.TLSOpts = []func(*tls.Config){sdktls.ConfigToFunc(tlsCfg)}
 	}
 
 	mgrOptionsBase := manager.Options{
@@ -235,7 +242,6 @@ func main() {
 	healthAddressesLock.Lock()
 
 	healthAddresses[mgrHealthAddr] = true
-	mainCtx := ctrl.SetupSignalHandler()
 	mgrCtx, mgrCtxCancel := context.WithCancel(mainCtx)
 
 	mgr := getManager(mgrCtx, mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg)

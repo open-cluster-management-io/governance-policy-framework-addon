@@ -33,6 +33,8 @@ type SyncerOptions struct {
 	EvaluationConcurrency uint8
 	ClientQPS             float32
 	ClientBurst           uint32
+	TLSMinVersion         string
+	TLSCipherSuites       string
 }
 
 var disableSpecSync bool
@@ -152,6 +154,22 @@ func ProcessFlags() {
 		45, // the controller-runtime defaults are 20:30 (qps:burst) - this matches that ratio
 		"The maximum burst before client requests will be throttled. "+
 			"Will scale with concurrency, if not explicitly set.",
+	)
+
+	flag.StringVar(
+		&Options.TLSMinVersion,
+		"tls-min-version",
+		"",
+		"The minimum TLS version to use on the metrics server (e.g. VersionTLS12). "+
+			"Overrides the ocm-tls-profile ConfigMap when set.",
+	)
+
+	flag.StringVar(
+		&Options.TLSCipherSuites,
+		"tls-cipher-suites",
+		"",
+		"A comma-separated list of IANA cipher suite names to use on the metrics server. "+
+			"Overrides the ocm-tls-profile ConfigMap when set.",
 	)
 }
 

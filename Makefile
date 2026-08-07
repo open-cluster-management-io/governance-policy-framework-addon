@@ -46,12 +46,14 @@ CONTROLLER_NAME ?= $(shell cat COMPONENT_NAME 2> /dev/null)
 # Set the Kind version tag
 ifeq ($(KIND_VERSION), minimum)
 	KIND_ARGS = --image kindest/node:v1.19.16
-	E2E_FILTER = --label-filter="!skip-minimum"
+	E2E_FILTER = --label-filter="!skip-minimum && !running-in-cluster"
 	export DISABLE_GK_SYNC = true
 else ifneq ($(KIND_VERSION), latest)
 	KIND_ARGS = --image kindest/node:$(KIND_VERSION)
+	E2E_FILTER = --label-filter="!running-in-cluster"
 else
 	KIND_ARGS =
+	E2E_FILTER = --label-filter="!running-in-cluster"
 endif
 # Test coverage threshold
 export COVERAGE_MIN ?= 69
@@ -96,7 +98,7 @@ lint:
 # test section
 ############################################################
 
-TEST_PKGS ?= ./controllers/statussync ./controllers/secretsync ./controllers/templatesync ./controllers/utils
+TEST_PKGS ?= . ./controllers/statussync ./controllers/secretsync ./controllers/templatesync ./controllers/utils
 
 .PHONY: test
 test: envtest kubebuilder gotestsum
@@ -259,6 +261,12 @@ e2e-test-hosted-coverage: COVERAGE_E2E_OUT = coverage_e2e_hosted_mode.out
 e2e-test-hosted-coverage: E2E_JSON = --json-report=report_e2e_hosted.json
 e2e-test-hosted-coverage: E2E_JUNIT = --junit-report=report_e2e_hosted.xml
 e2e-test-hosted-coverage: e2e-run-instrumented e2e-test e2e-stop-instrumented
+
+.PHONY: e2e-test-running-in-cluster
+e2e-test-running-in-cluster: E2E_FILTER = --label-filter="running-in-cluster"
+e2e-test-running-in-cluster: E2E_JSON = --json-report=report_e2e_running_in_cluster.json
+e2e-test-running-in-cluster: E2E_JUNIT = --junit-report=report_e2e_running_in_cluster.xml
+e2e-test-running-in-cluster: e2e-test
 
 .PHONY: scale-down-deployment
 scale-down-deployment:
