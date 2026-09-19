@@ -4,8 +4,6 @@
 package e2e
 
 import (
-	"fmt"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -217,13 +215,13 @@ var _ = Describe("Test status sync", func() {
 					managedPlc,
 					corev1.EventTypeNormal,
 					"policy: managed/case2-test-policy-configurationpolicy",
-					fmt.Sprintf("Compliant; No violation detected %d", historyIndex))
+					"Compliant; No violation detected %d", historyIndex)
 			} else {
 				managedRecorder.Eventf(
 					managedPlc,
 					corev1.EventTypeWarning,
 					"policy: managed/case2-test-policy-configurationpolicy",
-					fmt.Sprintf("NonCompliant; there is violation %d", historyIndex))
+					"NonCompliant; there is violation %d", historyIndex)
 			}
 
 			historyIndex++
