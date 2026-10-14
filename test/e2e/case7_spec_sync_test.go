@@ -8,6 +8,8 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"open-cluster-management.io/governance-policy-propagator/test/utils"
+
+	frameworkutils "open-cluster-management.io/governance-policy-framework-addon/controllers/utils"
 )
 
 var _ = Describe("Test spec sync", func() {
@@ -35,6 +37,9 @@ var _ = Describe("Test spec sync", func() {
 			true,
 			defaultTimeoutSeconds)
 		Expect(plc).NotTo(BeNil())
+
+		// Verify this annotation is removed for the spoke copy.
+		Expect(plc.GetAnnotations()).NotTo(HaveKey(frameworkutils.ManagedClusterUIDAnnotation))
 	})
 	It("should update policy on the hub", func(ctx SpecContext) {
 		By("Patching " + case7PolicyYaml + " on hub with spec.remediationAction = enforce")
@@ -61,6 +66,16 @@ var _ = Describe("Test spec sync", func() {
 
 			return managedPlc.Object["spec"]
 		}, defaultTimeoutSeconds, 1).Should(utils.SemanticEqual(hubPlc.Object["spec"]))
+
+		managedPlc := utils.GetWithTimeout(
+			clientManagedDynamic,
+			gvrPolicy,
+			case7PolicyName,
+			clusterNamespace,
+			true,
+			defaultTimeoutSeconds,
+		)
+		Expect(managedPlc.GetAnnotations()).NotTo(HaveKey(frameworkutils.ManagedClusterUIDAnnotation))
 	})
 	It("should update policy to a different policy template", func() {
 		hubApplyPolicy(case7PolicyName, "../resources/case7_spec_sync/case7-test-policy2.yaml")

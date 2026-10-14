@@ -30,6 +30,7 @@ type SyncerOptions struct {
 	// Hub.
 	ClusterNamespace      string
 	DeploymentName        string
+	ManagedClusterUID     string
 	EvaluationConcurrency uint8
 	ClientQPS             float32
 	ClientBurst           uint32
@@ -58,6 +59,14 @@ func ProcessFlags() {
 		"cluster-namespace-on-hub",
 		"",
 		"The cluster namespace on the Hub. This defaults to the namespace provided with --cluster-namespace.",
+	)
+
+	flag.StringVar(
+		&Options.ManagedClusterUID,
+		"managed-cluster-uid",
+		"",
+		"The ManagedCluster UID this addon instance is configured to report status for. "+
+			"When unset, UID fencing is disabled.",
 	)
 
 	flag.StringVar(
