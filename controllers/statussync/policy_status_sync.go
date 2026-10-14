@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	depclient "github.com/stolostron/kubernetes-dependency-watches/client"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -31,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -39,8 +41,26 @@ import (
 )
 
 const (
-	ControllerName string = "policy-status-sync"
+	ControllerName                    string = "policy-status-sync"
+	managedClusterUIDFenceRetryPeriod        = 30 * time.Second
 )
+
+var (
+	errManagedClusterUIDFenceMismatch = errors.New("ManagedCluster UID mismatch")
+	managedClusterUIDFenceSkips       = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "policy_status_sync_fenced_hub_writes_total",
+		Help: "The number of hub Policy status writes skipped because the ManagedCluster UID did not match.",
+	})
+)
+
+func init() {
+	if err := metrics.Registry.Register(managedClusterUIDFenceSkips); err != nil {
+		var alreadyRegistered *prometheus.AlreadyRegisteredError
+		if !errors.As(err, &alreadyRegistered) {
+			panic(err)
+		}
+	}
+}
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PolicyReconciler) SetupWithManager(mgr ctrl.Manager, additionalSources ...source.Source) error {
@@ -73,7 +93,9 @@ var _ reconcile.Reconciler = &PolicyReconciler{}
 type PolicyReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	HubClient             client.Client
+	HubClient client.Client
+	// ManagedClusterUID is captured at process startup and never refreshed from the hub.
+	ManagedClusterUID     string
 	ManagedClient         client.Client
 	HubRecorder           events.EventRecorder
 	ManagedRecorder       events.EventRecorder
@@ -140,6 +162,13 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	err = r.updateStatuses(ctx, instance, hubInstance, oldStatus)
+	if errors.Is(err, errManagedClusterUIDFenceMismatch) {
+		reqLogger.Info("Requeueing Policy status-sync after a fenced hub status write",
+			"retryAfter", managedClusterUIDFenceRetryPeriod)
+
+		return reconcile.Result{RequeueAfter: managedClusterUIDFenceRetryPeriod}, nil
+	}
+
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -601,8 +630,21 @@ Loop:
 		}
 
 		if !equality.Semantic.DeepEqual(hubInstance.Status, instance.Status) {
-			reqLogger.Info("status not in sync, update the hub")
+			observedUID := hubInstance.GetAnnotations()[utils.ManagedClusterUIDAnnotation]
 
+			// The UID fence is opt-in for compatibility with deployments that do not configure this option.
+			if r.ManagedClusterUID != "" && r.ManagedClusterUID != observedUID {
+				managedClusterUIDFenceSkips.Inc()
+				reqLogger.Info("Skipping hub Policy status update because the ManagedCluster UID does not match",
+					"policy", hubInstance.GetNamespace()+"/"+hubInstance.GetName(),
+					"addonManagedClusterUID", r.ManagedClusterUID,
+					"hubPolicyManagedClusterUID", observedUID)
+
+				return errManagedClusterUIDFenceMismatch
+			}
+
+			// Updating this same object preserves its resource version, so concurrent marker changes or Policy
+			// replacement cause a conflict and a retry instead of allowing a stale UID check to write status.
 			hubInstance.Status = instance.Status
 
 			err = r.HubClient.Status().Update(ctx, hubInstance)

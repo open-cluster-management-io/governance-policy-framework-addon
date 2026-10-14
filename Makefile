@@ -237,9 +237,10 @@ E2E_JUNIT = --junit-report=report_e2e.xml
 
 .PHONY: e2e-test
 e2e-test: e2e-dependencies
-	$(GINKGO) -v $(E2E_TEST_ARGS) $(E2E_FILTER) --output-dir=. $(E2E_JSON) $(E2E_JUNIT) test/e2e
+	E2E_MANAGED_CLUSTER_UID=$(E2E_MANAGED_CLUSTER_UID) $(GINKGO) -v $(E2E_TEST_ARGS) $(E2E_FILTER) --output-dir=. $(E2E_JSON) $(E2E_JUNIT) test/e2e
 
 .PHONY: e2e-test-coverage
+e2e-test-coverage: E2E_MANAGED_CLUSTER_UID = framework-addon-e2e-uid-fence
 e2e-test-coverage: e2e-run-instrumented e2e-test e2e-stop-instrumented
 
 .PHONY: e2e-test-uninistall
@@ -250,6 +251,7 @@ e2e-test-uninistall: E2E_TEST_ARGS = --covermode=atomic --coverprofile=coverage_
 e2e-test-uninistall: e2e-test
 
 .PHONY: e2e-test-uninstall-coverage
+e2e-test-uninstall-coverage: E2E_MANAGED_CLUSTER_UID = framework-addon-e2e-uid-fence
 e2e-test-uninstall-coverage: COVERAGE_E2E_OUT = coverage_e2e_uninstall_controller.out
 e2e-test-uninstall-coverage: e2e-run-instrumented scale-down-deployment e2e-test-uninistall e2e-stop-instrumented
 
@@ -257,6 +259,7 @@ e2e-test-uninstall-coverage: e2e-run-instrumented scale-down-deployment e2e-test
 e2e-test-hosted-coverage: DISABLE_GK_SYNC=true
 e2e-test-hosted-coverage: E2E_CLUSTER_NAMESPACE="other-namespace"
 e2e-test-hosted-coverage: E2E_CLUSTER_NAMESPACE_ON_HUB="other-namespace-on-hub"
+e2e-test-hosted-coverage: E2E_MANAGED_CLUSTER_UID = framework-addon-e2e-uid-fence
 e2e-test-hosted-coverage: COVERAGE_E2E_OUT = coverage_e2e_hosted_mode.out
 e2e-test-hosted-coverage: E2E_JSON = --json-report=report_e2e_hosted.json
 e2e-test-hosted-coverage: E2E_JUNIT = --junit-report=report_e2e_hosted.xml
@@ -279,7 +282,8 @@ e2e-build-instrumented:
 .PHONY: e2e-run-instrumented
 LOG_REDIRECT ?= &>build/_output/controller.log
 e2e-run-instrumented: e2e-build-instrumented
-	HUB_CONFIG=$(HUB_CONFIG) MANAGED_CONFIG=$(MANAGED_CONFIG) MANAGED_CLUSTER_NAME=$(MANAGED_CLUSTER_NAME) \
+	E2E_MANAGED_CLUSTER_UID=$(E2E_MANAGED_CLUSTER_UID) HUB_CONFIG=$(HUB_CONFIG) \
+		MANAGED_CONFIG=$(MANAGED_CONFIG) MANAGED_CLUSTER_NAME=$(MANAGED_CLUSTER_NAME) \
 		./build/_output/bin/$(IMG)-instrumented -test.run "^TestRunMain$$" -test.coverprofile=$(COVERAGE_E2E_OUT) 2>&1 \
 		| tee ./build/_output/controller.log &
 

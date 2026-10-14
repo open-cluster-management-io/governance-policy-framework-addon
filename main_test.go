@@ -36,5 +36,9 @@ func TestRunMain(t *testing.T) {
 		fmt.Sprintf("--cluster-namespace-on-hub=%s", clusterNsHub),
 	)
 
+	if managedClusterUID := os.Getenv("E2E_MANAGED_CLUSTER_UID"); managedClusterUID != "" {
+		os.Args = append(os.Args, fmt.Sprintf("--managed-cluster-uid=%s", managedClusterUID))
+	}
+
 	main()
 }

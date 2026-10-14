@@ -137,6 +137,7 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 
 			managedPlc = instance.DeepCopy()
 			managedPlc.Namespace = r.TargetNamespace
+			managedPlc.SetAnnotations(utils.PolicyAnnotationsForSpoke(instance.GetAnnotations()))
 
 			if managedPlc.Labels[common.ClusterNamespaceLabel] != "" {
 				managedPlc.Labels[common.ClusterNamespaceLabel] = r.TargetNamespace
@@ -161,11 +162,13 @@ func (r *PolicyReconciler) Reconcile(ctx context.Context, request reconcile.Requ
 			return reconcile.Result{}, err
 		}
 	}
-	// found, then compare and update
-	if !utils.EquivalentReplicatedPolicies(instance, managedPlc) {
-		// update needed
+
+	updateNeeded := managedPlc.GetAnnotations()[utils.ManagedClusterUIDAnnotation] != "" ||
+		!utils.EquivalentReplicatedPolicies(instance, managedPlc)
+
+	if updateNeeded {
 		reqLogger.Info("Policy mismatch between hub and managed, updating it...")
-		managedPlc.SetAnnotations(instance.GetAnnotations())
+		managedPlc.SetAnnotations(utils.PolicyAnnotationsForSpoke(instance.GetAnnotations()))
 		managedPlc.Spec = instance.Spec
 		err = r.ManagedClient.Update(ctx, managedPlc)
 

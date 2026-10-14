@@ -727,6 +727,7 @@ func addControllers(
 	statusReconciler := &statussync.PolicyReconciler{
 		ClusterNamespaceOnHub: tool.Options.ClusterNamespaceOnHub,
 		HubClient:             hubClient,
+		ManagedClusterUID:     tool.Options.ManagedClusterUID,
 		HubRecorder:           hubRecorder,
 		ManagedClient:         managedMgr.GetClient(),
 		ManagedRecorder:       managedMgr.GetEventRecorder(statussync.ControllerName),

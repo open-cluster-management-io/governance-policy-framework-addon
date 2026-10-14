@@ -1,6 +1,8 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
+  annotations:
+    policy.open-cluster-management.io/managed-cluster-uid: framework-addon-e2e-uid-fence
   name: case15-test-policy
   labels:
     policy.open-cluster-management.io/cluster-name: managed

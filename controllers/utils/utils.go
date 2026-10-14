@@ -40,6 +40,8 @@ const (
 	ClusterwideFinalizer      = common.APIGroup + "/cleanup-cluster-scoped-policies"
 	ParentPolicyLabel         = common.APIGroup + "/policy"
 	PolicyTypeLabel           = common.APIGroup + "/policy-type"
+	// ManagedClusterUIDAnnotation is internal metadata used to fence status writes from stale addons.
+	ManagedClusterUIDAnnotation = "policy.open-cluster-management.io/managed-cluster-uid"
 )
 
 // EquivalentReplicatedPolicies compares replicated policies. Returns true if they match. (Comparing
@@ -47,12 +49,35 @@ const (
 // match.)
 func EquivalentReplicatedPolicies(plc1 *policiesv1.Policy, plc2 *policiesv1.Policy) bool {
 	// Compare annotations
-	if !equality.Semantic.DeepEqual(plc1.GetAnnotations(), plc2.GetAnnotations()) {
+	if !equality.Semantic.DeepEqual(
+		PolicyAnnotationsForSpoke(plc1.GetAnnotations()),
+		PolicyAnnotationsForSpoke(plc2.GetAnnotations()),
+	) {
 		return false
 	}
 
 	// Compare the specs
 	return equality.Semantic.DeepEqual(plc1.Spec, plc2.Spec)
+}
+
+// PolicyAnnotationsForSpoke returns a copy of hub Policy annotations without the hub-only identity marker.
+func PolicyAnnotationsForSpoke(annotations map[string]string) map[string]string {
+	if len(annotations) == 0 {
+		return nil
+	}
+
+	filtered := make(map[string]string, len(annotations))
+	for key, value := range annotations {
+		if key != ManagedClusterUIDAnnotation {
+			filtered[key] = value
+		}
+	}
+
+	if len(filtered) == 0 {
+		return nil
+	}
+
+	return filtered
 }
 
 // ApplyObjectDefaults marshals an object to JSON using its scheme in order to fill in default
