@@ -36,6 +36,7 @@ type SyncerOptions struct {
 	ClientBurst           uint32
 	TLSMinVersion         string
 	TLSCipherSuites       string
+	TLSGroups             string
 }
 
 var disableSpecSync bool
@@ -179,6 +180,14 @@ func ProcessFlags() {
 		"",
 		"A comma-separated list of IANA cipher suite names to use on the metrics server. "+
 			"Overrides the ocm-tls-profile ConfigMap when set.",
+	)
+
+	flag.StringVar(
+		&Options.TLSGroups,
+		"tls-groups",
+		"",
+		"A comma-separated list of TLS group names to use on the metrics server "+
+			"(e.g. X25519,secp256r1). Overrides the default APIServer TLS groups when set.",
 	)
 }
 
