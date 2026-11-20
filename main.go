@@ -159,7 +159,19 @@ func main() {
 
 	mainCtx := ctrl.SetupSignalHandler()
 
-	tlsCfg := resolveEffectiveTLSConfig(mainCtx, managedCfg)
+	tlsOptsFunc, watchAPIServer, initialTLSProfileSpec, err := resolveEffectiveTLSConfig(
+		mainCtx, managedCfg, tool.Options.TLSMinVersion, tool.Options.TLSCipherSuites, tool.Options.TLSGroups,
+	)
+	if err != nil {
+		if errors.Is(err, errInvalidTLSGroups) {
+			log.Error(err, "Invalid TLS groups configuration")
+			os.Exit(1)
+		}
+
+		log.Error(err, "Failed to resolve TLS configuration; falling back to defaults")
+
+		tlsOptsFunc = sdktls.ConfigToFunc(sdktls.GetDefaultTLSConfig())
+	}
 
 	metricsOptions := server.Options{
 		BindAddress: tool.Options.MetricsAddr,
@@ -169,7 +181,7 @@ func main() {
 		metricsOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
 		metricsOptions.SecureServing = true
 		metricsOptions.CertDir = "/var/run/metrics-cert"
-		metricsOptions.TLSOpts = []func(*tls.Config){sdktls.ConfigToFunc(tlsCfg)}
+		metricsOptions.TLSOpts = []func(*tls.Config){tlsOptsFunc}
 	}
 
 	mgrOptionsBase := manager.Options{
@@ -244,7 +256,18 @@ func main() {
 	healthAddresses[mgrHealthAddr] = true
 	mgrCtx, mgrCtxCancel := context.WithCancel(mainCtx)
 
-	mgr := getManager(mgrCtx, mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg)
+	cacheOptions := managedCacheOptions()
+	addAPIServerCacheEntry(cacheOptions, watchAPIServer)
+
+	mgr := getManager(mgrCtx, mgrOptionsBase, mgrHealthAddr, hubCfg, managedCfg, cacheOptions)
+
+	if watchAPIServer {
+		if err := mgr.Add(&apiServerTLSWatcherSetup{mgr: mgr, initialSpec: initialTLSProfileSpec}); err != nil {
+			log.Error(err, "Unable to watch the APIServer TLS profile; using resolved TLS settings. "+
+				"Expected when none is provided",
+				"controller", "tls-profile-watcher")
+		}
+	}
 
 	var hubMgr manager.Manager
 
@@ -363,12 +386,63 @@ func main() {
 	}
 }
 
+func managedCacheOptions() cache.Options {
+	crdLabelSelector := labels.SelectorFromSet(map[string]string{utils.PolicyTypeLabel: "template"})
+
+	cacheByObject := map[client.Object]cache.ByObject{
+		&extensionsv1.CustomResourceDefinition{}: {
+			Label: crdLabelSelector,
+		},
+		&v1.Event{}: {
+			Namespaces: map[string]cache.Config{
+				tool.Options.ClusterNamespace: {
+					// Filter out events not related to policy compliance
+					FieldSelector: fields.ParseSelectorOrDie(`involvedObject.kind=Policy,` +
+						`reason!="PolicySpecSync",` +
+						`reason!="PolicyTemplateSync",` +
+						`reason!="PolicyStatusSync"`,
+					),
+					Transform: func(obj any) (any, error) {
+						event := obj.(*v1.Event)
+						// Only cache fields that are utilized by the controllers.
+						return &v1.Event{
+							InvolvedObject: event.InvolvedObject,
+							TypeMeta:       event.TypeMeta,
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      event.Name,
+								Namespace: event.Namespace,
+								UID:       event.UID,
+							},
+							LastTimestamp: event.LastTimestamp,
+							Message:       event.Message,
+							Reason:        event.Reason,
+						}, nil
+					},
+				},
+			},
+		},
+		&v1.Secret{}: {
+			Namespaces: map[string]cache.Config{
+				tool.Options.ClusterNamespace: {
+					FieldSelector: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
+				},
+			},
+		},
+	}
+
+	return cache.Options{
+		ByObject: cacheByObject,
+		DefaultNamespaces: map[string]cache.Config{
+			tool.Options.ClusterNamespace: {},
+		},
+	}
+}
+
 // getManager return a controller Manager object that watches on the managed cluster and has the controllers registered.
 func getManager(
 	ctx context.Context, options manager.Options, healthAddr string, hubCfg *rest.Config, managedCfg *rest.Config,
+	cacheOptions cache.Options,
 ) manager.Manager {
-	crdLabelSelector := labels.SelectorFromSet(map[string]string{utils.PolicyTypeLabel: "template"})
-
 	options.LeaderElectionID = "governance-policy-framework-addon.open-cluster-management.io"
 	options.HealthProbeBindAddress = healthAddr
 	options.Client = client.Options{
@@ -379,51 +453,7 @@ func getManager(
 			},
 		},
 	}
-	options.Cache = cache.Options{
-		ByObject: map[client.Object]cache.ByObject{
-			&extensionsv1.CustomResourceDefinition{}: {
-				Label: crdLabelSelector,
-			},
-			&v1.Event{}: {
-				Namespaces: map[string]cache.Config{
-					tool.Options.ClusterNamespace: {
-						// Filter out events not related to policy compliance
-						FieldSelector: fields.ParseSelectorOrDie(`involvedObject.kind=Policy,` +
-							`reason!="PolicySpecSync",` +
-							`reason!="PolicyTemplateSync",` +
-							`reason!="PolicyStatusSync"`,
-						),
-						Transform: func(obj any) (any, error) {
-							event := obj.(*v1.Event)
-							// Only cache fields that are utilized by the controllers.
-							return &v1.Event{
-								InvolvedObject: event.InvolvedObject,
-								TypeMeta:       event.TypeMeta,
-								ObjectMeta: metav1.ObjectMeta{
-									Name:      event.Name,
-									Namespace: event.Namespace,
-									UID:       event.UID,
-								},
-								LastTimestamp: event.LastTimestamp,
-								Message:       event.Message,
-								Reason:        event.Reason,
-							}, nil
-						},
-					},
-				},
-			},
-			&v1.Secret{}: {
-				Namespaces: map[string]cache.Config{
-					tool.Options.ClusterNamespace: {
-						FieldSelector: fields.SelectorFromSet(fields.Set{"metadata.name": secretsync.SecretName}),
-					},
-				},
-			},
-		},
-		DefaultNamespaces: map[string]cache.Config{
-			tool.Options.ClusterNamespace: {},
-		},
-	}
+	options.Cache = cacheOptions
 
 	mgr, err := utils.NewManagerWithRetry(ctx, log, managedCfg, options)
 	if err != nil {

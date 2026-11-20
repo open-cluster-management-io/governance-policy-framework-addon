@@ -8,11 +8,15 @@ require (
 	github.com/onsi/ginkgo/v2 v2.33.1
 	github.com/onsi/gomega v1.44.0
 	github.com/open-policy-agent/frameworks/constraint v0.0.0-20240524210416-5368a3b697f2
+	github.com/openshift/api v0.0.0-20260805215214-cfb63858e9d7
+	github.com/openshift/controller-runtime-common v0.0.0-20260813135806-e1187ec555fc
+	github.com/openshift/library-go v0.0.0-20260807194649-ee0a87843dda
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
 	github.com/spf13/pflag v1.0.10
 	github.com/stolostron/go-log-utils v0.1.5
 	github.com/stolostron/kubernetes-dependency-watches v0.10.2
+	github.com/stretchr/testify v1.12.1
 	golang.org/x/mod v0.42.0
 	k8s.io/api v0.36.6
 	k8s.io/apiextensions-apiserver v0.36.6
@@ -109,7 +113,7 @@ require (
 	k8s.io/component-base v0.36.6 // indirect
 	k8s.io/kube-openapi v0.0.0-20260519202549-bbf5c5577288 // indirect
 	k8s.io/streaming v0.36.6 // indirect
-	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
+	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	open-cluster-management.io/api v1.4.0 // indirect
 	open-cluster-management.io/multicloud-operators-subscription v0.16.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.34.0 // indirect
